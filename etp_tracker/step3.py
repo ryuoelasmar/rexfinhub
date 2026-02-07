@@ -212,7 +212,10 @@ def step3_extract_for_trust(client: SECClient, output_root, trust_name: str,
     paths = output_paths_for_trust(output_root, trust_name)
     p2 = paths["prospectus_base"]; p3 = paths["extracted_funds"]
     if not p2.exists() or p2.stat().st_size == 0: return 0
-    df2 = pd.read_csv(p2, dtype=str)
+    try:
+        df2 = pd.read_csv(p2, dtype=str)
+    except pd.errors.EmptyDataError:
+        return 0
     if df2.empty: return 0
 
     if since or until or forms:
