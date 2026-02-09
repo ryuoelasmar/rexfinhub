@@ -8,10 +8,11 @@ from .paths import output_paths_for_trust
 from .sgml import parse_sgml_series_classes
 from .body_extractors import iter_txt_documents, extract_from_html_string, extract_from_primary_html, extract_from_primary_pdf
 
-_TICKER_STOPWORDS = {"THE","AND","FOR","WITH","ETF","FUND","RISK","USD","MEMBER"}
+_TICKER_STOPWORDS = {"THE","AND","FOR","WITH","ETF","FUND","RISK","USD","MEMBER",
+                     "SYMBOL","NAN","NONE","TBD","COM","INC","LLC","TRUST","DAILY","TARGET"}
 def _valid_ticker(tok: str) -> bool:
     t = (tok or "").strip().upper()
-    if not (1 <= len(t) <= 6): return False
+    if not (2 <= len(t) <= 5): return False
     if t in _TICKER_STOPWORDS: return False
     return any(c.isalpha() for c in t)
 

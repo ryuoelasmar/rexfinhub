@@ -1,7 +1,10 @@
 # etp_tracker/sgml.py
 from __future__ import annotations
 import re
-from .utils import normalize_spacing  # make sure utils.py has this helper (shown below)
+from .utils import normalize_spacing
+
+_SGML_BAD_TICKERS = {"SYMBOL", "NAN", "NONE", "TBD", "N/A", "NA",
+                     "COM", "INC", "LLC", "TRUST", "DAILY", "TARGET"}
 
 def _grab(block: str, tag: str) -> str:
     """
@@ -34,12 +37,16 @@ def parse_sgml_series_classes(txt: str) -> list[dict]:
                 csym  = (_grab(cblk, "CLASS-CONTRACT-TICKER-SYMBOL")
                          or _grab(cblk, "CLASS-TICKER-SYMBOL")
                          or _grab(cblk, "CLASS-TICKER"))
+                # Validate ticker: min 2 chars, not a known bad value
+                ticker = (csym or "").upper().strip()
+                if len(ticker) < 2 or ticker in _SGML_BAD_TICKERS:
+                    ticker = ""
                 out.append({
                     "Series ID": sid,
                     "Series Name": sname,
                     "Class-Contract ID": cid,
                     "Class Contract Name": cname,
-                    "Class Symbol": (csym or "").upper(),
+                    "Class Symbol": ticker,
                     "Extracted From": "SGML-TXT",
                 })
         else:

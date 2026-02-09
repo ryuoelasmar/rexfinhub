@@ -163,9 +163,10 @@ def step4_rollup_for_trust(output_root, trust_name: str) -> int:
             if not pn.empty:
                 prospectus_name = pn.iloc[-1]
 
-        # Clean ticker: filter out placeholder values
+        # Clean ticker: filter out placeholder values and single-char junk
         ticker = g["Class Symbol"].fillna("").str.upper().str.strip()
         ticker = ticker[~ticker.isin(_BAD_TICKERS)]
+        ticker = ticker[ticker.str.len() >= 2]
         ticker = ticker.iloc[-1] if not ticker.empty else ""
 
         registrant = g["Registrant"].fillna("").iloc[-1] if "Registrant" in g.columns else trust_name
