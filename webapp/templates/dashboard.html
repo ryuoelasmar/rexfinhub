@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}ETP Filing Tracker - Dashboard{% endblock %}
+
+{% block nav_extra %}
+<select onchange="jumpToTrust(this.value)" style="margin-left:auto">
+  <option value="">Jump to Trust...</option>
+  {% for t in trusts %}
+  <option value="{{ t.slug }}">{{ t.name }}</option>
+  {% endfor %}
+</select>
+{% endblock %}
+
+{% block content %}
+<div class="header">
+  <h1>ETP Filing Tracker</h1>
+  <div class="date">{{ today.strftime('%B %d, %Y') }} &middot; {{ trusts|length }} trusts monitored</div>
+</div>
+
+<!-- KPIs -->
+<div class="kpi-row">
+  <div class="kpi">
+    <div class="num">{{ trusts|length }}</div>
+    <div class="label">Trusts</div>
+  </div>
+  <div class="kpi">
+    <div class="num">{{ total_funds }}</div>
+    <div class="label">Total Funds</div>
+  </div>
+  <div class="kpi">
+    <div class="num" style="color:var(--green)">{{ total_effective }}</div>
+    <div class="label">Effective</div>
+  </div>
+  <div class="kpi">
+    <div class="num" style="color:var(--orange)">{{ total_pending }}</div>
+    <div class="label">Pending</div>
+  </div>
+  <div class="kpi">
+    <div class="num" style="color:var(--red)">{{ total_delayed }}</div>
+    <div class="label">Delayed</div>
+  </div>
+</div>
+
+<!-- Recent Filings -->
+{% if recent_filings %}
+<div class="what-changed">
+  <h2>Recent Filings (Last 7 Days)</h2>
+  <div>
+    <span class="stat"><b>{{ recent_filings|length }}</b> filings</span>
+  </div>
+</div>
+{% endif %}
+
+<!-- All Trusts -->
+<div class="section-header" id="all-trusts">
+  <h2>All Trusts</h2>
+  <span class="badge">{{ trusts|length }} trusts</span>
+</div>
+
+<input type="text" id="global-search" placeholder="Search all funds by name or ticker..."
+       style="padding:8px 14px; border:1px solid var(--border); border-radius:6px; width:100%; max-width:400px; font-size:14px; margin-bottom:10px;"
+       oninput="globalSearch(this.value)">
+
+{% for t in trusts %}
+<div class="trust-block" id="trust-{{ t.slug }}" data-trust="{{ t.name }}">
+  <div class="trust-header" onclick="toggleTrust(this)">
+    <h3>{{ t.name }}</h3>
+    <div>
+      <span class="stats">{{ t.total }} funds: {{ t.pending }} pending | {{ t.effective }} effective | {{ t.delayed }} delayed</span>
+      <span class="arrow">&#9654;</span>
+    </div>
+  </div>
+  <div class="trust-body">
+    <div style="padding:16px; text-align:center;">
+      <a href="/trusts/{{ t.slug }}" class="btn btn-primary btn-sm">View All Funds &rarr;</a>
+    </div>
+  </div>
+</div>
+{% endfor %}
+
+{% endblock %}

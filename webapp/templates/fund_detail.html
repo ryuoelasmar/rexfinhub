@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+{% block title %}{{ fund.fund_name }} - ETP Filing Tracker{% endblock %}
+
+{% block content %}
+<div class="header">
+  <div style="display:flex; justify-content:space-between; align-items:center;">
+    <div>
+      <h1>{{ fund.fund_name }}</h1>
+      <div class="date">
+        {% if trust %}<a href="/trusts/{{ trust.slug }}">{{ trust.name }}</a> &middot; {% endif %}
+        Series ID: {{ fund.series_id or 'N/A' }}
+      </div>
+    </div>
+    {% if trust %}
+    <a href="/trusts/{{ trust.slug }}" class="btn btn-primary btn-sm">&larr; Back to Trust</a>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Fund metadata -->
+<div class="meta-grid">
+  <div class="meta-item">
+    <div class="meta-label">Status</div>
+    <div class="meta-value"><span class="status-{{ fund.status|lower }}">{{ fund.status }}</span></div>
+  </div>
+  <div class="meta-item">
+    <div class="meta-label">Ticker</div>
+    <div class="meta-value ticker-col">{{ fund.ticker or 'N/A' }}</div>
+  </div>
+  <div class="meta-item">
+    <div class="meta-label">Effective Date</div>
+    <div class="meta-value">{{ fund.effective_date or 'N/A' }}</div>
+  </div>
+  <div class="meta-item">
+    <div class="meta-label">Latest Form</div>
+    <div class="meta-value">{{ fund.latest_form or 'N/A' }}</div>
+  </div>
+  <div class="meta-item">
+    <div class="meta-label">Latest Filing Date</div>
+    <div class="meta-value">{{ fund.latest_filing_date or 'N/A' }}</div>
+  </div>
+  {% if fund.status_reason %}
+  <div class="meta-item" style="grid-column: span 2;">
+    <div class="meta-label">Status Reason</div>
+    <div class="meta-value" style="font-size:13px; font-weight:normal;">{{ fund.status_reason }}</div>
+  </div>
+  {% endif %}
+  {% if fund.prospectus_link %}
+  <div class="meta-item">
+    <div class="meta-label">Prospectus</div>
+    <div class="meta-value"><a href="{{ fund.prospectus_link }}" target="_blank">View on SEC</a></div>
+  </div>
+  {% endif %}
+</div>
+
+<!-- Name History -->
+{% if names %}
+<div class="section-header">
+  <h2>Name History</h2>
+  <span class="badge">{{ names|length }}</span>
+</div>
+<table>
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>First Seen</th>
+      <th>Last Seen</th>
+      <th>Source Form</th>
+      <th>Current</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for n in names %}
+    <tr>
+      <td>{{ n.name }}</td>
+      <td>{{ n.first_seen_date or '' }}</td>
+      <td>{{ n.last_seen_date or '' }}</td>
+      <td>{{ n.source_form or '' }}</td>
+      <td>{% if n.is_current %}<span style="color:var(--green)">Yes</span>{% endif %}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+<!-- Filing History -->
+{% if extractions %}
+<div class="section-header" style="margin-top:30px">
+  <h2>Filing History</h2>
+  <span class="badge">{{ extractions|length }}</span>
+</div>
+<table>
+  <thead>
+    <tr>
+      <th>Filing Date</th>
+      <th>Form</th>
+      <th>Class Name</th>
+      <th>Ticker</th>
+      <th>Effective Date</th>
+      <th>Link</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in extractions %}
+    {% set e = row.FundExtraction %}
+    <tr>
+      <td>{{ row.filing_date or '' }}</td>
+      <td>{{ row.form }}</td>
+      <td>{{ e.class_contract_name or '' }}</td>
+      <td class="ticker-col">{{ e.class_symbol or '' }}</td>
+      <td>{{ e.effective_date or '' }}</td>
+      <td>
+        {% if row.primary_link %}
+        <a href="{{ row.primary_link }}" target="_blank">View</a>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+{% endblock %}

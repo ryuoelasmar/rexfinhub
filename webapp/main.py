@@ -37,6 +37,13 @@ def create_app() -> FastAPI:
     if static_dir.exists():
         app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
+    # Routers
+    from webapp.routers import dashboard, trusts, funds, filings
+    app.include_router(dashboard.router)
+    app.include_router(trusts.router, prefix="/trusts")
+    app.include_router(funds.router, prefix="/funds")
+    app.include_router(filings.router, prefix="/filings")
+
     # Health check
     @app.get("/health")
     def health():

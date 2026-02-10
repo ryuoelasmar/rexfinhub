@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+{% block title %}{{ trust.name }} - ETP Filing Tracker{% endblock %}
+
+{% block content %}
+<div class="header">
+  <div style="display:flex; justify-content:space-between; align-items:center;">
+    <div>
+      <h1>{{ trust.name }}</h1>
+      <div class="date">CIK: {{ trust.cik }} &middot; {{ total }} funds tracked</div>
+    </div>
+    <a href="/" class="btn btn-primary btn-sm">&larr; Back to Dashboard</a>
+  </div>
+</div>
+
+<!-- KPIs -->
+<div class="kpi-row">
+  <div class="kpi">
+    <div class="num">{{ total }}</div>
+    <div class="label">Total Funds</div>
+  </div>
+  <div class="kpi">
+    <div class="num" style="color:var(--green)">{{ effective }}</div>
+    <div class="label">Effective</div>
+  </div>
+  <div class="kpi">
+    <div class="num" style="color:var(--orange)">{{ pending }}</div>
+    <div class="label">Pending</div>
+  </div>
+  <div class="kpi">
+    <div class="num" style="color:var(--red)">{{ delayed }}</div>
+    <div class="label">Delayed</div>
+  </div>
+</div>
+
+<!-- Fund Table -->
+<div class="section-header">
+  <h2>Funds</h2>
+  <span class="badge">{{ total }}</span>
+</div>
+
+<div class="filter-bar">
+  <input type="text" placeholder="Filter by name or ticker..."
+         oninput="filterTable('fund-table', this.value, document.querySelector('.filter-bar .pill.active')?.getAttribute('data-status'))">
+  <span class="pill active" data-status="ALL" onclick="setStatusFilter(this, 'fund-table')">All</span>
+  <span class="pill" data-status="PENDING" onclick="setStatusFilter(this, 'fund-table')">Pending</span>
+  <span class="pill" data-status="EFFECTIVE" onclick="setStatusFilter(this, 'fund-table')">Effective</span>
+  <span class="pill" data-status="DELAYED" onclick="setStatusFilter(this, 'fund-table')">Delayed</span>
+  <span class="count filter-count">{{ total }} of {{ total }} funds</span>
+</div>
+
+<table id="fund-table">
+  <thead>
+    <tr>
+      <th onclick="sortTable('fund-table',0)">Fund Name</th>
+      <th onclick="sortTable('fund-table',1)">Ticker</th>
+      <th onclick="sortTable('fund-table',2)">Status</th>
+      <th onclick="sortTable('fund-table',3)">Form</th>
+      <th onclick="sortTable('fund-table',4)">Filing Date</th>
+      <th onclick="sortTable('fund-table',5)">Days</th>
+      <th onclick="sortTable('fund-table',6)">Expected Effective</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for item in funds %}
+    {% set f = item.fund %}
+    <tr data-name="{{ f.fund_name }}" data-ticker="{{ f.ticker or '' }}" data-status="{{ f.status }}"
+        {% if f.latest_filing_date == today %}class="today-highlight"{% endif %}>
+      <td>
+        {% if f.series_id %}
+        <a href="/funds/{{ f.series_id }}">{{ f.fund_name }}</a>
+        {% else %}
+        {{ f.fund_name }}
+        {% endif %}
+      </td>
+      <td class="ticker-col">{{ f.ticker or '' }}</td>
+      <td><span class="status-{{ f.status|lower }}">{{ f.status }}</span></td>
+      <td>
+        {% if f.prospectus_link %}
+        <span class="form-link">
+          <a href="{{ f.prospectus_link }}" target="_blank">{{ f.latest_form or '' }}</a>
+          {% if item.form_tooltip %}<span class="tooltip">{{ item.form_tooltip }}</span>{% endif %}
+        </span>
+        {% else %}
+        {{ f.latest_form or '' }}
+        {% endif %}
+      </td>
+      <td>{{ f.latest_filing_date or '' }}</td>
+      <td class="days-col">{{ item.days_since if item.days_since is not none else '' }}</td>
+      <td>
+        {% if item.expected %}
+          {% if item.expected.days_left <= 0 %}
+            <span style="color:var(--green); font-weight:bold">{{ item.expected.date }}</span>
+          {% elif item.expected.days_left <= 14 %}
+            <span style="color:var(--orange); font-weight:bold">{{ item.expected.date }} ({{ item.expected.days_left }}d)</span>
+          {% else %}
+            <span style="color:var(--gray)">{{ item.expected.date }} ({{ item.expected.days_left }}d)</span>
+          {% endif %}
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+{% if recent_filings %}
+<div class="section-header" style="margin-top:30px">
+  <h2>Recent Filings</h2>
+  <span class="badge">{{ recent_filings|length }}</span>
+</div>
+<table>
+  <thead>
+    <tr>
+      <th>Date</th>
+      <th>Form</th>
+      <th>Accession</th>
+      <th>Document</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for f in recent_filings %}
+    <tr>
+      <td>{{ f.filing_date or '' }}</td>
+      <td>{{ f.form }}</td>
+      <td>{{ f.accession_number }}</td>
+      <td>
+        {% if f.primary_link %}
+        <a href="{{ f.primary_link }}" target="_blank">View</a>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+{% endblock %}

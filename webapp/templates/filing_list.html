@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Recent Filings - ETP Filing Tracker{% endblock %}
+
+{% block content %}
+<div class="header">
+  <h1>Recent Filings</h1>
+  <div class="date">{{ total }} filings shown (most recent first)</div>
+</div>
+
+<form method="get" action="/filings/" style="margin-bottom:20px;">
+  <div class="filter-bar" style="border-radius:8px;">
+    <input type="text" name="form" value="{{ form }}" placeholder="Filter by form type (e.g. 485BPOS)...">
+    <select name="trust_id" style="padding:6px 12px; border:1px solid var(--border); border-radius:4px; font-size:13px;">
+      <option value="0">All Trusts</option>
+      {% for t in trusts %}
+      <option value="{{ t.id }}" {% if trust_id == t.id %}selected{% endif %}>{{ t.name }}</option>
+      {% endfor %}
+    </select>
+    <button type="submit" class="btn btn-primary btn-sm">Filter</button>
+  </div>
+</form>
+
+<table>
+  <thead>
+    <tr>
+      <th>Date</th>
+      <th>Form</th>
+      <th>Trust</th>
+      <th>Accession</th>
+      <th>Document</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in filings %}
+    {% set f = row.Filing %}
+    <tr>
+      <td>{{ f.filing_date or '' }}</td>
+      <td>{{ f.form }}</td>
+      <td><a href="/trusts/{{ row.trust_slug }}">{{ row.trust_name }}</a></td>
+      <td style="font-size:11px;">{{ f.accession_number }}</td>
+      <td>
+        {% if f.primary_link %}
+        <a href="{{ f.primary_link }}" target="_blank">View</a>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+    {% if not filings %}
+    <tr><td colspan="5" class="empty-state">No filings found.</td></tr>
+    {% endif %}
+  </tbody>
+</table>
+{% endblock %}

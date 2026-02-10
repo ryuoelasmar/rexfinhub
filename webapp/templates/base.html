@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}ETP Filing Tracker{% endblock %}</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+  {% block head %}{% endblock %}
+</head>
+<body>
+
+<nav class="sticky-nav">
+  <a href="/" class="brand" style="text-decoration:none">ETP Tracker</a>
+  <a href="/">Dashboard</a>
+  <a href="/funds/">Funds</a>
+  <a href="/filings/">Filings</a>
+  <a href="/search/">Search EDGAR</a>
+  {% block nav_extra %}{% endblock %}
+</nav>
+
+<div class="container">
+  {% block content %}{% endblock %}
+</div>
+
+<button class="back-top" id="backTop" onclick="window.scrollTo({top:0,behavior:'smooth'})">&#9650;</button>
+
+<div class="container">
+  <div class="footer">
+    ETP Filing Tracker v2.0 &middot; Data from SEC EDGAR &middot; {% block footer_extra %}{% endblock %}
+  </div>
+</div>
+
+<script src="/static/js/app.js"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

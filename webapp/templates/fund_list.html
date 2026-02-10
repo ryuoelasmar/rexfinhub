@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}Funds - ETP Filing Tracker{% endblock %}
+
+{% block content %}
+<div class="header">
+  <h1>Fund Search</h1>
+  <div class="date">{{ total }} funds found</div>
+</div>
+
+<!-- Filters -->
+<form method="get" action="/funds/" style="margin-bottom:20px;">
+  <div class="filter-bar" style="border-radius:8px;">
+    <input type="text" name="q" value="{{ q }}" placeholder="Search by name or ticker...">
+    <select name="status" style="padding:6px 12px; border:1px solid var(--border); border-radius:4px; font-size:13px;">
+      <option value="">All Statuses</option>
+      <option value="PENDING" {% if status == 'PENDING' %}selected{% endif %}>Pending</option>
+      <option value="EFFECTIVE" {% if status == 'EFFECTIVE' %}selected{% endif %}>Effective</option>
+      <option value="DELAYED" {% if status == 'DELAYED' %}selected{% endif %}>Delayed</option>
+    </select>
+    <select name="trust_id" style="padding:6px 12px; border:1px solid var(--border); border-radius:4px; font-size:13px;">
+      <option value="0">All Trusts</option>
+      {% for t in trusts %}
+      <option value="{{ t.id }}" {% if trust_id == t.id %}selected{% endif %}>{{ t.name }}</option>
+      {% endfor %}
+    </select>
+    <button type="submit" class="btn btn-primary btn-sm">Search</button>
+  </div>
+</form>
+
+<table>
+  <thead>
+    <tr>
+      <th>Fund Name</th>
+      <th>Ticker</th>
+      <th>Trust</th>
+      <th>Status</th>
+      <th>Latest Form</th>
+      <th>Filing Date</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in funds %}
+    {% set f = row.FundStatus %}
+    <tr>
+      <td>
+        {% if f.series_id %}
+        <a href="/funds/{{ f.series_id }}">{{ f.fund_name }}</a>
+        {% else %}
+        {{ f.fund_name }}
+        {% endif %}
+      </td>
+      <td class="ticker-col">{{ f.ticker or '' }}</td>
+      <td><a href="/trusts/{{ row.trust_slug }}">{{ row.trust_name }}</a></td>
+      <td><span class="status-{{ f.status|lower }}">{{ f.status }}</span></td>
+      <td>{{ f.latest_form or '' }}</td>
+      <td>{{ f.latest_filing_date or '' }}</td>
+    </tr>
+    {% endfor %}
+    {% if not funds %}
+    <tr><td colspan="6" class="empty-state">No funds found.</td></tr>
+    {% endif %}
+  </tbody>
+</table>
+{% endblock %}
