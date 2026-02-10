@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}Search EDGAR - ETP Filing Tracker{% endblock %}
+
+{% block content %}
+<div class="header">
+  <h1>Search SEC EDGAR</h1>
+  <div class="date">Find trusts and registrants by name, ticker, or keyword</div>
+</div>
+
+<form method="get" action="/search/" style="margin-bottom:24px;">
+  <div class="filter-bar" style="border-radius:8px;">
+    <input type="text" name="q" value="{{ q }}" placeholder="Search by trust name, ticker, or keyword..."
+           style="flex:1; padding:10px 14px; font-size:15px; border:2px solid var(--border); border-radius:6px;">
+    <button type="submit" class="btn btn-primary">Search EDGAR</button>
+  </div>
+</form>
+
+{% if q and results %}
+<div class="kpi-row">
+  <div class="kpi">
+    <div class="kpi-value">{{ results|length }}</div>
+    <div class="kpi-label">Results Found</div>
+  </div>
+</div>
+
+<table>
+  <thead>
+    <tr>
+      <th>Entity Name</th>
+      <th>CIK</th>
+      <th>Forms Found</th>
+      <th>Filings</th>
+      <th>Action</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for r in results %}
+    <tr>
+      <td><strong>{{ r.name }}</strong></td>
+      <td style="font-size:12px;">{{ r.cik }}</td>
+      <td style="font-size:12px;">{{ r.forms_found|join(', ') }}</td>
+      <td>{{ r.filing_count }}</td>
+      <td>
+        {% if r.cik in existing_ciks %}
+          <span class="status-pill" style="background:#d4edda; color:#155724;">Monitored</span>
+        {% else %}
+          <a href="/search/verify/{{ r.cik }}" class="btn btn-primary btn-sm">Verify & Add</a>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% elif q %}
+<div class="empty-state" style="padding:40px; text-align:center;">
+  <p>No results found for "<strong>{{ q }}</strong>".</p>
+  <p style="color:var(--muted); font-size:13px;">Try a different name or keyword. EDGAR searches trust/registrant names in prospectus filings.</p>
+</div>
+{% else %}
+<div style="padding:40px; text-align:center; color:var(--muted);">
+  <p style="font-size:15px;">Enter a trust name, ticker, or keyword to search SEC EDGAR filings.</p>
+  <p style="font-size:13px; margin-top:12px;">
+    Examples: "Vanguard", "ProShares", "Bitcoin ETF", "ARKK"
+  </p>
+</div>
+{% endif %}
+{% endblock %}
