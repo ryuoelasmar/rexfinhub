@@ -62,7 +62,7 @@ def main():
     print(f"=== ETP Filing Tracker - Daily Run ({today}) ===")
 
     # Step 1: Run pipeline
-    print("\n[1/3] Running pipeline...")
+    print("\n[1/4] Running pipeline...")
     n = run_pipeline(
         ciks=get_all_ciks(),
         overrides=get_overrides(),
@@ -73,11 +73,27 @@ def main():
     print(f"  Processed {n} trusts")
 
     # Step 2: Export Excel
-    print("\n[2/3] Exporting Excel...")
+    print("\n[2/4] Exporting Excel...")
     export_excel(OUTPUT_DIR)
 
-    # Step 3: Save digest + send email if configured
-    print("\n[3/3] Building digest...")
+    # Step 3: Sync to database
+    print("\n[3/4] Syncing to database...")
+    try:
+        from webapp.database import init_db, SessionLocal
+        from webapp.services.sync_service import seed_trusts, sync_all
+        init_db()
+        db = SessionLocal()
+        try:
+            seed_trusts(db)
+            sync_all(db, OUTPUT_DIR)
+        finally:
+            db.close()
+        print("  Database synced.")
+    except Exception as e:
+        print(f"  DB sync failed (non-fatal): {e}")
+
+    # Step 4: Save digest + send email if configured
+    print("\n[4/4] Building digest...")
     from etp_tracker.email_alerts import build_digest_html, send_digest_email
     html = build_digest_html(OUTPUT_DIR, DASHBOARD_URL)
     digest_path = OUTPUT_DIR / "daily_digest.html"
