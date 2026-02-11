@@ -27,7 +27,8 @@ from etp_tracker.email_alerts import send_digest_email
 OUTPUT_DIR = Path("outputs")
 SINCE_DATE = "2024-11-14"  # Earliest REX filing
 USER_AGENT = "REX-ETP-Tracker/2.0 (relasmar@rexfin.com)"
-DASHBOARD_URL = ""  # Set after deploying to Streamlit Cloud
+DASHBOARD_URL = "https://rex-etp-tracker.onrender.com"
+RENDER_API_URL = "https://rex-etp-tracker.onrender.com/api/v1"
 
 
 def export_excel(output_dir: Path) -> None:
@@ -56,13 +57,53 @@ def export_excel(output_dir: Path) -> None:
         print(f"  Excel: etp_name_history.xlsx ({len(df)} entries)")
 
 
+def _load_api_key() -> str:
+    """Load API_KEY from .env."""
+    env_file = Path(__file__).parent / ".env"
+    if env_file.exists():
+        for line in env_file.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if line.startswith("API_KEY="):
+                return line.split("=", 1)[1].strip().strip('"').strip("'")
+    return ""
+
+
+def upload_db_to_render() -> None:
+    """Upload the local SQLite DB to Render's /api/v1/db/upload endpoint."""
+    import requests
+
+    db_path = Path("data") / "etp_tracker.db"
+    if not db_path.exists():
+        print("  No local database found, skipping upload.")
+        return
+
+    api_key = _load_api_key()
+    headers = {"X-API-Key": api_key} if api_key else {}
+
+    try:
+        with open(db_path, "rb") as f:
+            resp = requests.post(
+                f"{RENDER_API_URL}/db/upload",
+                files={"file": ("etp_tracker.db", f, "application/octet-stream")},
+                headers=headers,
+                timeout=120,
+            )
+        if resp.status_code == 200:
+            size_mb = db_path.stat().st_size / 1_000_000
+            print(f"  Uploaded to Render ({size_mb:.1f} MB)")
+        else:
+            print(f"  Upload failed: {resp.status_code} {resp.text}")
+    except Exception as e:
+        print(f"  Upload failed (non-fatal): {e}")
+
+
 def main():
     start = time.time()
     today = datetime.now().strftime("%Y-%m-%d %H:%M")
     print(f"=== ETP Filing Tracker - Daily Run ({today}) ===")
 
     # Step 1: Run pipeline
-    print("\n[1/4] Running pipeline...")
+    print("\n[1/5] Running pipeline...")
     n = run_pipeline(
         ciks=get_all_ciks(),
         overrides=get_overrides(),
@@ -73,11 +114,11 @@ def main():
     print(f"  Processed {n} trusts")
 
     # Step 2: Export Excel
-    print("\n[2/4] Exporting Excel...")
+    print("\n[2/5] Exporting Excel...")
     export_excel(OUTPUT_DIR)
 
     # Step 3: Sync to database
-    print("\n[3/4] Syncing to database...")
+    print("\n[3/5] Syncing to database...")
     try:
         from webapp.database import init_db, SessionLocal
         from webapp.services.sync_service import seed_trusts, sync_all
@@ -92,8 +133,12 @@ def main():
     except Exception as e:
         print(f"  DB sync failed (non-fatal): {e}")
 
-    # Step 4: Save digest + send email if configured
-    print("\n[4/4] Building digest...")
+    # Step 4: Upload DB to Render
+    print("\n[4/5] Uploading database to Render...")
+    upload_db_to_render()
+
+    # Step 5: Save digest + send email if configured
+    print("\n[5/5] Building digest...")
     from etp_tracker.email_alerts import build_digest_html, send_digest_email
     html = build_digest_html(OUTPUT_DIR, DASHBOARD_URL)
     digest_path = OUTPUT_DIR / "daily_digest.html"

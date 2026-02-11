@@ -7,10 +7,12 @@ Prefix: /api/v1
 from __future__ import annotations
 
 import os
+import shutil
+import tempfile
 from datetime import date, timedelta
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, Header, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Depends, Header, HTTPException, BackgroundTasks, UploadFile, File
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -192,3 +194,37 @@ def send_digest(
     from etp_tracker.email_alerts import send_digest_email
     sent = send_digest_email(Path("outputs"))
     return {"sent": sent}
+
+
+@router.post("/db/upload")
+async def upload_db(
+    file: UploadFile = File(...),
+    _: None = Depends(verify_api_key),
+):
+    """Replace the database file with an uploaded copy.
+
+    Used by the local pipeline to push its DB to Render after sync.
+    The uploaded file replaces data/etp_tracker.db atomically.
+    """
+    from webapp.database import DB_PATH, engine
+
+    # Write upload to temp file first
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".db", dir=str(DB_PATH.parent))
+    try:
+        shutil.copyfileobj(file.file, tmp)
+        tmp.close()
+
+        # Dispose existing connections so the file isn't locked
+        engine.dispose()
+
+        # Atomic replace
+        shutil.move(tmp.name, str(DB_PATH))
+
+        return {"status": "ok", "message": f"Database replaced ({DB_PATH.stat().st_size} bytes)"}
+    except Exception as e:
+        # Clean up temp file on failure
+        try:
+            os.unlink(tmp.name)
+        except OSError:
+            pass
+        raise HTTPException(status_code=500, detail=str(e))
