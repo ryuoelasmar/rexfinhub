@@ -14,7 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from webapp.dependencies import get_db
-from webapp.models import Trust, FundStatus
+from webapp.models import Trust, Filing, FundExtraction, FundStatus
 
 router = APIRouter(prefix="/downloads")
 templates = Jinja2Templates(directory="webapp/templates")
@@ -34,7 +34,7 @@ def _safe_path(requested: str) -> Path:
 
 
 @router.get("/")
-def downloads_page(request: Request):
+def downloads_page(request: Request, db: Session = Depends(get_db)):
     """List available downloads."""
     summary_files = []
     trust_files = []
@@ -75,11 +75,17 @@ def downloads_page(request: Request):
                     "files": csvs,
                 })
 
+    # Active trusts for per-trust filing exports
+    all_trusts = db.execute(
+        select(Trust).where(Trust.is_active == True).order_by(Trust.name)
+    ).scalars().all()
+
     return templates.TemplateResponse("downloads.html", {
         "request": request,
         "summary_files": summary_files,
         "trust_files": trust_files,
         "digest_files": digest_files,
+        "all_trusts": all_trusts,
     })
 
 
@@ -129,4 +135,59 @@ def export_funds_csv(db: Session = Depends(get_db)):
         iter([buf.getvalue()]),
         media_type="text/csv",
         headers={"Content-Disposition": "attachment; filename=funds_export.csv"},
+    )
+
+
+@router.get("/export/trust/{trust_id}/filings")
+def export_trust_filings(trust_id: int, db: Session = Depends(get_db)):
+    """Export all filings for a specific trust as CSV."""
+    trust = db.execute(
+        select(Trust).where(Trust.id == trust_id)
+    ).scalar_one_or_none()
+    if not trust:
+        raise HTTPException(status_code=404, detail="Trust not found")
+
+    results = db.execute(
+        select(
+            Filing,
+            FundExtraction.series_name,
+            FundExtraction.class_name,
+            FundExtraction.ticker,
+            FundExtraction.effective_date,
+            FundExtraction.confidence,
+        )
+        .outerjoin(FundExtraction, FundExtraction.filing_id == Filing.id)
+        .where(Filing.trust_id == trust_id)
+        .order_by(Filing.filing_date.desc(), FundExtraction.series_name)
+    ).all()
+
+    slug = trust.slug or trust.name.lower().replace(" ", "-")
+    filename = f"{slug}_filings.csv"
+
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow([
+        "Filing Date", "Form", "Accession Number",
+        "Series Name", "Class Name", "Ticker",
+        "Effective Date", "Confidence", "Primary Link",
+    ])
+    for row in results:
+        f = row.Filing
+        writer.writerow([
+            f.filing_date or "",
+            f.form or "",
+            f.accession_number or "",
+            row.series_name or "",
+            row.class_name or "",
+            row.ticker or "",
+            row.effective_date or "",
+            row.confidence or "",
+            f.primary_link or "",
+        ])
+
+    buf.seek(0)
+    return StreamingResponse(
+        iter([buf.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
     )

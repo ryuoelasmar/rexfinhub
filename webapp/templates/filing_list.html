@@ -4,7 +4,12 @@
 {% block content %}
 <div class="header">
   <h1>Recent Filings</h1>
-  <div class="date">{{ total }} filings shown (most recent first)</div>
+  <div class="date">
+    {{ total }} filings shown (most recent first)
+    {% if not show_all and not form %}
+    &middot; <span style="color:var(--gray);">Prospectus filings only</span>
+    {% endif %}
+  </div>
 </div>
 
 <form method="get" action="/filings/" style="margin-bottom:20px;">
@@ -17,6 +22,11 @@
       {% endfor %}
     </select>
     <button type="submit" class="btn btn-primary btn-sm">Filter</button>
+    {% if not show_all and not form %}
+    <a href="/filings/?show_all=true{% if trust_id %}&trust_id={{ trust_id }}{% endif %}" style="font-size:12px; color:var(--gray); margin-left:8px;">Show all form types</a>
+    {% elif show_all %}
+    <a href="/filings/{% if trust_id %}?trust_id={{ trust_id }}{% endif %}" style="font-size:12px; color:var(--gray); margin-left:8px;">Prospectus only</a>
+    {% endif %}
   </div>
 </form>
 
@@ -26,18 +36,33 @@
       <th>Date</th>
       <th>Form</th>
       <th>Trust</th>
+      <th>Fund(s)</th>
       <th>Accession</th>
-      <th>Document</th>
+      <th>Doc</th>
       <th>AI</th>
     </tr>
   </thead>
   <tbody>
     {% for row in filings %}
     {% set f = row.Filing %}
+    {% set form_upper = f.form|upper %}
     <tr>
       <td>{{ f.filing_date or '' }}</td>
-      <td>{{ f.form }}</td>
+      <td>
+        {% if form_upper.startswith('485B') and 'BXT' not in form_upper %}
+        <span class="form-badge form-badge-effective">{{ f.form }}</span>
+        {% elif 'BXT' in form_upper %}
+        <span class="form-badge form-badge-extension">{{ f.form }}</span>
+        {% elif form_upper.startswith('485A') %}
+        <span class="form-badge form-badge-initial">{{ f.form }}</span>
+        {% elif form_upper.startswith('497') %}
+        <span class="form-badge form-badge-supplement">{{ f.form }}</span>
+        {% else %}
+        <span class="form-badge">{{ f.form }}</span>
+        {% endif %}
+      </td>
       <td><a href="/trusts/{{ row.trust_slug }}">{{ row.trust_name }}</a></td>
+      <td style="font-size:12px; max-width:250px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ row.fund_names or '' }}</td>
       <td style="font-size:11px;">{{ f.accession_number }}</td>
       <td>
         {% if f.primary_link %}
@@ -48,8 +73,16 @@
     </tr>
     {% endfor %}
     {% if not filings %}
-    <tr><td colspan="6" class="empty-state">No filings found.</td></tr>
+    <tr><td colspan="7" class="empty-state">No filings found.</td></tr>
     {% endif %}
   </tbody>
 </table>
+
+<style>
+.form-badge { display:inline-block; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:600; background:var(--border); color:var(--navy); }
+.form-badge-effective { background:#27ae60; color:white; }
+.form-badge-extension { background:#0984e3; color:white; }
+.form-badge-initial { background:#e67e22; color:white; }
+.form-badge-supplement { background:#636e72; color:white; }
+</style>
 {% endblock %}

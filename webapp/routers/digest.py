@@ -8,6 +8,7 @@ from datetime import datetime
 from pathlib import Path
 
 from fastapi import APIRouter, Form, Request
+from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 router = APIRouter(prefix="/digest", tags=["digest"])
@@ -72,10 +73,12 @@ def subscribe_submit(request: Request, email: str = Form(...)):
 
 @router.post("/send")
 def send_digest(request: Request):
-    """Send the digest email now."""
+    """Send the digest email now (admin action)."""
     from etp_tracker.email_alerts import send_digest_email
 
-    sent = send_digest_email(OUTPUT_DIR)
+    dashboard_url = str(request.base_url).rstrip("/")
+    sent = send_digest_email(OUTPUT_DIR, dashboard_url=dashboard_url)
+
     if sent:
-        return {"status": "sent", "message": "Digest email sent successfully"}
-    return {"status": "failed", "message": "Failed to send digest. Check SMTP/Azure config."}
+        return RedirectResponse("/digest/subscribe?sent=ok", status_code=303)
+    return RedirectResponse("/digest/subscribe?sent=fail", status_code=303)
