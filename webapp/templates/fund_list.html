@@ -4,7 +4,7 @@
 {% block content %}
 <div class="header">
   <h1>Fund Search</h1>
-  <div class="date">{{ total }} funds found</div>
+  <div class="date">{{ total_all }} funds tracked{% if q or status or trust_id %} &middot; {{ total }} matching{% endif %}</div>
 </div>
 
 <!-- Filters -->

@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Subscribe to Digest - ETP Filing Tracker{% endblock %}
+
+{% block content %}
+<div class="header">
+  <h1>Subscribe to Daily Digest</h1>
+  <div class="date">Get ETP filing updates delivered to your inbox</div>
+</div>
+
+{% if submitted %}
+<div style="background:#e8f5e9; border-left:4px solid var(--green); padding:15px 20px; border-radius:0 8px 8px 0; margin-bottom:20px;">
+  <strong style="color:var(--green);">Request submitted.</strong>
+  Our team will review and approve your subscription. You will start receiving digests once approved.
+</div>
+{% elif error %}
+<div style="background:#fce4ec; border-left:4px solid var(--red); padding:15px 20px; border-radius:0 8px 8px 0; margin-bottom:20px;">
+  <strong style="color:var(--red);">{{ error }}</strong>
+</div>
+{% endif %}
+
+{% if not submitted %}
+<div style="max-width:480px; margin:0 auto;">
+  <div style="background:var(--light); border:1px solid var(--border); border-radius:8px; padding:30px;">
+    <p style="color:var(--muted); font-size:14px; margin-bottom:20px;">
+      Enter your email to request access to the daily ETP filing digest.
+      A team member will review your request before you start receiving emails.
+    </p>
+    <form method="post" action="/digest/subscribe">
+      <div style="margin-bottom:16px;">
+        <label style="display:block; font-size:13px; font-weight:600; margin-bottom:6px;">Email Address</label>
+        <input type="email" name="email" required placeholder="you@company.com"
+               style="width:100%; padding:10px 14px; border:1px solid var(--border); border-radius:6px; font-size:14px; box-sizing:border-box;">
+      </div>
+      <button type="submit" class="btn btn-primary" style="width:100%; padding:12px; font-size:15px;">
+        Request Access
+      </button>
+    </form>
+  </div>
+
+  <div style="margin-top:24px; padding:20px; border:1px solid var(--border); border-radius:8px;">
+    <h3 style="font-size:15px; margin-bottom:8px;">What you'll receive</h3>
+    <ul style="color:var(--muted); font-size:13px; padding-left:20px; margin:0;">
+      <li style="margin-bottom:4px;">Daily summary of new SEC filings across all tracked trusts</li>
+      <li style="margin-bottom:4px;">KPI snapshot: effective, pending, and delayed fund counts</li>
+      <li style="margin-bottom:4px;">Direct link to the dashboard for full details and AI analysis</li>
+    </ul>
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}

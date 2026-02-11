@@ -7,6 +7,7 @@ Run locally:
 from __future__ import annotations
 
 import logging
+import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -45,7 +46,7 @@ def create_app() -> FastAPI:
         app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
     # Routers
-    from webapp.routers import auth_routes, dashboard, trusts, funds, filings, search, analysis, digest, api
+    from webapp.routers import auth_routes, dashboard, trusts, funds, filings, search, analysis, digest, downloads, api
     app.include_router(auth_routes.router)
     app.include_router(dashboard.router)
     app.include_router(trusts.router, prefix="/trusts")
@@ -54,12 +55,17 @@ def create_app() -> FastAPI:
     app.include_router(search.router)
     app.include_router(analysis.router)
     app.include_router(digest.router)
+    app.include_router(downloads.router)
     app.include_router(api.router)
 
     # Health check
     @app.get("/health")
     def health():
-        return {"status": "ok", "version": "2.0.0"}
+        resp = {"status": "ok", "version": "2.0.0"}
+        commit = os.environ.get("RENDER_GIT_COMMIT", "")
+        if commit:
+            resp["commit"] = commit[:8]
+        return resp
 
     return app
 

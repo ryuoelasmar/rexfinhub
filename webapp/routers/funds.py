@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Request, HTTPException
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import select, or_
+from sqlalchemy import func, select, or_
 from sqlalchemy.orm import Session
 
 from webapp.dependencies import get_db
@@ -39,7 +39,9 @@ def fund_list(
         query = query.where(FundStatus.trust_id == trust_id)
 
     query = query.order_by(FundStatus.fund_name)
-    results = db.execute(query.limit(500)).all()
+    results = db.execute(query).all()
+
+    total_all = db.execute(select(func.count()).select_from(FundStatus)).scalar() or 0
 
     trusts = db.execute(
         select(Trust).where(Trust.is_active == True).order_by(Trust.name)
@@ -53,6 +55,7 @@ def fund_list(
         "status": status,
         "trust_id": trust_id,
         "total": len(results),
+        "total_all": total_all,
     })
 
 
@@ -77,7 +80,7 @@ def fund_detail(series_id: str, request: Request, db: Session = Depends(get_db))
 
     # All extractions for this series (filing history)
     extractions = db.execute(
-        select(FundExtraction, Filing.form, Filing.filing_date, Filing.primary_link)
+        select(FundExtraction, Filing.id.label("filing_id"), Filing.form, Filing.filing_date, Filing.primary_link)
         .join(Filing, Filing.id == FundExtraction.filing_id)
         .where(FundExtraction.series_id == series_id)
         .order_by(Filing.filing_date.desc())
