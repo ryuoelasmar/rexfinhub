@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% block title %}Downloads - ETP Filing Tracker{% endblock %}
+
+{% block content %}
+<div class="header">
+  <h1>Downloads</h1>
+  <div class="date">Export data for offline analysis</div>
+</div>
+
+<!-- Live Export -->
+<div class="section-header">
+  <h2>Live Exports</h2>
+</div>
+<div style="border:1px solid var(--border); border-radius:8px; padding:16px; margin-bottom:24px; background:var(--light);">
+  <div style="display:flex; justify-content:space-between; align-items:center;">
+    <div>
+      <strong>All Funds (CSV)</strong>
+      <div style="font-size:13px; color:var(--gray); margin-top:2px;">
+        Live export of all fund statuses from the database. Includes trust, ticker, status, effective date, and latest filing info.
+      </div>
+    </div>
+    <a href="/downloads/export/funds" class="btn btn-primary btn-sm" style="white-space:nowrap;">Download CSV</a>
+  </div>
+</div>
+
+<!-- Summary Files -->
+{% if summary_files %}
+<div class="section-header">
+  <h2>Summary Reports</h2>
+  <span class="badge">{{ summary_files|length }}</span>
+</div>
+<table>
+  <thead>
+    <tr>
+      <th>File</th>
+      <th>Size</th>
+      <th>Action</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for f in summary_files %}
+    <tr>
+      <td>{{ f.name }}</td>
+      <td style="color:var(--gray); font-size:13px;">{{ f.size }}</td>
+      <td><a href="/downloads/file?path={{ f.path }}" class="btn btn-sm">Download</a></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+<!-- Daily Digest -->
+{% if digest_files %}
+<div class="section-header" style="margin-top:24px;">
+  <h2>Daily Digest</h2>
+</div>
+<table>
+  <thead>
+    <tr>
+      <th>File</th>
+      <th>Size</th>
+      <th>Action</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for f in digest_files %}
+    <tr>
+      <td>{{ f.name }}</td>
+      <td style="color:var(--gray); font-size:13px;">{{ f.size }}</td>
+      <td><a href="/downloads/file?path={{ f.path }}" class="btn btn-sm">Download</a></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+<!-- Per-Trust CSVs -->
+{% if trust_files %}
+<div class="section-header" style="margin-top:24px;">
+  <h2>Per-Trust Data</h2>
+  <span class="badge">{{ trust_files|length }} trusts</span>
+</div>
+
+{% for trust in trust_files %}
+<details style="border:1px solid var(--border); border-radius:8px; margin-bottom:8px; background:var(--light);">
+  <summary style="padding:12px 16px; cursor:pointer; font-weight:600; font-size:14px;">
+    {{ trust.trust_name }} <span style="color:var(--gray); font-weight:400; font-size:12px;">({{ trust.files|length }} files)</span>
+  </summary>
+  <table style="margin:0;">
+    <thead>
+      <tr>
+        <th>File</th>
+        <th>Size</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for f in trust.files %}
+      <tr>
+        <td style="font-size:13px;">{{ f.name }}</td>
+        <td style="color:var(--gray); font-size:13px;">{{ f.size }}</td>
+        <td><a href="/downloads/file?path={{ f.path }}" class="btn btn-sm">Download</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</details>
+{% endfor %}
+{% endif %}
+
+{% if not summary_files and not trust_files and not digest_files %}
+<div style="text-align:center; padding:40px; color:var(--gray);">
+  <p>No files available yet. Run the pipeline to generate output files.</p>
+</div>
+{% endif %}
+{% endblock %}

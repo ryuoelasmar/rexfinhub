@@ -24,5 +24,9 @@ itsdangerous>=2.1.0
 # AI Analysis (Claude)
 anthropic>=0.39.0
 
+# Testing
+pytest>=8.0.0
+httpx>=0.27.0
+
 # Deployment
 gunicorn>=22.0.0

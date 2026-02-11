@@ -89,29 +89,69 @@
   <h2>Filing History</h2>
   <span class="badge">{{ extractions|length }}</span>
 </div>
-<table>
+
+<!-- Form type filter pills -->
+<div style="display:flex; gap:6px; margin-bottom:12px; flex-wrap:wrap;">
+  <span class="form-pill active" onclick="filterFilings('ALL', this)">All</span>
+  <span class="form-pill" onclick="filterFilings('485APOS', this)" style="border-color:#e67e22;">485APOS</span>
+  <span class="form-pill" onclick="filterFilings('485BPOS', this)" style="border-color:#27ae60;">485BPOS</span>
+  <span class="form-pill" onclick="filterFilings('485BXT', this)" style="border-color:#0984e3;">485BXT</span>
+  <span class="form-pill" onclick="filterFilings('497', this)" style="border-color:#636e72;">497</span>
+</div>
+
+<table id="filing-table">
   <thead>
     <tr>
       <th>Filing Date</th>
-      <th>Form</th>
+      <th>Form Type</th>
       <th>Class Name</th>
       <th>Ticker</th>
       <th>Effective Date</th>
-      <th>Link</th>
+      <th>Confidence</th>
+      <th>Actions</th>
     </tr>
   </thead>
   <tbody>
     {% for row in extractions %}
     {% set e = row.FundExtraction %}
-    <tr>
+    {% set form_upper = row.form|upper %}
+    <tr data-form="{{ row.form }}">
       <td>{{ row.filing_date or '' }}</td>
-      <td>{{ row.form }}</td>
+      <td>
+        {% if form_upper.startswith('485B') and 'BXT' not in form_upper %}
+        <span class="form-badge form-badge-effective">{{ row.form }}</span>
+        <span style="font-size:10px; color:var(--gray); margin-left:4px;">Post-Effective</span>
+        {% elif 'BXT' in form_upper %}
+        <span class="form-badge form-badge-extension">{{ row.form }}</span>
+        <span style="font-size:10px; color:var(--gray); margin-left:4px;">Extension</span>
+        {% elif form_upper.startswith('485A') %}
+        <span class="form-badge form-badge-initial">{{ row.form }}</span>
+        <span style="font-size:10px; color:var(--gray); margin-left:4px;">Initial Filing</span>
+        {% elif form_upper.startswith('497') %}
+        <span class="form-badge form-badge-supplement">{{ row.form }}</span>
+        <span style="font-size:10px; color:var(--gray); margin-left:4px;">Supplement</span>
+        {% else %}
+        <span class="form-badge">{{ row.form }}</span>
+        {% endif %}
+      </td>
       <td>{{ e.class_contract_name or '' }}</td>
       <td class="ticker-col">{{ e.class_symbol or '' }}</td>
       <td>{{ e.effective_date or '' }}</td>
       <td>
+        {% if e.effective_date_confidence == 'HIGH' %}
+        <span style="color:var(--green); font-size:12px;">HIGH</span>
+        {% elif e.effective_date_confidence == 'MEDIUM' %}
+        <span style="color:var(--orange); font-size:12px;">MED</span>
+        {% elif e.effective_date_confidence %}
+        <span style="color:var(--gray); font-size:12px;">{{ e.effective_date_confidence }}</span>
+        {% endif %}
+      </td>
+      <td style="white-space:nowrap;">
         {% if row.primary_link %}
-        <a href="{{ row.primary_link }}" target="_blank">View</a>
+        <a href="{{ row.primary_link }}" target="_blank" style="font-size:12px;">View</a>
+        {% endif %}
+        {% if row.filing_id %}
+        <a href="/analysis/filing/{{ row.filing_id }}" style="font-size:12px; margin-left:8px;">Analyze</a>
         {% endif %}
       </td>
     </tr>
@@ -120,4 +160,31 @@
 </table>
 {% endif %}
 
+<style>
+.form-pill { cursor:pointer; padding:4px 12px; border-radius:16px; font-size:12px; border:2px solid var(--border); background:white; color:var(--navy); font-weight:600; }
+.form-pill.active { background:var(--navy); color:white; border-color:var(--navy); }
+.form-pill:hover { opacity:0.8; }
+.form-badge { display:inline-block; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:600; background:var(--border); color:var(--navy); }
+.form-badge-effective { background:#27ae60; color:white; }
+.form-badge-extension { background:#0984e3; color:white; }
+.form-badge-initial { background:#e67e22; color:white; }
+.form-badge-supplement { background:#636e72; color:white; }
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function filterFilings(form, btn) {
+  var rows = document.querySelectorAll('#filing-table tbody tr');
+  rows.forEach(function(row) {
+    if (form === 'ALL' || row.getAttribute('data-form').toUpperCase().indexOf(form) >= 0) {
+      row.style.display = '';
+    } else {
+      row.style.display = 'none';
+    }
+  });
+  document.querySelectorAll('.form-pill').forEach(function(p) { p.classList.remove('active'); });
+  btn.classList.add('active');
+}
+</script>
 {% endblock %}
