@@ -3,7 +3,7 @@ EDGAR Search router - Search for trusts/registrants on SEC EDGAR.
 """
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
@@ -64,7 +64,7 @@ def verify_page(request: Request, cik: str, db: Session = Depends(get_db)):
 
 
 @router.post("/search/add")
-def add_trust(request: Request, cik: str = "", name: str = "", db: Session = Depends(get_db)):
+def add_trust(request: Request, cik: str = Form(""), name: str = Form(""), db: Session = Depends(get_db)):
     """Add a new trust to monitoring from search results."""
     import re
 

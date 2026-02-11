@@ -33,7 +33,7 @@
     <div class="meta-value">{{ filing.filing_date or 'N/A' }}</div>
   </div>
   <div class="meta-item">
-    <div class="meta-label">Cached Text</div>
+    <div class="meta-label">Filing Text</div>
     <div class="meta-value">
       {% if has_text %}
         {{ (text_length / 1000)|round(1) }}K characters
@@ -48,12 +48,29 @@
     <div class="meta-value">${{ cost_estimate.cost_est_usd }}</div>
   </div>
   {% endif %}
+  {% if fund_names %}
+  <div class="meta-item" style="grid-column: span 2;">
+    <div class="meta-label">Fund(s) in Filing</div>
+    <div class="meta-value" style="font-size:13px; font-weight:normal;">{{ fund_names | join(', ') }}</div>
+  </div>
+  {% endif %}
 </div>
 
 {% if configured and has_text %}
 <div style="padding:20px; background:#f8f9fa; border:1px solid var(--border); border-radius:8px; margin-bottom:24px;">
-  <h3 style="margin-top:0;">Run New Analysis</h3>
-  <form method="post" action="/analysis/filing/{{ filing.id }}">
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+    <h3 style="margin:0;">Run New Analysis</h3>
+    <span style="font-size:12px; color:var(--muted);">
+      Analyses today: <strong>{{ usage_today }}</strong> / {{ daily_limit }}
+    </span>
+  </div>
+  {% if usage_today >= daily_limit %}
+  <div style="padding:12px; background:#fff3cd; border:1px solid #ffc107; border-radius:6px; color:#856404; font-size:13px;">
+    Daily analysis limit reached ({{ daily_limit }} per day). Try again tomorrow.
+  </div>
+  {% else %}
+  <form method="post" action="/analysis/filing/{{ filing.id }}"
+        onsubmit="return confirm('Run AI analysis?\n\nUsage: {{ usage_today }}/{{ daily_limit }} today{% if cost_estimate %}\nEstimated cost: ${{ cost_estimate.cost_est_usd }}{% endif %}\n\nProceed?');">
     <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(220px, 1fr)); gap:12px; margin-bottom:16px;">
       {% for key, type in analysis_types.items() %}
       <label style="display:flex; align-items:flex-start; gap:8px; padding:12px; background:white; border:1px solid var(--border); border-radius:6px; cursor:pointer;">
@@ -72,6 +89,7 @@
     </span>
     {% endif %}
   </form>
+  {% endif %}
 </div>
 {% elif not configured %}
 <div style="padding:16px; background:#fff3cd; border:1px solid #ffc107; border-radius:8px; color:#856404; margin-bottom:24px;">
@@ -79,7 +97,7 @@
 </div>
 {% elif not has_text %}
 <div style="padding:16px; background:#fff3cd; border:1px solid #ffc107; border-radius:8px; color:#856404; margin-bottom:24px;">
-  No cached filing text available. Run the pipeline first to download this filing.
+  Filing text could not be retrieved. The filing may not be available on SEC or there may be a network issue.
 </div>
 {% endif %}
 

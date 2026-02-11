@@ -108,7 +108,31 @@
 {% endfor %}
 {% endif %}
 
-{% if not summary_files and not trust_files and not digest_files %}
+<!-- Trust Filing Exports (from DB) -->
+{% if all_trusts %}
+<div class="section-header" style="margin-top:24px;">
+  <h2>Trust Filing Exports</h2>
+  <span class="badge">{{ all_trusts|length }} trusts</span>
+</div>
+<p style="font-size:13px; color:var(--gray); margin-bottom:16px;">
+  Download all SEC filings and extracted fund data for a specific trust as CSV.
+</p>
+<div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(280px, 1fr)); gap:12px; margin-bottom:24px;">
+  {% for t in all_trusts %}
+  <div style="border:1px solid var(--border); border-radius:8px; padding:16px; background:var(--light); display:flex; justify-content:space-between; align-items:center;">
+    <div>
+      <strong style="font-size:14px;">{{ t.name }}</strong>
+      {% if t.name.startswith('REX') %}
+      <span style="background:var(--navy); color:white; font-size:10px; padding:1px 6px; border-radius:8px; margin-left:6px;">REX</span>
+      {% endif %}
+    </div>
+    <a href="/downloads/export/trust/{{ t.id }}/filings" class="btn btn-sm" style="white-space:nowrap;">Download CSV</a>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if not summary_files and not trust_files and not digest_files and not all_trusts %}
 <div style="text-align:center; padding:40px; color:var(--gray);">
   <p>No files available yet. Run the pipeline to generate output files.</p>
 </div>

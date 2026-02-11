@@ -4,15 +4,16 @@ Analysis router - On-demand Claude AI analysis of SEC filings.
 from __future__ import annotations
 
 import hashlib
+from datetime import date, datetime
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from webapp.dependencies import get_db
-from webapp.models import Filing, Trust, FundStatus, AnalysisResult
+from webapp.models import Filing, Trust, FundExtraction, AnalysisResult
 from webapp.services.claude_service import (
     ANALYSIS_TYPES,
     analyze_filing,
@@ -24,14 +25,15 @@ router = APIRouter()
 templates = Jinja2Templates(directory="webapp/templates")
 
 CACHE_DIR = Path("http_cache/web")
+DAILY_ANALYSIS_LIMIT = 10
 
 
 def _get_filing_text(filing: Filing) -> str:
-    """Retrieve cached filing text from http_cache."""
+    """Retrieve filing text: try local cache first, then fetch from SEC on demand."""
     if not filing.primary_link:
         return ""
 
-    # Match the cache key used by sec_client.py
+    # Try local cache first (works locally, not on Render)
     url_hash = hashlib.sha256(filing.primary_link.encode("utf-8")).hexdigest()
     cache_path = CACHE_DIR / f"{url_hash}.txt"
     if cache_path.exists():
@@ -39,7 +41,28 @@ def _get_filing_text(filing: Filing) -> str:
             return cache_path.read_text(encoding="utf-8", errors="ignore")
         except Exception:
             pass
-    return ""
+
+    # On-demand fetch from SEC (for Render or cache miss)
+    from webapp.services.sec_fetch import fetch_filing_text
+    return fetch_filing_text(filing.primary_link)
+
+
+def _get_fund_names(filing_id: int, db: Session) -> list[str]:
+    """Get deduplicated fund names for a filing."""
+    extractions = db.execute(
+        select(FundExtraction.series_name)
+        .where(FundExtraction.filing_id == filing_id)
+    ).scalars().all()
+    return sorted(set(n for n in extractions if n))
+
+
+def _usage_today(db: Session) -> int:
+    """Count analyses run today."""
+    today_start = datetime.combine(date.today(), datetime.min.time())
+    return db.execute(
+        select(func.count(AnalysisResult.id))
+        .where(AnalysisResult.created_at >= today_start)
+    ).scalar() or 0
 
 
 @router.get("/analysis/filing/{filing_id}")
@@ -56,6 +79,8 @@ def analysis_page(request: Request, filing_id: int, db: Session = Depends(get_db
     trust = db.get(Trust, filing.trust_id)
     filing_text = _get_filing_text(filing)
     cost_estimate = estimate_cost(len(filing_text)) if filing_text else None
+    fund_names = _get_fund_names(filing_id, db)
+    usage = _usage_today(db)
 
     # Get existing analyses for this filing
     existing = db.execute(
@@ -74,6 +99,9 @@ def analysis_page(request: Request, filing_id: int, db: Session = Depends(get_db
         "analysis_types": ANALYSIS_TYPES,
         "existing_analyses": existing,
         "configured": is_configured(),
+        "fund_names": fund_names,
+        "usage_today": usage,
+        "daily_limit": DAILY_ANALYSIS_LIMIT,
         "error": None,
     })
 
@@ -95,20 +123,57 @@ def run_analysis(
         })
 
     trust = db.get(Trust, filing.trust_id)
+    fund_names = _get_fund_names(filing_id, db)
+    usage = _usage_today(db)
+
+    # Check daily limit
+    if usage >= DAILY_ANALYSIS_LIMIT:
+        filing_text = _get_filing_text(filing)
+        existing = db.execute(
+            select(AnalysisResult)
+            .where(AnalysisResult.filing_id == filing_id)
+            .order_by(AnalysisResult.created_at.desc())
+        ).scalars().all()
+
+        return templates.TemplateResponse("analysis.html", {
+            "request": request,
+            "error": f"Daily analysis limit reached ({DAILY_ANALYSIS_LIMIT} per day). Try again tomorrow.",
+            "filing": filing,
+            "trust": trust,
+            "has_text": bool(filing_text),
+            "text_length": len(filing_text) if filing_text else 0,
+            "cost_estimate": estimate_cost(len(filing_text)) if filing_text else None,
+            "analysis_types": ANALYSIS_TYPES,
+            "existing_analyses": existing,
+            "configured": is_configured(),
+            "fund_names": fund_names,
+            "usage_today": usage,
+            "daily_limit": DAILY_ANALYSIS_LIMIT,
+        })
+
     filing_text = _get_filing_text(filing)
 
     if not filing_text:
+        existing = db.execute(
+            select(AnalysisResult)
+            .where(AnalysisResult.filing_id == filing_id)
+            .order_by(AnalysisResult.created_at.desc())
+        ).scalars().all()
+
         return templates.TemplateResponse("analysis.html", {
             "request": request,
-            "error": "No cached filing text available. Run the pipeline first to download filings.",
+            "error": "Filing text could not be retrieved from SEC. The filing may not be available or there may be a network issue.",
             "filing": filing,
             "trust": trust,
             "has_text": False,
             "text_length": 0,
             "cost_estimate": None,
             "analysis_types": ANALYSIS_TYPES,
-            "existing_analyses": [],
+            "existing_analyses": existing,
             "configured": is_configured(),
+            "fund_names": fund_names,
+            "usage_today": usage,
+            "daily_limit": DAILY_ANALYSIS_LIMIT,
         })
 
     # Run analysis
@@ -136,6 +201,9 @@ def run_analysis(
             "analysis_types": ANALYSIS_TYPES,
             "existing_analyses": existing,
             "configured": is_configured(),
+            "fund_names": fund_names,
+            "usage_today": usage,
+            "daily_limit": DAILY_ANALYSIS_LIMIT,
         })
 
     # Convert markdown to simple HTML (basic conversion)
@@ -173,6 +241,9 @@ def run_analysis(
         "analysis_types": ANALYSIS_TYPES,
         "existing_analyses": existing,
         "configured": is_configured(),
+        "fund_names": fund_names,
+        "usage_today": usage + 1,
+        "daily_limit": DAILY_ANALYSIS_LIMIT,
         "error": None,
         "just_ran": analysis_type,
     })
