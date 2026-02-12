@@ -1,30 +1,33 @@
 """
 Daily Pipeline Runner
 
-Run this script daily at 5pm via Windows Task Scheduler.
+Run this script daily at 8am via Windows Task Scheduler.
 It refreshes all trust data, generates Excel files, and sends email digest.
 
-Setup Task Scheduler:
-    schtasks /create /tn "ETP_Filing_Tracker" /tr "python D:\\REX_ETP_TRACKER\\run_daily.py" /sc daily /st 17:00
+Setup Task Scheduler (run PowerShell as Admin):
+    schtasks /create /tn "ETP_Filing_Tracker" /tr "python D:\\REX_ETP_TRACKER\\run_daily.py" /sc daily /st 08:00 /f
 
 To run manually:
     python run_daily.py
 """
 from __future__ import annotations
+import os
 import time
 import sys
 from pathlib import Path
 from datetime import datetime
 
-# Ensure project root is on path
-sys.path.insert(0, str(Path(__file__).parent))
+# Ensure project root is on path and set working directory
+PROJECT_ROOT = Path(__file__).resolve().parent
+sys.path.insert(0, str(PROJECT_ROOT))
+os.chdir(PROJECT_ROOT)
 
 from etp_tracker.run_pipeline import run_pipeline
 from etp_tracker.trusts import get_all_ciks, get_overrides
 from etp_tracker.email_alerts import send_digest_email
 
 
-OUTPUT_DIR = Path("outputs")
+OUTPUT_DIR = PROJECT_ROOT / "outputs"
 SINCE_DATE = "2024-11-14"  # Earliest REX filing
 USER_AGENT = "REX-ETP-Tracker/2.0 (relasmar@rexfin.com)"
 DASHBOARD_URL = "https://rex-etp-tracker.onrender.com"
@@ -72,7 +75,7 @@ def upload_db_to_render() -> None:
     """Upload the local SQLite DB to Render's /api/v1/db/upload endpoint."""
     import requests
 
-    db_path = Path("data") / "etp_tracker.db"
+    db_path = PROJECT_ROOT / "data" / "etp_tracker.db"
     if not db_path.exists():
         print("  No local database found, skipping upload.")
         return
