@@ -198,8 +198,22 @@ git push origin main
 
 ## 7. Scheduled Daily Run (Windows Task Scheduler)
 
+Run PowerShell **as Administrator**, then:
+
 ```powershell
-schtasks /create /tn "ETP_Filing_Tracker" /tr "python D:\REX_ETP_TRACKER\run_daily.py" /sc daily /st 17:00
+schtasks /create /tn "ETP_Filing_Tracker" /tr "python D:\REX_ETP_TRACKER\run_daily.py" /sc daily /st 08:00 /f
 ```
 
-This runs at 5pm daily: pipeline + Excel exports + email digest.
+This runs at 8am daily: pipeline + Excel exports + DB sync + email digest.
+
+**Important**: Your laptop must be on and not sleeping at 8am. Set power options to "Never sleep" when plugged in.
+
+To check the task exists:
+```powershell
+schtasks /query /tn "ETP_Filing_Tracker"
+```
+
+To delete it:
+```powershell
+schtasks /delete /tn "ETP_Filing_Tracker" /f
+```
