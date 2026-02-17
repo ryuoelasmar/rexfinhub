@@ -8,7 +8,7 @@
 </div>
 
 {% if added %}
-<div style="padding:14px 20px; background:#d4edda; border:1px solid #c3e6cb; border-radius:8px; color:#155724; margin-bottom:20px; display:flex; justify-content:space-between; align-items:center;">
+<div class="alert alert-success" style="display:flex; justify-content:space-between; align-items:center;">
   <span><strong>{{ added }}</strong> has been added to monitoring. Filing data will appear after the next pipeline run.</span>
   <a href="/" style="color:#155724; font-weight:600;">Dismiss</a>
 </div>
@@ -24,16 +24,16 @@
     <div class="num">{{ total_funds }}</div>
     <div class="label">Total Funds</div>
   </div>
-  <div class="kpi">
-    <div class="num" style="color:var(--green)">{{ total_effective }}</div>
+  <div class="kpi kpi-green">
+    <div class="num">{{ total_effective }}</div>
     <div class="label">Effective</div>
   </div>
-  <div class="kpi">
-    <div class="num" style="color:var(--orange)">{{ total_pending }}</div>
+  <div class="kpi kpi-orange">
+    <div class="num">{{ total_pending }}</div>
     <div class="label">Pending</div>
   </div>
-  <div class="kpi">
-    <div class="num" style="color:var(--red)">{{ total_delayed }}</div>
+  <div class="kpi kpi-red">
+    <div class="num">{{ total_delayed }}</div>
     <div class="label">Delayed</div>
   </div>
 </div>
@@ -42,7 +42,7 @@
 {% if recent_filings %}
 <div class="section-header">
   <h2>Recent Filings (Last 7 Days)</h2>
-  <a href="/filings/" class="badge" style="text-decoration:none;">View All</a>
+  <span class="badge">{{ recent_filings|length }}</span>
 </div>
 <table>
   <thead>
@@ -78,24 +78,25 @@
 <!-- All Trusts (Card Grid) -->
 <div class="section-header" style="margin-top:30px;">
   <h2>Monitored Trusts</h2>
-  <span class="badge">{{ trusts|length }}</span>
+  <div style="display:flex; align-items:center; gap:8px;">
+    <span class="badge">{{ trusts|length }}</span>
+    <a href="/search/" class="btn btn-primary btn-sm">+ Request a Trust</a>
+  </div>
 </div>
 
-<div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(280px, 1fr)); gap:12px; margin-top:12px;">
+<div class="trust-grid">
   {% for t in trusts %}
-  <a href="/trusts/{{ t.slug }}" class="trust-card" style="text-decoration:none; color:inherit; display:block; border:1px solid var(--border); border-radius:8px; padding:16px; background:var(--light); transition:box-shadow 0.15s, border-color 0.15s;">
-    <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
-      <h3 style="font-size:15px; margin:0;">{{ t.name }}</h3>
-      {% if t.is_rex %}
-      <span style="background:var(--blue); color:white; padding:1px 8px; border-radius:10px; font-size:11px; font-weight:600;">[REX]</span>
-      {% endif %}
+  <a href="/trusts/{{ t.slug }}" class="trust-card">
+    <div class="trust-card-header">
+      <h3>{{ t.name }}</h3>
+      {% if t.is_rex %}<span class="rex-badge">[REX]</span>{% endif %}
     </div>
     {% if t.total == 0 %}
-    <div style="font-size:13px; color:var(--orange); font-weight:600;">
-      Pipeline pending... <span style="font-weight:400; color:var(--gray); font-size:11px;">data appears after next run</span>
+    <div class="trust-card-pending">
+      Pipeline pending... <span>data appears after next run</span>
     </div>
     {% else %}
-    <div style="display:flex; gap:16px; font-size:13px; color:var(--gray);">
+    <div class="trust-card-stats">
       <span><strong>{{ t.total }}</strong> funds</span>
       <span style="color:var(--green);">{{ t.effective }} eff</span>
       <span style="color:var(--orange);">{{ t.pending }} pend</span>
@@ -107,8 +108,4 @@
   </a>
   {% endfor %}
 </div>
-
-<style>
-  .trust-card:hover { border-color: var(--blue) !important; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
-</style>
 {% endblock %}

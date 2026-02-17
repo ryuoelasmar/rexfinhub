@@ -1,4 +1,4 @@
-// ETP Filing Tracker - Dashboard JavaScript
+// ETP Filing Tracker - REX Financial
 
 // Toggle trust accordion
 function toggleTrust(el) {
@@ -77,26 +77,44 @@ function globalSearch(query) {
   });
 }
 
-// Column sorting
+// Column sorting with sort indicators
 function sortTable(tableId, colIdx) {
   var table = document.getElementById(tableId);
   if (!table) return;
   var tbody = table.querySelector('tbody');
   var rows = Array.from(tbody.querySelectorAll('tr'));
-  var asc = table.getAttribute('data-sort-dir') !== 'asc';
+  var asc = table.getAttribute('data-sort-dir') !== 'asc' || parseInt(table.getAttribute('data-sort-col')) !== colIdx;
   table.setAttribute('data-sort-dir', asc ? 'asc' : 'desc');
+  table.setAttribute('data-sort-col', colIdx);
+
   rows.sort(function(a, b) {
     var aVal = a.cells[colIdx] ? a.cells[colIdx].textContent.trim() : '';
     var bVal = b.cells[colIdx] ? b.cells[colIdx].textContent.trim() : '';
-    var aNum = parseFloat(aVal);
-    var bNum = parseFloat(bVal);
+    var aNum = parseFloat(aVal.replace(/[,$%B]/g, ''));
+    var bNum = parseFloat(bVal.replace(/[,$%B]/g, ''));
     if (!isNaN(aNum) && !isNaN(bNum)) {
       return asc ? aNum - bNum : bNum - aNum;
     }
     return asc ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
   });
   rows.forEach(function(row) { tbody.appendChild(row); });
+
+  // Update header sort indicators
+  var ths = table.querySelectorAll('th');
+  ths.forEach(function(th, i) {
+    th.classList.remove('sorted-asc', 'sorted-desc');
+    if (i === colIdx) {
+      th.classList.add(asc ? 'sorted-asc' : 'sorted-desc');
+    }
+  });
 }
+
+// Mark sortable headers on page load
+document.addEventListener('DOMContentLoaded', function() {
+  document.querySelectorAll('th[onclick*="sortTable"]').forEach(function(th) {
+    th.classList.add('sortable');
+  });
+});
 
 // Back to top visibility
 window.addEventListener('scroll', function() {

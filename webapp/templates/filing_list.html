@@ -14,10 +14,10 @@
 
 <!-- Filters -->
 <form method="get" action="/filings/" style="margin-bottom:20px;">
-  <div class="filter-bar" style="border-radius:8px;">
+  <div class="filter-bar">
     <input type="text" name="q" value="{{ q }}" placeholder="Search by trust, accession, form type...">
     <input type="text" name="form" value="{{ form }}" placeholder="Form filter (e.g. 485BPOS)" style="width:180px;">
-    <select name="trust_id" style="padding:6px 12px; border:1px solid var(--border); border-radius:4px; font-size:13px;">
+    <select name="trust_id">
       <option value="0">All Trusts</option>
       {% for t in trusts %}
       <option value="{{ t.id }}" {% if trust_id == t.id %}selected{% endif %}>{{ t.name }}</option>
@@ -68,7 +68,7 @@
       </td>
       <td><a href="/trusts/{{ row.trust_slug }}">{{ row.trust_name }}</a></td>
       <td style="font-size:12px; max-width:250px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ row.fund_names or '' }}</td>
-      <td style="font-size:11px;">{{ f.accession_number }}</td>
+      <td class="accession-col">{{ f.accession_number }}</td>
       <td>
         {% if f.primary_link %}
         <a href="{{ f.primary_link }}" target="_blank">View</a>
@@ -82,12 +82,4 @@
     {% endif %}
   </tbody>
 </table>
-
-<style>
-.form-badge { display:inline-block; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:600; background:var(--border); color:var(--navy); }
-.form-badge-effective { background:#27ae60; color:white; }
-.form-badge-extension { background:#0984e3; color:white; }
-.form-badge-initial { background:#e67e22; color:white; }
-.form-badge-supplement { background:#636e72; color:white; }
-</style>
 {% endblock %}

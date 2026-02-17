@@ -4,26 +4,28 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{% block title %}ETP Filing Tracker{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/css/style.css">
   {% block head %}{% endblock %}
 </head>
 <body>
 
 <nav class="sticky-nav">
-  <a href="/" class="brand" style="text-decoration:none">ETP Tracker</a>
-  <a href="/">Dashboard</a>
-  <a href="/funds/">Funds</a>
-  <a href="/filings/">Filings</a>
-  <a href="/search/">Search</a>
-  <a href="/downloads/">Downloads</a>
-  <a href="/screener/">Screener</a>
-  <a href="/digest/subscribe">Subscribe</a>
-  <a href="/admin/">Admin</a>
+  <a href="/" class="brand" style="text-decoration:none">REX Financial</a>
+  <a href="/" {% if request.url.path == '/' %}class="active"{% endif %}>Dashboard</a>
+  <a href="/funds/" {% if '/funds' in request.url.path %}class="active"{% endif %}>Funds</a>
+  <a href="/search/" {% if '/search' in request.url.path %}class="active"{% endif %}>Search</a>
+  <a href="/downloads/" {% if '/downloads' in request.url.path %}class="active"{% endif %}>Downloads</a>
+  <a href="/screener/" {% if '/screener' in request.url.path %}class="active"{% endif %}>Screener</a>
+  <a href="/digest/subscribe" {% if '/digest' in request.url.path %}class="active"{% endif %}>Subscribe</a>
+  <a href="/admin/" {% if '/admin' in request.url.path %}class="active"{% endif %}>Admin</a>
   {% block nav_extra %}{% endblock %}
-  <span style="margin-left:auto; font-size:12px; color:var(--muted);">
+  <span style="margin-left:auto; font-size:var(--text-sm); color:rgba(255,255,255,0.5);">
     {% set session_user = request.session.get('user') if request.session is defined else None %}
     {% if session_user and session_user.name %}
-      {{ session_user.name }} &middot; <a href="/auth/logout" style="color:var(--muted);">Logout</a>
+      {{ session_user.name }} &middot; <a href="/auth/logout" style="color:rgba(255,255,255,0.5); height:auto; border:none; padding:0;">Logout</a>
     {% endif %}
   </span>
 </nav>
@@ -36,7 +38,7 @@
 
 <div class="container">
   <div class="footer">
-    ETP Filing Tracker v2.0 &middot; Data from SEC EDGAR &middot; {% block footer_extra %}{% endblock %}
+    REX Financial &middot; ETP Filing Tracker v2.0 &middot; Data from SEC EDGAR &middot; {% block footer_extra %}{% endblock %}
   </div>
 </div>
 
