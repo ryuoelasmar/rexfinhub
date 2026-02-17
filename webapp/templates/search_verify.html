@@ -69,14 +69,14 @@
 </div>
 
 {% if already_monitored %}
-<div style="padding:16px; background:#d4edda; border:1px solid #c3e6cb; border-radius:8px; color:#155724;">
+<div class="alert alert-success">
   This trust is already being monitored.
 </div>
 {% elif not submitted %}
 <form method="post" action="/search/request" style="margin-top:16px;">
   <input type="hidden" name="cik" value="{{ details.cik }}">
   <input type="hidden" name="name" value="{{ details.name }}">
-  <div style="padding:16px; background:#e8f4fd; border:1px solid #bee5eb; border-radius:8px; margin-bottom:16px;">
+  <div class="alert alert-info">
     <p style="margin:0; font-size:14px;">
       <strong>Request monitoring for "{{ details.name }}"?</strong><br>
       <span style="color:var(--muted); font-size:13px;">
@@ -89,5 +89,21 @@
   <a href="/search/" class="btn" style="margin-left:8px;">Cancel</a>
 </form>
 {% endif %}
+
+<!-- View filings on EDGAR -->
+<div class="alert alert-info" style="margin-top:20px;">
+  <p style="margin:0; font-size:14px;">
+    <strong>View filings on EDGAR directly</strong><br>
+    <span style="color:var(--muted); font-size:13px;">
+      Browse this trust's SEC filings. This data is not processed by our tracker unless you request monitoring above.
+    </span>
+  </p>
+  <p style="margin-top:10px;">
+    <a href="https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK={{ '%010d' % (details.cik|int) }}&type=485&dateb=&owner=include&count=40"
+       target="_blank" class="btn btn-primary btn-sm">
+      View {{ details.name }} on EDGAR
+    </a>
+  </p>
+</div>
 {% endif %}
 {% endblock %}

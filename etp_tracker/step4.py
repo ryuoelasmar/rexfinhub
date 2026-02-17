@@ -175,11 +175,19 @@ def step4_rollup_for_trust(output_root, trust_name: str) -> int:
         eff_date = str(latest.get("Effective Date", "")).strip()
         eff_confidence = str(latest.get("Effective Date Confidence", "")).strip() if "Effective Date Confidence" in latest.index else ""
 
-        # Prospectus Link: only use 485BPOS or 485APOS links (NOT 497)
+        # Prospectus Link: prefer 485BPOS (actual prospectus), NOT 485BXT (extension)
         prosp_link = ""
-        g_485 = g[g["Form"].fillna("").str.upper().str.startswith("485")]
-        if not g_485.empty:
-            prosp_link = str(g_485.iloc[-1].get("Primary Link", ""))
+        forms_upper = g["Form"].fillna("").str.upper()
+        # First: latest 485BPOS
+        g_bpos = g[forms_upper.str.contains("485B", na=False) & ~forms_upper.str.contains("BXT", na=False)]
+        if not g_bpos.empty:
+            prosp_link = str(g_bpos.iloc[-1].get("Primary Link", ""))
+        # Fallback: latest 485APOS
+        if not prosp_link:
+            g_apos = g[forms_upper.str.startswith("485A")]
+            if not g_apos.empty:
+                prosp_link = str(g_apos.iloc[-1].get("Primary Link", ""))
+        # Final fallback: latest filing link
         if not prosp_link:
             prosp_link = str(latest.get("Primary Link", ""))
 
