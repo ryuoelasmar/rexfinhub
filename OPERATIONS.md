@@ -26,8 +26,8 @@ uvicorn webapp.main:app --reload --port 8000
 Then open: **http://localhost:8000**
 
 Pages:
-- `/` - Dashboard (trust overview, fund counts, recent filings)
-- `/funds/` - Fund Search (all 2,836 funds, search/filter)
+- `/` - Dashboard (122 trust cards, fund counts, recent filings with filters)
+- `/funds/` - Fund Search (~7,000 ETF funds, mutual fund classes excluded)
 - `/filings/` - Filing Search (all filings, search by trust/form/accession)
 - `/trusts/<slug>` - Trust detail page
 - `/screener/` - Launch Screener (Top 50 + Filed-only tables)
@@ -42,14 +42,14 @@ Pages:
 
 ## 2. Running the SEC Pipeline (Local Only)
 
-The pipeline fetches SEC filings for all 20 trusts. **Run locally, not on Render.**
+The pipeline fetches SEC filings for all 122 trusts. **Run locally, not on Render.**
 
 The pipeline is **incremental by default** - it only processes NEW filings that haven't been extracted before. This is tracked via `_manifest.json` files in each trust's output folder.
 
-- **Daily incremental run**: 2-5 seconds (only new filings)
-- **Full reprocess**: 30-90 min (all filings from scratch)
+- **Daily incremental run**: seconds if no new filings, minutes if new filings found
+- **Full reprocess**: ~2-3 hours (all 122 trusts from scratch)
 
-### Full daily run (pipeline + Excel + email digest):
+### Full daily run (pipeline + Excel + DB sync + Render upload + email digest):
 
 ```powershell
 cd D:\REX_ETP_TRACKER
@@ -127,19 +127,21 @@ print('DB sync complete')
 
 ---
 
-## 3. Screener Operations
+## 3. Screener Workflow
 
-### Upload Bloomberg data (Render or Local):
+### Daily Bloomberg data update:
 
-1. Go to **Admin Panel** > **Launch Screener**
-2. Click **Upload New Data** and select your `.xlsx` file
-3. File must have sheets: `stock_data` and `etp_data`
-4. Scoring runs automatically. Page auto-refreshes in 10-15s.
-5. Go to **Screener** tab to see results.
+1. Scrape Bloomberg for etp_data and stock_data
+2. Save the Excel file as `D:\REX_ETP_TRACKER\data\SCREENER\data.xlsx`
+   - Must have two sheets: `stock_data` and `etp_data`
+3. Go to **Admin Panel** > **Score Data** to re-score
+4. View results at `/screener/`
+
+No upload through the web UI. Place the file directly on disk.
 
 ### Re-score existing data:
 
-1. Go to **Admin Panel** > **Launch Screener**
+1. Go to **Admin Panel** (`/admin/`, password `123`)
 2. Click **Score Data**
 
 ### Generate PDF report (local):
@@ -190,10 +192,29 @@ Output: `reports/Candidate_Evaluation_YYYYMMDD.pdf`
 ### Send from admin panel:
 1. Go to **Admin Panel** > **Email Digest**
 2. Click **Send Digest Now**
-3. Requires pipeline CSV data in `outputs/` folder
+3. Reads directly from the database (no CSV dependency)
 4. Recipients configured in `email_recipients.txt`
 
-### Send from command line:
+### Subscriber management:
+1. Users subscribe via the webapp (writes to `digest_subscribers.txt`)
+2. Admin approves/rejects in **Admin Panel** > **Digest Subscribers**
+3. Approved emails are added to `email_recipients.txt`
+
+### Send from command line (DB-based):
+
+```powershell
+cd D:\REX_ETP_TRACKER
+python -c "
+from webapp.database import SessionLocal, init_db
+from etp_tracker.email_alerts import send_digest_from_db
+init_db()
+db = SessionLocal()
+send_digest_from_db(db, dashboard_url='https://rex-etp-tracker.onrender.com')
+db.close()
+"
+```
+
+### Send from command line (CSV-based, legacy):
 
 ```powershell
 cd D:\REX_ETP_TRACKER
@@ -206,7 +227,25 @@ send_digest_email(Path('outputs'), dashboard_url='https://rex-etp-tracker.onrend
 
 ---
 
-## 6. Deploying to Render
+## 6. Admin Panel
+
+The admin panel (`/admin/`, password `123`) has these sections:
+
+| Section | What It Does |
+|---------|-------------|
+| Trust Request Approvals | Approve/reject trust monitoring requests (writes to DB + trusts.py) |
+| Digest Subscriber Approvals | Approve/reject digest subscribers (writes to email_recipients.txt) |
+| Email Digest | Send digest email to all approved recipients (reads from DB) |
+| Score Data | Re-score Bloomberg screener data from data/SCREENER/data.xlsx |
+| Email Report | Email screener report to subscribers |
+| Ticker QC | Check pipeline ticker quality |
+| AI Analysis Status | View Claude API usage |
+
+**Not in admin**: Pipeline control (run locally only), screener data upload (place file on disk).
+
+---
+
+## 7. Deploying to Render
 
 The app auto-deploys on push to `main`.
 
@@ -216,13 +255,13 @@ The app auto-deploys on push to `main`.
 
 ### What works on Render:
 - All web pages (dashboard, funds, filings, screener, search, evaluate)
-- Bloomberg data upload and scoring (via admin panel)
+- Screener scoring (data must be on persistent disk)
 - Candidate evaluator (interactive ticker evaluation)
-- Email digest (if Azure Graph API is configured)
+- Email digest from DB (if Azure Graph API is configured)
 - AI filing analysis (if Anthropic API key is set)
 
 ### What must run locally:
-- SEC filing pipeline (`run_daily.py`) - too long, crashes web server
+- SEC filing pipeline (`run_daily.py`) - too resource-intensive for Render
 - PDF report generation (needs local file output)
 
 ### Push and deploy:
@@ -236,7 +275,7 @@ git push origin main
 
 ---
 
-## 7. Scheduled Daily Run (Windows Task Scheduler)
+## 8. Scheduled Daily Run (Windows Task Scheduler)
 
 Run PowerShell **as Administrator**, then:
 
@@ -244,7 +283,7 @@ Run PowerShell **as Administrator**, then:
 schtasks /create /tn "ETP_Filing_Tracker" /tr "python D:\REX_ETP_TRACKER\run_daily.py" /sc daily /st 08:00 /f
 ```
 
-This runs at 8am daily: pipeline + Excel exports + DB sync + email digest.
+This runs at 8am daily: pipeline + Excel exports + DB sync + Render upload + email digest.
 
 **Important**: Your laptop must be on and not sleeping at 8am. Set power options to "Never sleep" when plugged in.
 
