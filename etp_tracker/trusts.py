@@ -89,6 +89,65 @@ TRUST_CIKS = {
     "1896677": "Grayscale Solana Staking ETF",  # SOL
     "2037427": "Grayscale XRP Trust ETF",  # XRP
     "1723788": "Bitwise 10 Crypto Index ETF",  # BITW
+    # Added 2026-02-18 - Bloomberg screener categories: LI, Crypto, CC, Defined
+    # -- Leveraged & Inverse --
+    "1415311": "ProShares Trust II",  # Commodity/currency leveraged (AGQ, BOIL, UVXY)
+    "1039803": "ProFunds",  # ProFunds leveraged mutual funds
+    # -- Covered Call / Income --
+    "1761055": "BlackRock ETF Trust",  # iShares buy-write/covered call
+    "1804196": "BlackRock ETF Trust II",
+    "1501825": "Hartford Funds Exchange-Traded Trust",
+    "1676326": "Morgan Stanley ETF Trust",
+    "1506001": "Neuberger Berman ETF Trust",
+    "1064641": "Select Sector SPDR Trust",  # SPDR sector covered call
+    "836267": "SCM Trust",
+    # -- Defined Outcome --
+    "1797318": "AIM ETF Products Trust",  # Innovator/AIM buffer ETFs
+    "1727074": "PGIM ETF Trust",  # PGIM buffer ETFs
+    "1616668": "Pacer Funds Trust",  # Pacer defined outcome
+    "1936157": "Elevation Series Trust",  # Buffer/defined outcome
+    "1580843": "WEBs ETF Trust",
+    "1898391": "Fidelity Greenwood Street Trust",
+    "1581539": "Horizons ETF Trust",
+    # -- Multi-Strategy Platforms --
+    "1633061": "Amplify ETF Trust",
+    "1408970": "AdvisorShares Trust",
+    "1527428": "Arrow Investments Trust",
+    "1719812": "Collaborative Investment Series Trust",
+    "2078265": "Corgi ETF Trust I",
+    "945908": "Fidelity Covington Trust",
+    "1547576": "Krane Shares Trust",  # KraneShares
+    "1040612": "Madison Funds",
+    "1537140": "Northern Lights Fund Trust III",
+    "1644419": "Northern Lights Fund Trust IV",
+    "1454889": "Schwab Strategic Trust",
+    "1650149": "Series Portfolios Trust",
+    "1506213": "Strategy Shares",
+    "1795351": "T. Rowe Price Exchange-Traded Funds, Inc.",
+    "1496608": "AB Active ETFs, Inc.",
+    "1970751": "Advisor Managed Portfolios",
+    "1371571": "Invesco DB US Dollar Index Trust",
+    "1516212": "SSGA Active Trust",  # State Street Global Advisors
+    "768847": "VanEck Funds",
+    # -- Commodity Trusts --
+    "1529505": "United States Commodity Funds Trust I",  # USO, UNG etc.
+    "1985840": "Tidal Commodities Trust I",  # DEFI commodity trust
+    # -- Crypto S-1 filers (no 485 forms, tracked for completeness) --
+    "2064314": "21Shares Dogecoin ETF",
+    "2028834": "21Shares Solana ETF",
+    "2082889": "Bitwise Chainlink ETF",
+    "2053791": "Bitwise Dogecoin ETF",
+    "2045872": "Bitwise Solana Staking ETF",  # BSOL
+    "2039525": "Bitwise XRP ETF",
+    "2063380": "Fidelity Solana Fund",
+    "2033807": "Franklin Crypto Trust",  # EZPZ
+    "2074409": "Invesco Galaxy Solana ETF",  # QSOL
+    "1767057": "Osprey Bitcoin Trust",  # OBTC
+    "1345125": "Cyber Hornet Trust",  # BBB, SSS, EEE, XXX
+    "2039505": "Canary XRP ETF",
+    "2039458": "Canary HBAR ETF",
+    "2039461": "Canary Litecoin ETF",
+    "2041869": "Canary Marinade Solana ETF",
 }
 
 def get_all_ciks() -> list[str]:

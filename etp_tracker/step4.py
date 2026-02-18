@@ -102,7 +102,7 @@ def step4_rollup_for_trust(output_root, trust_name: str) -> int:
     if not p3.exists() or p3.stat().st_size == 0:
         return 0
 
-    df = pd.read_csv(p3, dtype=str)
+    df = pd.read_csv(p3, dtype=str, on_bad_lines="skip", engine="python")
     if df.empty:
         return 0
 

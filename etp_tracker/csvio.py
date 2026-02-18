@@ -8,7 +8,7 @@ def write_csv(path: Path, df: pd.DataFrame) -> None:
 
 def append_dedupe_csv(path: Path, df_new: pd.DataFrame, key_cols: list[str]) -> pd.DataFrame:
     if path.exists() and path.stat().st_size:
-        df_old = pd.read_csv(path, dtype=str)
+        df_old = pd.read_csv(path, dtype=str, on_bad_lines="skip", engine="python")
     else:
         df_old = pd.DataFrame(columns=df_new.columns)
     all_df = pd.concat([df_old, df_new], ignore_index=True)
