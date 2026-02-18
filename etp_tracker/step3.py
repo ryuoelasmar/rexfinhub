@@ -397,7 +397,7 @@ def step3_extract_for_trust(client: SECClient, output_root, trust_name: str,
     if not p2.exists() or p2.stat().st_size == 0:
         return metrics
     try:
-        df2 = pd.read_csv(p2, dtype=str)
+        df2 = pd.read_csv(p2, dtype=str, on_bad_lines="skip", engine="python")
     except pd.errors.EmptyDataError:
         return metrics
     if df2.empty:

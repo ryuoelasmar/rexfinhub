@@ -140,7 +140,7 @@ def sync_extractions(db: Session, trust: Trust, output_dir: Path) -> int:
     if not csv_path.exists():
         return 0
 
-    df = pd.read_csv(csv_path, dtype=str)
+    df = pd.read_csv(csv_path, dtype=str, on_bad_lines="skip", engine="python")
     if df.empty:
         return 0
 
