@@ -1,0 +1,10 @@
+# Dev Orchestrator Configuration
+# See: https://github.com/rexfinhub/dev-orchestrator
+
+[orchestrator]
+model = "claude-opus-4-6"
+planning_model = "claude-opus-4-6"
+max_turns = 50
+max_budget_usd = 5.0
+max_parallel = 3
+pause_between_spawns = 2.0
