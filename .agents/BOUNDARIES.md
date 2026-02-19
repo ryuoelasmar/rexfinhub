@@ -1,44 +1,19 @@
-# File Ownership
+# File Ownership - 2026-02-19 15:12
 
-## MARKET Agent
-```
-webapp/routers/market.py           # CREATE
-webapp/services/market_data.py     # CREATE
-webapp/templates/market/*          # CREATE folder + files
-webapp/static/js/market.js         # CREATE
-webapp/static/css/market.css       # CREATE
-```
+## Context
+Fix screener data path bug
 
-## FIXES Agent
-```
-webapp/routers/screener.py         # EDIT
-webapp/routers/downloads.py        # EDIT
-webapp/services/screener_*.py      # EDIT
-webapp/templates/downloads.html    # EDIT
-webapp/templates/screener_*.html   # EDIT
-screener/*                         # EDIT
-```
+## Active Agents
 
-## EMAILS Agent
-```
-webapp/services/email_reports.py   # CREATE
-webapp/templates/emails/*          # CREATE folder + files
-scripts/send_weekly_report.py      # CREATE
-```
+### FIXES (TASK-001)
+- screener/config.py (EDIT)
+- screener/candidate_evaluator.py (EDIT)
+- webapp/services/screener_3x_cache.py (EDIT)
+- webapp/routers/admin.py (EDIT)
 
-## SHARED (Add only, don't remove existing code)
-```
-webapp/main.py                     # Add router registration
-webapp/templates/base.html         # Add nav link
-requirements.txt                   # Add dependencies
-```
 
-## MASTER Handles (Sub-agents don't touch)
-```
-.agents/*
-config/*
-docs/*
-CLAUDE.md
-render.yaml
-.gitignore
-```
+## Off-Limits (orchestrator only)
+- CLAUDE.md
+- .agents/*
+- .github/*
+- config/*
