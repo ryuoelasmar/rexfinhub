@@ -10,7 +10,7 @@ import re
 from datetime import date, datetime
 from pathlib import Path
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Form, Request
+from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import func, select
@@ -148,9 +148,6 @@ def admin_page(request: Request, db: Session = Depends(get_db)):
         select(ScreenerUpload).order_by(ScreenerUpload.uploaded_at.desc()).limit(1)
     ).scalar_one_or_none()
 
-    # Detect screener data file on disk
-    screener_data_available = SCREENER_DATA_FILE.exists()
-
     return templates.TemplateResponse("admin.html", {
         "request": request,
         "pending_requests": pending_requests,
@@ -159,7 +156,6 @@ def admin_page(request: Request, db: Session = Depends(get_db)):
         "ai_configured": ai_configured(),
         "ai_usage_today": ai_usage_today,
         "screener_upload": screener_upload,
-        "screener_data_available": screener_data_available,
     })
 
 
@@ -288,50 +284,6 @@ def reject_subscriber(request: Request, email: str = Form("")):
         _update_subscriber_status(email, "REJECTED")
 
     return RedirectResponse("/admin/?rejected_sub=1", status_code=303)
-
-
-# --- Screener Upload & Scoring ---
-
-# Use the same data file path as the screener config
-from screener.config import DATA_FILE as SCREENER_DATA_FILE
-
-
-@router.post("/screener/rescore")
-def screener_rescore(
-    request: Request,
-    background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db),
-):
-    """Re-run scoring on existing data."""
-    if not _is_admin(request):
-        return RedirectResponse("/admin/", status_code=302)
-
-    from webapp.services.screener_service import is_screener_running
-
-    if is_screener_running():
-        return RedirectResponse("/admin/?screener=running", status_code=303)
-
-    # Check the data file the loader expects
-    if not SCREENER_DATA_FILE.exists():
-        return RedirectResponse("/admin/?screener=error&msg=No+data+file.+Upload+Bloomberg+.xlsx+first.", status_code=303)
-
-    # Create new upload record
-    upload = ScreenerUpload(
-        file_name=SCREENER_DATA_FILE.name,
-        uploaded_by="admin-rescore",
-    )
-    db.add(upload)
-    db.commit()
-    db.refresh(upload)
-
-    # Invalidate 3x analysis cache (re-scoring)
-    from webapp.services.screener_3x_cache import invalidate_cache
-    invalidate_cache()
-
-    from webapp.services.screener_service import run_screener_pipeline
-    background_tasks.add_task(run_screener_pipeline, upload.id)
-
-    return RedirectResponse("/admin/?screener=scoring", status_code=303)
 
 
 @router.post("/screener/email")
