@@ -1,0 +1,71 @@
+{% set active_tab = 'calendar' %}
+{% extends "market/base.html" %}
+
+{% block title %}Compliance Calendar — REX Financial Intelligence Hub{% endblock %}
+
+{% block market_content %}
+<h2 class="section-title">Compliance Calendar</h2>
+
+<div class="calendar-grid">
+  <div class="calendar-section">
+    <h3>Upcoming 485BXT Extensions</h3>
+    {% if upcoming %}
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Trust</th>
+          <th>Effective Date</th>
+          <th>Days Until</th>
+          <th>Accession</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in upcoming %}
+        <tr>
+          <td>{{ item.trust.name }}</td>
+          <td>{{ item.effective_date.strftime('%b %d, %Y') if item.effective_date else 'N/A' }}</td>
+          <td>
+            <span class="urgency-badge urgency-{{ item.urgency }}">
+              {% if item.days_until is not none %}{{ item.days_until }}d{% else %}&mdash;{% endif %}
+            </span>
+          </td>
+          <td class="text-mono" style="font-size:0.75rem">{{ item.filing.accession_number }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="alert alert-info">No upcoming extension events.</div>
+    {% endif %}
+  </div>
+
+  <div class="calendar-section">
+    <h3>Recently Effective (Last 30 Days)</h3>
+    {% if recently_effective %}
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Trust</th>
+          <th>Effective Date</th>
+          <th>Form</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in recently_effective %}
+        <tr>
+          <td>{{ item.trust.name }}</td>
+          <td>{{ item.effective_date.strftime('%b %d, %Y') if item.effective_date else 'N/A' }}</td>
+          <td><span class="badge badge-primary">{{ item.filing.form }}</span></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="alert alert-info">No recent effective filings.</div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+
+{% block market_scripts %}
+{% endblock %}
