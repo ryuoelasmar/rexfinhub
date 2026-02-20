@@ -125,17 +125,22 @@ def _clean_data_import(df: pd.DataFrame) -> pd.DataFrame:
         rename_map[field] = f"t_w4.{field}"
 
     # Identify columns to keep: base fields + work-table fields
+    # Only keep the FIRST occurrence of each field name to avoid duplicates
+    # (data_import has ticker, ticker.1, ticker.2, Ticker, etc.)
+    base_lower = {f.lower() for f in _BASE_FIELDS}
+    w2_lower = {f.lower() for f in _W2_FIELDS}
+    w3_lower = {f.lower() for f in _W3_FIELDS}
+    w4_lower = {f.lower() for f in _W4_FIELDS}
+    seen_lower = set()
     keep_cols = []
     for col in df.columns:
         col_lower = col.lower().strip()
-        if col_lower in [f.lower() for f in _BASE_FIELDS]:
+        if col_lower in seen_lower:
+            continue
+        if col_lower in base_lower or col_lower in w2_lower or \
+           col_lower in w3_lower or col_lower in w4_lower:
             keep_cols.append(col)
-        elif col_lower in [f.lower() for f in _W2_FIELDS]:
-            keep_cols.append(col)
-        elif col_lower in [f.lower() for f in _W3_FIELDS]:
-            keep_cols.append(col)
-        elif col_lower in [f.lower() for f in _W4_FIELDS]:
-            keep_cols.append(col)
+            seen_lower.add(col_lower)
 
     df = df[keep_cols].copy()
 
@@ -186,8 +191,7 @@ def _build_category_attributes(xl: pd.ExcelFile) -> pd.DataFrame:
         "map_cc_underlier": "map_cc_underlier",
         "map_cc_index": "map_cc_index",
     }
-    if "map_cc_category" in cm.columns:
-        cc_cols_map["map_cc_category"] = "map_cc_category"
+    # Note: map_cc_category exists in the sheet but is NOT in q_master_data output
     cc_available = {k: v for k, v in cc_cols_map.items() if k in cm.columns}
     if "ticker.1" in cc_available:
         cc_df = cm[list(cc_available.keys())].dropna(subset=["ticker.1"]).copy()
@@ -272,19 +276,23 @@ def build_master_data(xl: pd.ExcelFile = None) -> pd.DataFrame:
     df = _clean_data_import(raw)
 
     # Step 3: Join fund_mapping -> adds etp_category
+    # Deduplicate on (ticker, etp_category) to avoid row multiplication
     try:
         fm = _read_sheet(xl, "fund_mapping")
         fm = fm[["etp_category", "ticker"]].dropna(subset=["ticker"])
+        fm = fm.drop_duplicates(subset=["ticker", "etp_category"])
         df = df.merge(fm, on="ticker", how="left")
     except Exception:
         df["etp_category"] = pd.NA
 
     # Step 4: Join issuer_mapping -> adds issuer_nickname
+    # Deduplicate to avoid row multiplication
     try:
         im = _read_sheet(xl, "issuer_mapping")
         im = im[["etp_category", "issuer", "issuer_nickname"]].dropna(
             subset=["etp_category", "issuer"]
         )
+        im = im.drop_duplicates(subset=["etp_category", "issuer"])
         df = df.merge(im, on=["etp_category", "issuer"], how="left")
     except Exception:
         df["issuer_nickname"] = pd.NA
@@ -302,20 +310,83 @@ def build_master_data(xl: pd.ExcelFile = None) -> pd.DataFrame:
         pass
 
     # Step 6: Join dim_fund_category -> adds category_display, issuer_display, is_rex, fund_category_key
+    # dim_fund_category has multiple rows per ticker (one per category_display).
+    # To avoid many-to-many explosion, build a join key using fund_category_key.
+    # fund_category_key format: "TICKER|category_display"
+    # We map etp_category -> category_display pattern to find the right dim row.
     try:
         dim = _read_sheet(xl, "dim_fund_category")
         dim = dim.dropna(subset=["ticker"])
-        dim_cols = ["ticker", "category_display", "issuer_display",
-                    "market_status", "fund_type", "is_rex", "fund_category_key"]
-        dim_available = [c for c in dim_cols if c in dim.columns]
-        dim = dim[dim_available]
-        # Avoid collision with existing market_status and fund_type
-        df = df.merge(dim, on="ticker", how="left", suffixes=("", "_dim"))
-        # Drop the _dim suffixed duplicates (keep the dim version for
-        # category fields, but keep original market_status/fund_type from data_import)
-        for col in ["market_status_dim", "fund_type_dim"]:
-            if col in df.columns:
-                df = df.drop(columns=[col])
+
+        # Build a lookup from fund_category_key -> dim row
+        if "fund_category_key" in dim.columns:
+            # For tickers with only one dim row, simple ticker join works
+            # For tickers with multiple dim rows, we need to match via category
+            dim_single = dim.drop_duplicates(subset=["ticker"], keep=False)
+            dim_multi = dim[dim.duplicated(subset=["ticker"], keep=False)]
+
+            # Build _fck on master side for multi-category tickers
+            # etp_category -> possible category_display values
+            _ETP_TO_CATS = {
+                "LI": {"Leverage & Inverse - Single Stock",
+                        "Leverage & Inverse - Index/Basket/ETF Based",
+                        "Leverage & Inverse - Unknown/Miscellaneous"},
+                "CC": {"Income - Single Stock",
+                       "Income - Index/Basket/ETF Based",
+                       "Income - Unknown/Miscellaneous"},
+                "Crypto": {"Crypto"},
+                "Defined": {"Defined Outcome"},
+                "Thematic": {"Thematic"},
+            }
+
+            # For multi-category dim rows, create a lookup: (ticker, etp_category) -> dim row
+            multi_rows = []
+            for _, row in dim_multi.iterrows():
+                cat_display = row.get("category_display", "")
+                # Find which etp_category this category_display belongs to
+                etp_cat = None
+                for etp, cats in _ETP_TO_CATS.items():
+                    if cat_display in cats:
+                        etp_cat = etp
+                        break
+                if etp_cat:
+                    row_dict = row.to_dict()
+                    row_dict["_etp_category"] = etp_cat
+                    multi_rows.append(row_dict)
+
+            # Join single-dim tickers on ticker only
+            dim_single_cols = [c for c in dim_single.columns
+                               if c not in ("market_status", "fund_type")]
+            df = df.merge(
+                dim_single[dim_single_cols],
+                on="ticker", how="left",
+            )
+
+            # Join multi-dim tickers on (ticker, etp_category)
+            if multi_rows:
+                dim_multi_df = pd.DataFrame(multi_rows)
+                dim_multi_cols = [c for c in dim_multi_df.columns
+                                  if c not in ("market_status", "fund_type")]
+                dim_multi_df = dim_multi_df[dim_multi_cols]
+                # Merge on ticker + etp_category match
+                df = df.merge(
+                    dim_multi_df.rename(columns={"_etp_category": "etp_category"}),
+                    on=["ticker", "etp_category"],
+                    how="left",
+                    suffixes=("", "_multi"),
+                )
+                # Fill in from multi where single was NaN
+                for col in ["category_display", "issuer_display", "is_rex",
+                            "fund_category_key"]:
+                    multi_col = f"{col}_multi"
+                    if multi_col in df.columns:
+                        df[col] = df[col].fillna(df[multi_col])
+                        df = df.drop(columns=[multi_col])
+        else:
+            # Fallback: simple ticker join (may create duplicates)
+            dim_cols_use = [c for c in dim.columns
+                           if c not in ("market_status", "fund_type")]
+            df = df.merge(dim[dim_cols_use], on="ticker", how="left")
     except Exception:
         pass
 
@@ -324,10 +395,10 @@ def build_master_data(xl: pd.ExcelFile = None) -> pd.DataFrame:
         rex = _read_sheet(xl, "rex_funds")
         rex_tickers = set(rex["ticker"].dropna().astype(str).str.strip())
         if "is_rex" in df.columns:
-            df["is_rex"] = (
-                df["ticker"].isin(rex_tickers)
-                | df["is_rex"].fillna(False).astype(bool)
+            existing = pd.array(
+                df["is_rex"].fillna(False).tolist(), dtype=bool
             )
+            df["is_rex"] = df["ticker"].isin(rex_tickers) | existing
         else:
             df["is_rex"] = df["ticker"].isin(rex_tickers)
     except Exception:
@@ -421,60 +492,55 @@ def build_time_series(master_df: pd.DataFrame, xl: pd.ExcelFile = None) -> pd.Da
     Build the equivalent of q_aum_time_series_labeled.
 
     Process:
-    1. Unpivot AUM columns from master_df into long format
+    1. Deduplicate master to one row per ticker (take first = base data_import row)
     2. Filter to tickers present in dim_fund_category
-    3. Join category_display, issuer_display, is_rex, fund_category_key
-    4. Apply t_timeseries_include filter rules (category_display + issuer_display pairs)
+    3. Unpivot AUM columns into long format (ticker, months_ago, aum_value)
+    4. Join dim_fund_category on ticker (many-to-one: multi-category tickers get
+       one row per fund_category_key per month = 1903 keys * 37 months = 70,411 rows)
     5. Add issuer_group (known issuers keep name, others become 'Other')
     """
     if xl is None:
         xl = _load_excel()
 
-    # Step 1: Unpivot
-    ts = _unpivot_aum(master_df)
-    if ts.empty:
-        return ts
+    # Step 1: Deduplicate master to one row per ticker
+    # (multi-category tickers have duplicate AUM values, keep first)
+    deduped = master_df.drop_duplicates(subset=["ticker"], keep="first")
 
-    # Step 2: Filter to dim_fund_category tickers only
+    # Step 2: Filter to dim_fund_category tickers
     try:
         dim = _read_sheet(xl, "dim_fund_category")
         dim = dim.dropna(subset=["ticker"])
         dim_tickers = set(dim["ticker"].astype(str).str.strip())
-        ts = ts[ts["ticker"].isin(dim_tickers)].copy()
+        deduped = deduped[deduped["ticker"].isin(dim_tickers)].copy()
     except Exception:
-        pass
+        return pd.DataFrame()
 
+    # Step 3: Unpivot AUM columns
+    ts = _unpivot_aum(deduped)
     if ts.empty:
         return ts
 
-    # Step 3: Join dim fields
+    # Step 4: Join dim_fund_category (this expands multi-category tickers)
     dim_join_cols = ["ticker", "category_display", "issuer_display",
                      "is_rex", "fund_category_key"]
     dim_available = [c for c in dim_join_cols if c in dim.columns]
-    ts = ts.merge(dim[dim_available], on="ticker", how="left")
+    ts = ts.merge(dim[dim_available], on="ticker", how="inner")
 
-    # Step 4: Apply t_timeseries_include filter
+    # Step 5: Add issuer_group
+    # issuer_group = issuer_display ONLY when the specific
+    # (category_display, issuer_display) pair is in the t_timeseries_include rules.
+    # Otherwise issuer_group = "Other".
     try:
         include_rules = _load_ts_include_rules(xl)
-        if not include_rules.empty:
-            # Keep only rows where (category_display, issuer_display) is in include rules
+        if not include_rules.empty and "issuer_display" in ts.columns:
             rule_set = set(
                 zip(include_rules["category_display"], include_rules["issuer_display"])
             )
-            mask = ts.apply(
-                lambda r: (r.get("category_display"), r.get("issuer_display")) in rule_set,
+            ts["issuer_group"] = ts.apply(
+                lambda r: r["issuer_display"]
+                if (r.get("category_display"), r.get("issuer_display")) in rule_set
+                else "Other",
                 axis=1,
-            )
-            ts = ts[mask].copy()
-    except Exception:
-        pass
-
-    # Step 5: Add issuer_group
-    try:
-        known_issuers = _load_issuer_group_rules(xl)
-        if known_issuers and "issuer_display" in ts.columns:
-            ts["issuer_group"] = ts["issuer_display"].apply(
-                lambda x: x if x in known_issuers else "Other"
             )
         elif "issuer_display" in ts.columns:
             ts["issuer_group"] = ts["issuer_display"]
