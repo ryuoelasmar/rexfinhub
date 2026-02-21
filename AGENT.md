@@ -1,91 +1,214 @@
-# AGENT: Screener-Admin
-**Task**: TASK-C — Screener Data Path Fix + Admin Score Data Removal
-**Branch**: feature/screener-admin
+# AGENT: Home-Design
+**Task**: TASK-A — Home Page + Global CSS Design Overhaul
+**Branch**: feature/home-design
 **Status**: DONE
 
 ## Progress Reporting
-Write timestamped progress to: `.agents/progress/Screener-Admin.md`
+Write timestamped progress to: `.agents/progress/Home-Design.md`
 Format: `## [HH:MM] Task description` then bullet details.
+Update every major step.
 
-## Your Files
-- `screener/config.py`
-- `webapp/routers/admin.py`
-- `webapp/templates/admin.html`
+## Your Mission
+Elevate the home page and global CSS to Bloomberg Terminal / etf.com quality.
+Three files you own completely:
+- `webapp/templates/home.html`
+- `webapp/static/css/style.css`
+- `webapp/templates/base.html`
 
-## CRITICAL: Read These First
-Read ALL of these before touching anything:
-- `screener/config.py`
-- `screener/data_loader.py`
-- `webapp/routers/admin.py`
-- `webapp/templates/admin.html`
-- `webapp/services/screener_3x_cache.py`
+## Step 1: Read First
+Read ALL three files before touching anything:
+- `webapp/static/css/style.css` (understand existing variables, classes, what exists)
+- `webapp/templates/home.html` (current naked layout)
+- `webapp/templates/base.html` (nav structure)
 
-## Fix 1: screener/config.py — Auto-detect Data Path
+## Step 2: style.css — Design System Overhaul
 
-The current DATA_FILE points to `data/SCREENER/data.xlsx` which is gitignored and not present on Render. Change it to auto-detect the new OneDrive master file.
+Add to `:root` (do NOT remove any existing variables):
+```css
+/* Extended palette */
+--teal:        #0D9488;
+--teal-light:  #CCFBF1;
+--slate:       #475569;
+--slate-light: #F8FAFC;
+--indigo:      #4338CA;
+--amber:       #D97706;
+--emerald:     #059669;
+--rose:        #E11D48;
 
-Replace the DATA_FILE line with:
-```python
-_LOCAL_DATA = Path(r"C:\Users\RyuEl-Asmar\REX Financial LLC\REX Financial LLC - Rex Financial LLC\Product Development\MasterFiles\MASTER Data\The Dashboard.xlsx")
-_LEGACY_DATA = PROJECT_ROOT / "data" / "SCREENER" / "data.xlsx"
-DATA_FILE = _LOCAL_DATA if _LOCAL_DATA.exists() else _LEGACY_DATA
+/* Market category colors */
+--cat-li:      #1E40AF;
+--cat-income:  #059669;
+--cat-crypto:  #7C3AED;
+--cat-defined: #D97706;
+--cat-thematic:#0891B2;
+
+/* Surface hierarchy */
+--surface-0:   #F8FAFC;
+--surface-1:   #FFFFFF;
+--surface-2:   #F1F5F9;
+--surface-3:   #E2E8F0;
+
+/* Typography */
+--text-primary:   #0F172A;
+--text-secondary: #475569;
+--text-muted:     #94A3B8;
+--text-accent:    #1E40AF;
 ```
 
-IMPORTANT: The new master file has sheets named `stock_data` and `etp_data` — check `screener/data_loader.py` to confirm what sheet names it reads. If data_loader.py reads `etp_data` and the new file has `etp_data`, no change needed to data_loader.py. If data_loader reads a different name, update data_loader.py to match.
+Add global improvements:
+- `.data-table th` → `position: sticky; top: 0; z-index: 2; background: var(--surface-1);`
+- `.data-table tr:hover` → `background: var(--surface-2);`
+- `.kpi` cards → left border accent, stronger shadow on hover
 
-After this fix, `screener_3x_cache.py`'s `warm_cache()` at startup will auto-load data from the OneDrive file and compute the cache automatically. The screener will never show "no data" when running locally.
+Add utility classes:
+```css
+.badge-positive { background: #D1FAE5; color: #065F46; }
+.badge-negative { background: #FEE2E2; color: #991B1B; }
+.badge-neutral  { background: #F1F5F9; color: #475569; }
+.flow-positive  { color: #059669; font-weight: 600; }
+.flow-negative  { color: #DC2626; font-weight: 600; }
+.text-mono      { font-family: var(--font-mono); }
+.truncate-cell  { max-width: 220px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sticky-col     { position: sticky; left: 0; background: var(--surface-1); z-index: 1; }
+```
 
-## Fix 2: admin.py — Remove Screener Score Data Route
+Add complete Home page CSS section (hero, sections, cards, contact, pagination):
+```css
+/* ── Home ─────────────────────────────────────────────────── */
+.home-hero {
+  background: linear-gradient(135deg, #0f1923 0%, #1a3a5c 60%, #0D9488 100%);
+  color: white; padding: 56px 40px; border-radius: 12px;
+  margin-bottom: 40px; position: relative; overflow: hidden;
+}
+.home-hero::after {
+  content: ''; position: absolute; right: -60px; top: -60px;
+  width: 300px; height: 300px; border-radius: 50%;
+  background: rgba(13,148,136,0.15); pointer-events: none;
+}
+.home-title { font-size: 2.6rem; font-weight: 800; letter-spacing: -0.04em; margin: 0 0 12px; }
+.home-tagline { font-size: 1.05rem; opacity: 0.82; max-width: 640px; line-height: 1.65; margin: 0; }
+.home-section { margin-bottom: 36px; }
+.home-section-title {
+  font-size: 0.7rem; font-weight: 700; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--text-muted);
+  margin-bottom: 16px; padding-bottom: 10px;
+  border-bottom: 2px solid var(--surface-3);
+  display: flex; align-items: center; gap: 8px;
+}
+.home-section-title::before {
+  content: ''; display: inline-block; width: 3px; height: 14px;
+  border-radius: 2px; background: var(--teal);
+}
+.home-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 14px; }
+.home-card {
+  display: block; text-decoration: none; color: inherit;
+  border: 1px solid var(--surface-3); border-radius: 10px;
+  padding: 18px 20px; background: var(--surface-1);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  transition: box-shadow 0.18s, transform 0.18s, border-color 0.18s;
+  border-top: 3px solid transparent;
+}
+.home-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.10); transform: translateY(-2px); text-decoration: none; color: inherit; }
+.home-card--market  { border-top-color: var(--cat-li); }
+.home-card--filing  { border-top-color: var(--emerald); }
+.home-card--product { border-top-color: var(--amber); }
+.home-card--ops     { border-top-color: var(--indigo); }
+.home-card-tag { font-size: 0.62rem; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; margin-bottom: 8px; }
+.home-card--market  .home-card-tag { color: var(--cat-li); }
+.home-card--filing  .home-card-tag { color: var(--emerald); }
+.home-card--product .home-card-tag { color: var(--amber); }
+.home-card--ops     .home-card-tag { color: var(--indigo); }
+.home-card-title { font-size: 0.98rem; font-weight: 700; margin-bottom: 6px; color: var(--text-primary); }
+.home-card-desc { font-size: 0.8rem; color: var(--text-secondary); line-height: 1.5; }
+.home-contact {
+  text-align: center; color: var(--text-muted); font-size: 0.85rem;
+  margin-top: 40px; padding-top: 20px; border-top: 1px solid var(--surface-3);
+}
+/* Pagination */
+.pagination-bar { display: flex; align-items: center; gap: 12px; margin-top: 20px; flex-wrap: wrap; }
+.pagination-info { color: var(--text-muted); font-size: 0.83rem; }
+.pagination-controls { display: flex; gap: 4px; }
+.pagination-controls .btn { min-width: 34px; text-align: center; }
+.select-sm { padding: 4px 8px; font-size: 0.82rem; border: 1px solid var(--surface-3); border-radius: 6px; background: var(--surface-1); color: var(--text-primary); }
+```
 
-In `webapp/routers/admin.py`:
+## Step 3: home.html — Executive Hub Rewrite
 
-1. Find and REMOVE the `POST /admin/screener/rescore` route entirely (search for `@router.post` with "rescore" or "score" in the path)
-2. Remove `screener_data_available` from the GET `/admin/` template context dict
-3. Remove any imports that are ONLY used by the removed rescore route (check if `from screener.config import DATA_FILE as SCREENER_DATA_FILE` is used elsewhere — if only for rescore, remove it)
+4 sections, professional tone:
 
-Be careful: keep ALL other admin routes intact:
-- GET `/admin/` (dashboard)
-- POST `/admin/trusts/approve`
-- POST `/admin/trusts/reject`
-- POST `/admin/subscribers/approve`
-- POST `/admin/subscribers/reject`
-- POST `/admin/digest/send`
-- GET `/admin/ticker-qc` (if exists)
+**Hero**: "REX Financial Intelligence Hub" with tagline:
+> "The central intelligence platform for all REX teams. Real-time access to market positioning, SEC filing activity, product analytics, and operational data across the structured and leveraged ETP universe."
 
-## Fix 3: admin.html — Remove Score Data UI Section
+**Section 1 — MARKET INTELLIGENCE** (`.home-card--market`, 6 cards):
+- REX View `/market/rex` — "REX branded suite performance, AUM by suite, and competitive positioning."
+- Category View `/market/category` — "Deep-dive into AUM and flow data across 8 ETP categories."
+- Product Treemap `/market/treemap` — "Visual AUM distribution across the entire product universe."
+- Issuer Analysis `/market/issuer` — "Rank and compare all ETP issuers by AUM, flows, and market share."
+- Market Share `/market/share` — "Track category-level market share shifts over time."
+- Underlier Deep-Dive `/market/underlier` — "Analyze the full ETP landscape by underlying asset."
 
-In `webapp/templates/admin.html`, find and remove the "Launch Screener" / "Score Data" section. This is approximately a block that contains:
-- A heading like "Score Data" or "Launch Screener"
-- A form with a submit button that posts to `/admin/screener/rescore`
-- Any associated flash message blocks for `?screener=` parameter
+**Section 2 — FILINGS & COMPLIANCE** (`.home-card--filing`, 3 cards):
+- Filing Tracker `/dashboard` — "Monitor SEC filings across 122 trusts. Track 485BPOS, 485BXT, and 497 forms."
+- Fund Search `/funds/` — "Search 7,000+ ETF funds by ticker, name, or trust. Filter by status."
+- Filing Analysis `/analysis` — "Analyze filing trends, effective date patterns, and amendment history."
 
-Remove the entire section but keep all other admin sections:
-- Trust Request Approvals
-- Digest Subscriber Approvals
-- Email Digest
-- Ticker QC / AI Analysis Status
+**Section 3 — PRODUCT DEVELOPMENT** (`.home-card--product`, 2 cards):
+- Launch Screener `/screener/` — "Score ETP launch candidates across 4 pillars: AUM, flows, options, spread."
+- Candidate Evaluator `/screener/evaluate` — "Side-by-side scoring comparison for specific tickers."
 
-Also remove any `{% if screener_data_available %}` conditionals related to the removed section.
+**Section 4 — OPERATIONS** (`.home-card--ops`, 2 cards):
+- Data Downloads `/downloads/` — "Export fund status, filing history, and pipeline CSVs for any trust."
+- Email Digest `/digest` — "Send filing digest emails to subscribed REX team members."
 
-## Verification
-After making changes, verify:
-1. `python -c "from screener.config import DATA_FILE; print(DATA_FILE, DATA_FILE.exists())"` — should show the OneDrive path and True (if on the local machine)
-2. `python -c "from webapp.routers.admin import router; print('admin ok')"` — should import without errors
-3. No references to `screener/rescore` remain in admin.py or admin.html
+Footer: `relasmar@rexfin.com`
+
+Use this structure:
+```html
+{% extends "base.html" %}
+{% block title %}REX Financial Intelligence Hub{% endblock %}
+{% block content %}
+<div class="home-hero">
+  <h1 class="home-title">REX Financial Intelligence Hub</h1>
+  <p class="home-tagline">The central intelligence platform for all REX teams...</p>
+</div>
+
+<div class="home-section">
+  <div class="home-section-title">Market Intelligence</div>
+  <div class="home-grid">
+    <a href="/market/rex" class="home-card home-card--market">
+      <div class="home-card-tag">Market</div>
+      <div class="home-card-title">REX View</div>
+      <div class="home-card-desc">...</div>
+    </a>
+    ... (5 more cards)
+  </div>
+</div>
+... (3 more sections)
+
+<div class="home-contact">
+  <p>Questions or feedback? Contact <a href="mailto:relasmar@rexfin.com">relasmar@rexfin.com</a></p>
+</div>
+{% endblock %}
+```
+
+## Step 4: base.html — Nav Improvements
+
+Read base.html carefully first, then:
+- Add `<meta name="theme-color" content="#0f1923">` in `<head>`
+- Ensure nav has consistent dark background
+- Add subtle bottom border on nav: `border-bottom: 1px solid rgba(255,255,255,0.1)`
+- Keep ALL existing links and structure
 
 ## Commit Convention
 ```
-git add screener/config.py webapp/routers/admin.py webapp/templates/admin.html
-git commit -m "fix: Screener auto-loads from OneDrive master file; remove admin Score Data section"
+git add webapp/templates/home.html webapp/static/css/style.css webapp/templates/base.html
+git commit -m "feat: Home page executive hub redesign + global CSS design system"
 ```
 
 ## Done Criteria
-- [x] screener/config.py auto-detects OneDrive path, falls back to legacy
-- [x] `/admin/` loads without errors (no screener_data_available reference)
-- [x] Score Data section completely gone from admin.html
-- [x] No POST /admin/screener/rescore route in admin.py
-- [x] Screener will auto-load on server startup (warm_cache in screener_3x_cache.py)
-
-## Log
-- All three fixes implemented in prior commits (5f93895, 1f10ae3, 7e71aed, 24afa32)
-- Verification passed: DATA_FILE resolves to OneDrive path (exists=True), admin router imports clean, no rescore references remain
+- [ ] home.html has 4 color-coded sections with proper CSS classes
+- [ ] style.css has all new CSS variables in :root
+- [ ] style.css has all home-card, home-section, home-hero CSS
+- [ ] style.css has pagination-bar, .flow-positive/.flow-negative utilities
+- [ ] base.html nav is consistent
+- [ ] No existing CSS broken (only additions/improvements)
