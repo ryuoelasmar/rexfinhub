@@ -41,7 +41,7 @@
 <!-- Recent Filings -->
 <div class="section-header">
   <h2>Recent Filings</h2>
-  <span class="badge">{{ recent_filings|length }}</span>
+  <span class="badge">{{ total_filings }}</span>
 </div>
 <form method="get" action="/dashboard" style="margin-bottom:12px;">
   <div class="filter-bar" style="border-radius:8px;">
@@ -67,7 +67,7 @@
 </form>
 
 {% if recent_filings %}
-<p style="font-size:var(--text-sm); color:var(--gray-500); margin-bottom:var(--sp-2);">Showing up to {{ filing_limit }} filings</p>
+<p style="font-size:var(--text-sm); color:var(--gray-500); margin-bottom:var(--sp-2);">{{ total_filings }} filing{{ 's' if total_filings != 1 else '' }} found{% if total_pages > 1 %} &middot; page {{ page }} of {{ total_pages }}{% endif %}</p>
 <table id="recentFilings">
   <thead>
     <tr>
@@ -97,6 +97,29 @@
     {% endfor %}
   </tbody>
 </table>
+{% if total_pages > 1 %}
+<div class="pagination-bar">
+  <span class="pagination-info">{{ total_filings }} filings &middot; page {{ page }} of {{ total_pages }}</span>
+  <div class="pagination-controls">
+    {% if page > 1 %}
+    <a href="?{{ base_qs }}{% if base_qs %}&{% endif %}page={{ page - 1 }}" class="btn btn-sm">Prev</a>
+    {% endif %}
+    {% set start_p = [1, page - 2]|max %}
+    {% set end_p = [total_pages + 1, page + 3]|min %}
+    {% for p in range(start_p, end_p) %}
+    <a href="?{{ base_qs }}{% if base_qs %}&{% endif %}page={{ p }}" class="btn btn-sm {{ 'btn-primary' if p == page else '' }}">{{ p }}</a>
+    {% endfor %}
+    {% if page < total_pages %}
+    <a href="?{{ base_qs }}{% if base_qs %}&{% endif %}page={{ page + 1 }}" class="btn btn-sm">Next</a>
+    {% endif %}
+  </div>
+  <select class="select-sm" onchange="location='?{{ base_qs }}{% if base_qs %}&{% endif %}page=1&per_page='+this.value">
+    {% for n in [25, 50, 100, 200] %}
+    <option value="{{ n }}"{{ ' selected' if n == per_page else '' }}>{{ n }}/page</option>
+    {% endfor %}
+  </select>
+</div>
+{% endif %}
 {% else %}
 <div style="text-align:center; padding:20px; color:var(--muted); font-size:13px;">
   {% if form_type or filing_trust_id or days != 7 %}
