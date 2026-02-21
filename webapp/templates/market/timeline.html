@@ -1,0 +1,57 @@
+{% set active_tab = 'timeline' %}
+{% extends "market/base.html" %}
+
+{% block title %}Fund Lifecycle Timeline — REX Financial Intelligence Hub{% endblock %}
+
+{% block market_content %}
+<h2 class="section-title">Fund Lifecycle Timeline</h2>
+
+<div class="timeline-controls">
+  <select class="select-sm" onchange="if(this.value) window.location='/market/timeline?trust_id='+this.value">
+    <option value="">Select a trust...</option>
+    {% for trust in trusts %}
+    <option value="{{ trust.id }}" {{ 'selected' if trust.id == trust_id else '' }}>{{ trust.name }}</option>
+    {% endfor %}
+  </select>
+</div>
+
+{% if selected_trust %}
+<h3 class="trust-timeline-title">{{ selected_trust.name }}</h3>
+
+{% if timeline_items %}
+<div class="timeline">
+  {% for item in timeline_items %}
+  <div class="timeline-entry">
+    <div class="timeline-date">{{ item.filing.filing_date.strftime('%b %d, %Y') if item.filing.filing_date else 'N/A' }}</div>
+    <div class="timeline-content">
+      <div class="timeline-form">
+        <span class="badge badge-{{ 'primary' if item.filing.form == '485BPOS' else 'warning' if item.filing.form == '485BXT' else 'secondary' }}">
+          {{ item.filing.form }}
+        </span>
+        {% if item.effective_date %}
+        <span class="timeline-effective">Effective: {{ item.effective_date.strftime('%b %d, %Y') }}</span>
+        {% endif %}
+      </div>
+      {% if item.fund_count > 0 %}
+      <div class="timeline-funds">{{ item.fund_count }} fund{{ 's' if item.fund_count != 1 else '' }}</div>
+      {% endif %}
+      <div class="timeline-accession">
+        <a href="https://www.sec.gov/Archives/edgar/data/{{ selected_trust.cik }}/{{ item.filing.accession_number|replace('-','') }}/{{ item.filing.accession_number }}-index.htm"
+           target="_blank" class="text-link">{{ item.filing.accession_number }}</a>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="alert alert-info">No 485 filings found for this trust.</div>
+{% endif %}
+
+{% elif trusts %}
+<div class="alert alert-info">Select a trust above to view its filing timeline.</div>
+{% endif %}
+
+{% endblock %}
+
+{% block market_scripts %}
+{% endblock %}
