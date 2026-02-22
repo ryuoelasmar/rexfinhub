@@ -52,20 +52,35 @@ var MarketCharts = (function() {
         responsive: true,
         maintainAspectRatio: true,
         plugins: {
+          datalabels: {
+            color: '#fff',
+            font: { weight: 'bold', size: 11 },
+            formatter: function(value, ctx) {
+              var total = ctx.dataset.data.reduce(function(a,b){return a+b;},0);
+              var pct = total > 0 ? (value/total*100).toFixed(1) : 0;
+              var label = ctx.chart.data.labels[ctx.dataIndex];
+              var short = label.replace('Leverage & Inverse - ','L&I ').replace('Income - ','Inc ');
+              return pct > 3 ? short + '\n' + pct + '%' : pct + '%';
+            },
+            anchor: 'center',
+            align: 'center',
+            display: function(ctx) {
+              var total = ctx.dataset.data.reduce(function(a,b){return a+b;},0);
+              return total > 0 && ctx.dataset.data[ctx.dataIndex] / total > 0.02;
+            }
+          },
           legend: {
-            position: 'right',
+            position: 'bottom',
             labels: {
-              font: { size: 11, family: "'Inter', sans-serif" },
-              padding: 12,
-              usePointStyle: true,
-              pointStyleWidth: 10
+              boxWidth: 12,
+              font: { size: 11 }
             }
           },
           tooltip: {
             callbacks: {
               label: function(ctx) {
-                var total = ctx.dataset.data.reduce(function(a, b) { return a + b; }, 0);
-                var pct = total > 0 ? ((ctx.parsed / total) * 100).toFixed(1) : '0';
+                var total = ctx.dataset.data.reduce(function(a,b){return a+b;},0);
+                var pct = total > 0 ? (ctx.parsed/total*100).toFixed(1) : 0;
                 return ctx.label + ': ' + fmtMoney(ctx.parsed) + ' (' + pct + '%)';
               }
             }
@@ -343,25 +358,38 @@ var MarketFilters = (function() {
   }
 
   function applyFilters() {
-    var catSelect = document.getElementById('categorySelect');
-    var category = catSelect ? catSelect.value : 'All';
-    var filters = getActiveFilters();
-    var filterStr = Object.keys(filters).length > 0 ? JSON.stringify(filters) : '';
+    // Read category from page data attribute
+    var pageEl = document.getElementById('market-category-page');
+    var cat = pageEl ? pageEl.getAttribute('data-category') : '';
 
-    var url = '/market/api/category-summary?category=' + encodeURIComponent(category);
-    if (filterStr) {
-      url += '&filters=' + encodeURIComponent(filterStr);
-    }
+    // Read slicer values
+    var filters = {};
+    document.querySelectorAll('.slicer-select').forEach(function(sel) {
+      if (sel.value) {
+        filters[sel.getAttribute('data-field')] = sel.value;
+      }
+    });
 
-    fetch(url)
-      .then(function(r) { return r.json(); })
-      .then(function(data) {
-        if (data.error) return;
-        updateCategoryView(data);
-      })
-      .catch(function(err) {
-        console.error('Filter update failed:', err);
-      });
+    // Build query string
+    var params = new URLSearchParams();
+    if (cat) params.set('cats', cat);
+    Object.keys(filters).forEach(function(k) { params.set(k, filters[k]); });
+
+    // Preserve fund_structure param
+    var fundStr = new URLSearchParams(location.search).get('fund_structure') || 'all';
+    params.set('fund_structure', fundStr);
+    location.search = params.toString();
+  }
+
+  function toggleCategory(cat) {
+    var params = new URLSearchParams(location.search);
+    var cats = params.get('cats') ? params.get('cats').split(',').filter(Boolean) : [];
+    var idx = cats.indexOf(cat);
+    if (idx >= 0) cats.splice(idx, 1);
+    else cats.push(cat);
+    if (cats.length === 0) params.delete('cats');
+    else params.set('cats', cats.join(','));
+    location.search = params.toString();
   }
 
   function updateCategoryView(data) {
@@ -479,6 +507,7 @@ var MarketFilters = (function() {
   return {
     onCategoryChange: onCategoryChange,
     applyFilters: applyFilters,
+    toggleCategory: toggleCategory,
     filterProductTable: filterProductTable
   };
 })();
