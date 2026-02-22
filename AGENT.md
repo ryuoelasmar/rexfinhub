@@ -1,7 +1,8 @@
 # AGENT: Market-Frontend-Events
 **Task**: TASK-D — Compare + Calendar + Timeline Frontend
 **Branch**: feature/market-frontend-events
-**Status**: IN_PROGRESS
+**Status**: DONE
+**Log**: Final commit bc8ab41 — all three templates redesigned with backward compat guards
 
 ## Progress Reporting
 Write timestamped progress to: `.agents/progress/Market-Frontend-Events.md`
