@@ -16,6 +16,19 @@
   <div class="chart-box">
     <h3>AUM by Suite</h3>
     <canvas id="suitesPieChart"></canvas>
+    <table class="data-table" style="margin-top:12px; font-size:0.8rem;">
+      <thead><tr><th>Suite</th><th>AUM</th><th>% Share</th><th>Products</th></tr></thead>
+      <tbody>
+        {% for suite in summary.suites %}
+        <tr>
+          <td>{{ suite.rex_name if suite.rex_name else suite.short_name }}</td>
+          <td class="text-mono">{{ suite.kpis.aum_fmt }}</td>
+          <td class="text-mono">{{ "%.1f%%"|format(suite.market_share) if suite.market_share else "—" }}</td>
+          <td>{{ suite.kpis.num_products }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
   </div>
   <div class="chart-box">
     <h3>Total REX AUM Trend</h3>
@@ -24,24 +37,26 @@
 </div>
 
 {# ETF/ETN Filter Toggle #}
+{% if fund_structure is defined %}
+<div class="filter-bar" style="display:flex; gap:8px; margin-bottom:16px; align-items:center;">
+  <span style="font-size:0.75rem; color:#94A3B8; font-weight:600; text-transform:uppercase;">Structure:</span>
+  <a href="?fund_structure=all"
+     class="pill {% if not fund_structure or fund_structure == 'all' %}active{% endif %}">All</a>
+  <a href="?fund_structure=ETF"
+     class="pill {% if fund_structure == 'ETF' %}active{% endif %}">ETF</a>
+  <a href="?fund_structure=ETN"
+     class="pill {% if fund_structure == 'ETN' %}active{% endif %}">ETN</a>
+</div>
+{% else %}
 <div class="product-type-filter">
   <a href="/market/rex?product_type=All" class="filter-btn {{ 'active' if product_type == 'All' else '' }}">All</a>
   <a href="/market/rex?product_type=ETF" class="filter-btn {{ 'active' if product_type == 'ETF' else '' }}">ETF</a>
   <a href="/market/rex?product_type=ETN" class="filter-btn {{ 'active' if product_type == 'ETN' else '' }}">ETN</a>
 </div>
+{% endif %}
 
 {# Suite Cards #}
 <h2 class="section-title">REX Suites</h2>
-
-{# Suite show/hide checkboxes #}
-<div class="suite-filter" id="suiteFilter">
-  {% for suite in summary.suites %}
-  <label>
-    <input type="checkbox" checked data-suite="{{ suite.name }}" onchange="toggleSuite(this)">
-    {{ suite.short_name }}
-  </label>
-  {% endfor %}
-</div>
 
 <div class="table-responsive">
 <table class="data-table suite-table" id="suiteTable">
@@ -59,8 +74,15 @@
   </thead>
   <tbody>
     {% for suite in summary.suites %}
-    <tr data-suite="{{ suite.name }}">
-      <td><a href="/market/category?cat={{ suite.name|urlencode }}" class="text-link">{{ suite.short_name }}</a></td>
+    <tr class="suite-row" data-suite="{{ suite.name }}"
+        onclick="toggleSuiteProducts('{{ suite.name | replace(' ', '-') | replace('/', '-') | lower }}')"
+        style="cursor:pointer;">
+      <td>
+        <span class="expand-icon" id="expand-{{ loop.index }}">&#9654;</span>
+        <a href="/market/category?cats={{ suite.name|urlencode }}" class="text-link" onclick="event.stopPropagation()" title="{{ suite.name }}">
+          {{ suite.rex_name if suite.rex_name else suite.short_name }}
+        </a>
+      </td>
       <td class="num-cell" data-sort="{{ suite.kpis.total_aum|default(0) }}">{{ suite.kpis.aum_fmt }}</td>
       <td class="num-cell {{ 'positive' if suite.kpis.flow_1w > 0 else 'negative' if suite.kpis.flow_1w < 0 else '' }}" data-sort="{{ suite.kpis.flow_1w|default(0) }}">{{ suite.kpis.flow_1w_fmt }}</td>
       <td class="num-cell {{ 'positive' if suite.kpis.flow_1m > 0 else 'negative' if suite.kpis.flow_1m < 0 else '' }}" data-sort="{{ suite.kpis.flow_1m|default(0) }}">{{ suite.kpis.flow_1m_fmt }}</td>
@@ -68,6 +90,37 @@
       <td class="num-cell" data-sort="{{ suite.kpis.num_products|default(0) }}">{{ suite.kpis.num_products }}</td>
       <td style="min-width:90px;"><canvas id="sparkline-{{ suite.short_name|replace(' ', '-') }}" width="88" height="30" class="sparkline-canvas"></canvas></td>
       <td class="movers-cell">{% for m in suite.top_movers[:3] %}<span class="{{ 'positive' if m.flow_raw > 0 else 'negative' if m.flow_raw < 0 else '' }}">{{ m.ticker }} {{ m.flow }}</span>{% if not loop.last %} &middot; {% endif %}{% endfor %}</td>
+    </tr>
+    <tr class="suite-products-row" id="suite-products-{{ suite.name | replace(' ', '-') | replace('/', '-') | lower }}"
+        style="display:none;">
+      <td colspan="8" style="padding:0; background:#F8FAFC;">
+        <table class="data-table" style="margin:0; border:none; border-radius:0;">
+          <thead>
+            <tr>
+              <th>Ticker</th>
+              <th>Fund Name</th>
+              <th>AUM</th>
+              <th>1W Flow</th>
+              <th>Exp Ratio</th>
+              <th>REX</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for p in suite.products %}
+            <tr class="{{ 'rex-highlight' if p.is_rex else '' }}">
+              <td class="text-mono">{{ p.ticker }}</td>
+              <td style="max-width:300px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ p.fund_name }}</td>
+              <td class="text-mono">{{ p.aum_fmt }}</td>
+              <td class="text-mono {{ 'flow-positive' if p.flow_1w_fmt.startswith('+') else 'flow-negative' if p.flow_1w_fmt.startswith('-') else '' }}">{{ p.flow_1w_fmt }}</td>
+              <td class="text-mono">{{ p.expense_ratio_fmt }}</td>
+              <td>{% if p.is_rex %}<span style="color:#1E40AF;font-weight:700;">REX</span>{% endif %}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="6" style="text-align:center;color:#94A3B8;padding:12px;">No products found</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </td>
     </tr>
     {% endfor %}
   </tbody>
@@ -80,7 +133,10 @@
 {% endblock %}
 
 {% block market_scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
 <script>
+Chart.register(ChartDataLabels);
+
 document.addEventListener('DOMContentLoaded', function() {
   {% if summary %}
   // Pie chart - AUM by suite
@@ -106,11 +162,21 @@ document.addEventListener('DOMContentLoaded', function() {
   {% endif %}
 });
 
-function toggleSuite(checkbox) {
-  var suiteName = checkbox.getAttribute('data-suite');
-  var rows = document.querySelectorAll('tr[data-suite="' + suiteName + '"]');
-  rows.forEach(function(row) {
-    row.style.display = checkbox.checked ? '' : 'none';
+function toggleSuiteProducts(key) {
+  var row = document.getElementById('suite-products-' + key);
+  var suiteRows = document.querySelectorAll('.suite-row');
+  suiteRows.forEach(function(sr) {
+    var k = sr.getAttribute('data-suite').replace(/ /g,'-').replace(/\//g,'-').toLowerCase();
+    if (k === key) {
+      var icon = sr.querySelector('.expand-icon');
+      if (row.style.display === 'none' || row.style.display === '') {
+        row.style.display = 'table-row';
+        if (icon) icon.textContent = '\u25BC';
+      } else {
+        row.style.display = 'none';
+        if (icon) icon.textContent = '\u25B6';
+      }
+    }
   });
 }
 </script>
