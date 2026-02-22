@@ -4,20 +4,46 @@
 {% block title %}Category View — REX Financial Intelligence Hub{% endblock %}
 
 {% block market_content %}
-{# Category Pill Selector #}
-<div class="category-pills">
+<div id="market-category-page" data-category="{{ summary.category if summary else '' }}">
+
+{# Category Multi-Select Pills #}
+<div class="category-pills" id="catPills">
+  {% if all_categories is defined %}
+  {% for cat in all_categories %}
+  {% set is_active = cat in (active_cats if active_cats is defined and active_cats else []) %}
+  <button class="pill {% if is_active %}active{% endif %}"
+          onclick="MarketFilters.toggleCategory({{ cat|tojson }})"
+          title="{{ cat }}">
+    {{ cat | replace('Leverage & Inverse - ', 'L&I ') | replace('Income - ', 'Inc ') | truncate(28, true) }}
+  </button>
+  {% endfor %}
+  {% elif categories is defined %}
   <a href="/market/category?cat=All" class="pill {{ 'active' if (category is not defined or category == 'All') else '' }}">All</a>
   {% for c in categories %}
   <a href="/market/category?cat={{ c|urlencode }}" class="pill {{ 'active' if category == c else '' }}">{{ c }}</a>
   {% endfor %}
+  {% endif %}
 </div>
+
+{# ETF/ETN Filter Toggle #}
+{% if fund_structure is defined %}
+<div class="filter-bar" style="display:flex; gap:8px; margin-bottom:16px; align-items:center;">
+  <span style="font-size:0.75rem; color:#94A3B8; font-weight:600; text-transform:uppercase;">Structure:</span>
+  <a href="?fund_structure=all{{ '&cats='~(active_cats|join(',')) if active_cats is defined and active_cats else '' }}"
+     class="pill {% if not fund_structure or fund_structure == 'all' %}active{% endif %}">All</a>
+  <a href="?fund_structure=ETF{{ '&cats='~(active_cats|join(',')) if active_cats is defined and active_cats else '' }}"
+     class="pill {% if fund_structure == 'ETF' %}active{% endif %}">ETF</a>
+  <a href="?fund_structure=ETN{{ '&cats='~(active_cats|join(',')) if active_cats is defined and active_cats else '' }}"
+     class="pill {% if fund_structure == 'ETN' %}active{% endif %}">ETN</a>
+</div>
+{% endif %}
 
 {# Dynamic Slicer Panel #}
 <div id="slicerPanel" class="slicer-panel" {% if not slicers %}style="display:none"{% endif %}>
   {% for slicer in slicers %}
   <div class="slicer-group" data-field="{{ slicer.field }}">
     <label>{{ slicer.label }}:</label>
-    <select onchange="MarketFilters.applyFilters()">
+    <select class="slicer-select select-sm" data-field="{{ slicer.field }}" onchange="MarketFilters.applyFilters()">
       <option value="">All</option>
       {% for opt in slicer.options %}
       <option value="{{ opt }}">{{ opt }}</option>
@@ -119,6 +145,8 @@
 {% else %}
 <div class="alert alert-warning">No data available for this category.</div>
 {% endif %}
+
+</div>{# end market-category-page #}
 {% endblock %}
 
 {% block market_scripts %}
@@ -140,6 +168,20 @@ document.addEventListener('DOMContentLoaded', function() {
     datasets.push({label: 'REX AUM', data: trendData.rex_values, color: '#1E40AF'});
   }
   MarketCharts.renderLineChart('categoryTrendChart', trendData.labels, datasets);
+  {% endif %}
+
+  // Mark active pills from URL if active_cats not in template context
+  {% if active_cats is not defined %}
+  var activeCats = new URLSearchParams(location.search).get('cats') || '';
+  if (activeCats) {
+    var catList = activeCats.split(',').filter(Boolean);
+    document.querySelectorAll('#catPills .pill').forEach(function(pill) {
+      var title = pill.getAttribute('title') || pill.textContent.trim();
+      if (catList.indexOf(title) >= 0) {
+        pill.classList.add('active');
+      }
+    });
+  }
   {% endif %}
 });
 </script>
