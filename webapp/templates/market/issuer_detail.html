@@ -6,6 +6,8 @@
 {% block market_content %}
 {% if not available %}
 <div class="alert alert-info">Market data not available. Upload The Dashboard.xlsx via Admin panel.</div>
+{% elif error %}
+<div class="alert alert-warning">{{ error }}</div>
 {% elif not issuer_data %}
 <div class="alert alert-warning">Issuer "{{ issuer }}" not found in current data.</div>
 {% else %}

@@ -75,6 +75,7 @@ def calendar_view(
         recent_launches.append({
             "filing": filing,
             "trust": trust,
+            "fund_name": extraction.series_name or "",
             "days_since": days_since,
             "effective_date": extraction.effective_date,
         })
@@ -90,6 +91,7 @@ def calendar_view(
         upcoming_classified.append({
             "filing": filing,
             "trust": trust,
+            "fund_name": extraction.series_name or "",
             "days_until": days_until,
             "urgency": urgency,
             "effective_date": extraction.effective_date,
@@ -101,20 +103,26 @@ def calendar_view(
         eff = item.get("effective_date")
         if eff and eff.year == cal_year and eff.month == cal_month:
             trust_name = item["trust"].name if item["trust"] else ""
+            fund_name = item.get("fund_name", "")
+            display_name = fund_name or trust_name
             events_by_date[eff.day].append({
                 "type": "launch",
-                "label": trust_name[:20],
+                "label": display_name[:20],
                 "trust": trust_name,
+                "fund_name": fund_name,
                 "form": item["filing"].form if item.get("filing") else "",
             })
     for item in upcoming_classified:
         eff = item.get("effective_date")
         if eff and eff.year == cal_year and eff.month == cal_month:
             trust_name = item["trust"].name if item["trust"] else ""
+            fund_name = item.get("fund_name", "")
+            display_name = fund_name or trust_name
             events_by_date[eff.day].append({
                 "type": "upcoming",
-                "label": trust_name[:20],
+                "label": display_name[:20],
                 "trust": trust_name,
+                "fund_name": fund_name,
                 "form": item["filing"].form if item.get("filing") else "",
                 "urgency": item["urgency"],
             })

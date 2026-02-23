@@ -171,4 +171,7 @@ def client(seeded_db):
     app.dependency_overrides[get_db] = _override_db
 
     with TestClient(app) as c:
+        # Authenticate: POST to /login with the site password
+        from webapp.main import SITE_PASSWORD
+        c.post("/login", data={"password": SITE_PASSWORD, "next": "/"})
         yield c

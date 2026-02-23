@@ -74,6 +74,38 @@
 })();
 
 // ---------------------------------------------------------------------------
+// Kebab (triple-dot) menu
+// ---------------------------------------------------------------------------
+(function() {
+  document.addEventListener('DOMContentLoaded', function() {
+    var btn = document.getElementById('kebabBtn');
+    var dropdown = document.getElementById('kebabDropdown');
+    var themeBtn = document.getElementById('kebabThemeToggle');
+    if (!btn || !dropdown) return;
+
+    btn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      dropdown.classList.toggle('open');
+    });
+
+    // Close on outside click
+    document.addEventListener('click', function(e) {
+      if (!dropdown.contains(e.target) && e.target !== btn) {
+        dropdown.classList.remove('open');
+      }
+    });
+
+    // Theme toggle from kebab menu
+    if (themeBtn && window.RexTheme) {
+      themeBtn.addEventListener('click', function(e) {
+        e.preventDefault();
+        window.RexTheme.toggle();
+      });
+    }
+  });
+})();
+
+// ---------------------------------------------------------------------------
 // Trust/filing utilities
 // ---------------------------------------------------------------------------
 

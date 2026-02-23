@@ -412,6 +412,10 @@
   white-space: nowrap;
 }
 
+.data-table td:first-child {
+  text-align: left;
+}
+
 .num-cell.positive { color: var(--green); }
 .num-cell.negative { color: var(--red); }
 
@@ -642,7 +646,7 @@
 }
 .cal-cell {
   background: #fff;
-  min-height: 80px;
+  min-height: 100px;
   padding: 6px;
   position: relative;
   display: flex;
