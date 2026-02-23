@@ -14,9 +14,9 @@ def test_home_page_loads(client):
 
 
 def test_home_analysis_link_valid(client):
-    """Filing Analysis card should link to /dashboard, not /analysis."""
+    """Filing Analysis card should link to /filings/, not /analysis."""
     r = client.get("/")
-    assert "/dashboard" in r.text
+    assert "/filings/" in r.text
     # Should NOT have href="/analysis" as a standalone link
     assert 'href="/analysis"' not in r.text
 
@@ -111,3 +111,38 @@ def test_compare_with_tickers(client):
 def test_screener_loads(client):
     r = client.get("/screener/")
     assert r.status_code == 200
+
+
+# ---------------------------------------------------------------------------
+# Filing Analysis page tests
+# ---------------------------------------------------------------------------
+
+def test_filing_analysis_loads(client):
+    r = client.get("/filings/")
+    assert r.status_code == 200
+
+
+def test_filing_analysis_search(client):
+    r = client.get("/filings/?q=REX")
+    assert r.status_code == 200
+
+
+def test_filing_analysis_form_filter(client):
+    r = client.get("/filings/?form_type=485BPOS")
+    assert r.status_code == 200
+
+
+def test_filing_analysis_date_range(client):
+    r = client.get("/filings/?date_range=30")
+    assert r.status_code == 200
+
+
+def test_filing_analysis_combined_filters(client):
+    r = client.get("/filings/?form_type=485BPOS&date_range=90&per_page=25")
+    assert r.status_code == 200
+
+
+def test_home_filing_analysis_link(client):
+    """Filing Analysis card should link to /filings/, not /dashboard."""
+    r = client.get("/")
+    assert '/filings/' in r.text

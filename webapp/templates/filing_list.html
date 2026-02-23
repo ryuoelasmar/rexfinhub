@@ -1,46 +1,77 @@
 {% extends "base.html" %}
-{% block title %}Filings - ETP Filing Tracker{% endblock %}
+{% block title %}Filing Analysis — REX Financial Intelligence Hub{% endblock %}
 
 {% block content %}
 <div class="header">
-  <h1>Filing Search</h1>
+  <h1>Filing Analysis</h1>
   <div class="date">
-    {{ total_all }} total filings tracked{% if q or form or trust_id or show_all %} &middot; {{ total }} matching{% endif %}
-    {% if not show_all and not form and not q %}
-    &middot; <span style="color:var(--gray);">Prospectus filings only</span>
-    {% endif %}
+    Search {{ "{:,}".format(total_all) }} SEC filings across {{ trust_count }} monitored trusts
   </div>
 </div>
 
-<!-- Filters -->
-<form method="get" action="/filings/" style="margin-bottom:20px;">
+{# ── Filter Bar ── #}
+<form method="get" action="/filings/" style="margin-bottom:16px;">
   <div class="filter-bar">
-    <input type="text" name="q" value="{{ q }}" placeholder="Search by trust, accession, form type...">
-    <input type="text" name="form" value="{{ form }}" placeholder="Form filter (e.g. 485BPOS)" style="width:180px;">
+    <input type="text" name="q" value="{{ q }}" placeholder="Search trust, fund name, accession..."
+           style="min-width:220px;">
+    <select name="form_type">
+      <option value="">All Forms</option>
+      {% for ft in ['485BPOS', '485BXT', '485APOS', '497', '497K'] %}
+      <option value="{{ ft }}" {% if form_type == ft %}selected{% endif %}>{{ ft }}</option>
+      {% endfor %}
+    </select>
     <select name="trust_id">
       <option value="0">All Trusts</option>
       {% for t in trusts %}
       <option value="{{ t.id }}" {% if trust_id == t.id %}selected{% endif %}>{{ t.name }}</option>
       {% endfor %}
     </select>
+    <select name="date_range">
+      <option value="all" {% if date_range == 'all' %}selected{% endif %}>All Time</option>
+      <option value="7" {% if date_range == '7' %}selected{% endif %}>Last 7 Days</option>
+      <option value="30" {% if date_range == '30' %}selected{% endif %}>Last 30 Days</option>
+      <option value="90" {% if date_range == '90' %}selected{% endif %}>Last 90 Days</option>
+      <option value="365" {% if date_range == '365' %}selected{% endif %}>Last Year</option>
+    </select>
     <button type="submit" class="btn btn-primary btn-sm">Search</button>
-    {% if q or form or trust_id or show_all %}
-    <a href="/filings/" style="font-size:12px; color:var(--gray); margin-left:4px;">Clear</a>
-    {% endif %}
-    {% if not show_all and not form and not q %}
-    <a href="/filings/?show_all=true{% if trust_id %}&trust_id={{ trust_id }}{% endif %}" style="font-size:12px; color:var(--gray); margin-left:8px;">Show all form types</a>
-    {% elif show_all %}
-    <a href="/filings/{% if trust_id %}?trust_id={{ trust_id }}{% endif %}" style="font-size:12px; color:var(--gray); margin-left:8px;">Prospectus only</a>
+    {% if q or form_type or trust_id or date_range != 'all' %}
+    <a href="/filings/" style="font-size:12px; color:var(--gray-500); margin-left:4px;">Clear</a>
     {% endif %}
   </div>
 </form>
 
-<table>
+{# ── Form Type Summary Bar ── #}
+<div style="font-size:0.8rem; color:var(--text-secondary, var(--gray-500)); margin-bottom:12px; display:flex; flex-wrap:wrap; gap:6px; align-items:center;">
+  <span style="font-weight:600;">{{ "{:,}".format(total_filings) }} filings</span>
+  {% if form_counts %}
+  <span>&middot;</span>
+  {% for ft in ['485BPOS', '485BXT', '485APOS', '497'] %}
+  {% if form_counts.get(ft, 0) > 0 %}
+  <a href="/filings/?form_type={{ ft }}{% if q %}&q={{ q|urlencode }}{% endif %}{% if trust_id %}&trust_id={{ trust_id }}{% endif %}{% if date_range != 'all' %}&date_range={{ date_range }}{% endif %}"
+     style="color:var(--text-secondary, var(--gray-500)); text-decoration:none; {% if form_type == ft %}font-weight:700; color:var(--navy, #1E3A5F);{% endif %}">
+    {{ "{:,}".format(form_counts[ft]) }} {{ ft }}
+  </a>
+  {% if not loop.last %}<span>&middot;</span>{% endif %}
+  {% endif %}
+  {% endfor %}
+  {% if form_counts.get('OTHER', 0) > 0 %}
+  <span>&middot;</span>
+  <span>{{ "{:,}".format(form_counts['OTHER']) }} other</span>
+  {% endif %}
+  {% endif %}
+  {% if total_pages > 1 %}
+  <span style="margin-left:auto;">page {{ page }} of {{ total_pages }}</span>
+  {% endif %}
+</div>
+
+{# ── Filing Table ── #}
+{% if filings %}
+<table id="filingsTable">
   <thead>
     <tr>
-      <th>Date</th>
-      <th>Form</th>
-      <th>Trust</th>
+      <th class="sortable" onclick="sortTable('filingsTable', 0)">Date</th>
+      <th class="sortable" onclick="sortTable('filingsTable', 1)">Form</th>
+      <th class="sortable" onclick="sortTable('filingsTable', 2)">Trust</th>
       <th>Fund(s)</th>
       <th>Accession</th>
       <th>Doc</th>
@@ -50,8 +81,8 @@
   <tbody>
     {% for row in filings %}
     {% set f = row.Filing %}
-    {% set form_upper = f.form|upper %}
-    <tr>
+    {% set form_upper = f.form|upper if f.form else '' %}
+    <tr{% if row.is_rex %} class="rex-highlight"{% endif %}>
       <td>{{ f.filing_date or '' }}</td>
       <td>
         {% if form_upper.startswith('485B') and 'BXT' not in form_upper %}
@@ -67,19 +98,53 @@
         {% endif %}
       </td>
       <td><a href="/trusts/{{ row.trust_slug }}">{{ row.trust_name }}</a></td>
-      <td style="font-size:12px; max-width:250px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ row.fund_names or '' }}</td>
+      <td style="font-size:12px; max-width:280px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"
+          title="{{ row.fund_names or '' }}">{{ row.fund_names or '' }}</td>
       <td class="accession-col">{{ f.accession_number }}</td>
       <td>
         {% if f.primary_link %}
-        <a href="{{ f.primary_link }}" target="_blank">View</a>
+        <a href="{{ f.primary_link }}" target="_blank" style="font-size:12px;">View</a>
         {% endif %}
       </td>
       <td><a href="/analysis/filing/{{ f.id }}" class="btn btn-sm" style="font-size:11px;">Analyze</a></td>
     </tr>
     {% endfor %}
-    {% if not filings %}
-    <tr><td colspan="7" class="empty-state">No filings found.</td></tr>
-    {% endif %}
   </tbody>
 </table>
+
+{# ── Pagination ── #}
+{% if total_pages > 1 %}
+<div class="pagination-bar">
+  <span class="pagination-info">{{ "{:,}".format(total_filings) }} filings &middot; page {{ page }} of {{ total_pages }}</span>
+  <div class="pagination-controls">
+    {% if page > 1 %}
+    <a href="?{{ base_qs }}{% if base_qs %}&{% endif %}page={{ page - 1 }}" class="btn btn-sm">Prev</a>
+    {% endif %}
+    {% set start_p = [1, page - 2]|max %}
+    {% set end_p = [total_pages + 1, page + 3]|min %}
+    {% for p in range(start_p, end_p) %}
+    <a href="?{{ base_qs }}{% if base_qs %}&{% endif %}page={{ p }}" class="btn btn-sm {{ 'btn-primary' if p == page else '' }}">{{ p }}</a>
+    {% endfor %}
+    {% if page < total_pages %}
+    <a href="?{{ base_qs }}{% if base_qs %}&{% endif %}page={{ page + 1 }}" class="btn btn-sm">Next</a>
+    {% endif %}
+  </div>
+  <select class="select-sm" onchange="location='?{{ base_qs }}{% if base_qs %}&{% endif %}page=1&per_page='+this.value">
+    {% for n in [25, 50, 100, 200] %}
+    <option value="{{ n }}"{{ ' selected' if n == per_page else '' }}>{{ n }}/page</option>
+    {% endfor %}
+  </select>
+</div>
+{% endif %}
+
+{% else %}
+<div style="text-align:center; padding:40px; color:var(--text-secondary, var(--gray-500)); font-size:0.9rem;">
+  {% if q or form_type or trust_id or date_range != 'all' %}
+  No filings match the selected filters.
+  <br><a href="/filings/" style="font-size:0.85rem; margin-top:8px; display:inline-block;">Clear all filters</a>
+  {% else %}
+  No filings found in the database.
+  {% endif %}
+</div>
+{% endif %}
 {% endblock %}
