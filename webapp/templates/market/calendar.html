@@ -4,6 +4,7 @@
 {% block title %}Fund Activity -- REX Financial Intelligence Hub{% endblock %}
 
 {% block market_content %}
+<div style="max-width:1400px; margin:0 auto;">
 <h2 class="section-title">Fund Activity Calendar</h2>
 <p style="color:#64748B; font-size:0.85rem; margin-bottom:24px;">
   Recent fund launches (485BPOS effective dates) and upcoming filing events.
@@ -66,7 +67,7 @@
      onclick="document.getElementById('calEventPopup').style.display='none'; this.style.display='none';"></div>
 {% endif %}
 
-<div style="display:grid; grid-template-columns:1fr 1fr; gap:24px;">
+<div style="display:grid; grid-template-columns:1fr 1fr; gap:24px; margin-top:32px;">
   {# --- Recent Launches --- #}
   <div class="chart-box">
     <div class="chart-title" style="color:#059669;">Recent Launches (Last 90 Days)</div>
@@ -74,7 +75,7 @@
     <table class="data-table" style="font-size:0.82rem;">
       <thead>
         <tr>
-          <th>Trust</th>
+          <th>Fund / Trust</th>
           <th>Effective Date</th>
           <th>Days Since</th>
           <th>Filing</th>
@@ -83,8 +84,8 @@
       <tbody>
         {% for item in recent_launches %}
         <tr>
-          <td style="max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
-            {{ item.trust.name }}
+          <td style="max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="{{ item.trust.name }}">
+            {{ item.fund_name if item.fund_name else item.trust.name }}
           </td>
           <td class="text-mono" style="white-space:nowrap;">
             {% if item.filing.effective_date is defined and item.filing.effective_date %}
@@ -111,7 +112,7 @@
     <table class="data-table" style="font-size:0.82rem;">
       <thead>
         <tr>
-          <th>Trust</th>
+          <th>Fund / Trust</th>
           <th>Effective Date</th>
           <th>Form</th>
         </tr>
@@ -119,8 +120,8 @@
       <tbody>
         {% for item in recently_effective %}
         <tr>
-          <td style="max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
-            {{ item.trust.name }}
+          <td style="max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="{{ item.trust.name }}">
+            {{ item.fund_name if item.fund_name is defined and item.fund_name else item.trust.name }}
           </td>
           <td class="text-mono" style="white-space:nowrap;">
             {{ item.effective_date.strftime('%b %d, %Y') if item.effective_date else '--' }}
@@ -144,7 +145,7 @@
     <table class="data-table" style="font-size:0.82rem;">
       <thead>
         <tr>
-          <th>Trust</th>
+          <th>Fund / Trust</th>
           <th>Form</th>
           <th>Effective Date</th>
           <th>Days Until</th>
@@ -153,8 +154,8 @@
       <tbody>
         {% for item in upcoming %}
         <tr>
-          <td style="max-width:160px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
-            {{ item.trust.name }}
+          <td style="max-width:160px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="{{ item.trust.name }}">
+            {{ item.fund_name if item.fund_name else item.trust.name }}
           </td>
           <td>
             {% set form_val = item.filing.form_type if item.filing.form_type is defined else item.filing.form %}
@@ -182,6 +183,7 @@
     <div style="padding:20px; text-align:center; color:#94A3B8;">No upcoming events in the next 60 days.</div>
     {% endif %}
   </div>
+</div>
 </div>
 
 {% endblock %}
@@ -211,12 +213,12 @@ function showCalEvents(day) {
   title.textContent = '{{ month_name }} ' + day;
 
   var html = '<table class="data-table" style="font-size:0.82rem;">';
-  html += '<thead><tr><th>Event</th><th>Trust</th><th>Type</th></tr></thead><tbody>';
+  html += '<thead><tr><th>Event</th><th>Fund / Trust</th><th>Type</th></tr></thead><tbody>';
   events.forEach(function(ev) {
     var cls = ev.type === 'launch' ? 'cal-event-launch' : 'cal-event-upcoming';
     html += '<tr>';
     html += '<td><span class="' + cls + '" style="padding:2px 6px; border-radius:4px; font-size:0.75rem;">' + escCalHtml(ev.label) + '</span></td>';
-    html += '<td>' + escCalHtml(ev.trust || '') + '</td>';
+    html += '<td>' + escCalHtml(ev.fund_name || ev.trust || '') + '</td>';
     html += '<td>' + escCalHtml(ev.form || '') + '</td>';
     html += '</tr>';
   });

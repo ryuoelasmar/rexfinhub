@@ -9,23 +9,47 @@
 {% endblock %}
 
 {% block market_content %}
-{# Category Filter — no "All" option #}
-<div class="category-selector">
-  <label for="catFilter">Category:</label>
-  <select id="catFilter" onchange="window.location='/market/treemap?cat='+this.value">
-    {% for c in categories %}
-    <option value="{{ c }}" {% if c == category %}selected{% endif %}>
-      {{ c | replace('Leverage & Inverse - ', 'L&I ') | replace('Income - ', 'Inc ') }}
-    </option>
-    {% endfor %}
-  </select>
-  {% if summary %}<span class="kpi-value">{{ summary.total_aum_fmt }} total AUM</span>{% endif %}
+{# ── Filter Bar ── #}
+<div style="display:flex; gap:12px; margin-bottom:16px; align-items:center; flex-wrap:wrap;">
+  <div style="display:flex; gap:8px; align-items:center;">
+    <label for="catFilter" style="font-size:0.72rem; color:var(--gray-500); font-weight:600; text-transform:uppercase;">Category:</label>
+    <select id="catFilter" class="select-sm" style="font-size:0.82rem; padding:4px 8px;"
+            onchange="applyTreemapFilters()">
+      {% for c in categories %}
+      <option value="{{ c }}" {% if c == category %}selected{% endif %}>
+        {{ c | replace('Leverage & Inverse - ', 'L&I ') | replace('Income - ', 'Inc ') }}
+      </option>
+      {% endfor %}
+    </select>
+  </div>
+  <div style="display:flex; gap:8px; align-items:center;">
+    <span style="font-size:0.72rem; color:var(--gray-500); font-weight:600; text-transform:uppercase;">Type:</span>
+    <a href="javascript:void(0)" onclick="setTreemapFundType('all')"
+       class="pill {% if not fund_type or fund_type == 'all' %}active{% endif %}" id="tmTypeAll">All</a>
+    <a href="javascript:void(0)" onclick="setTreemapFundType('ETF')"
+       class="pill {% if fund_type == 'ETF' %}active{% endif %}" id="tmTypeETF">ETF</a>
+    <a href="javascript:void(0)" onclick="setTreemapFundType('ETN')"
+       class="pill {% if fund_type == 'ETN' %}active{% endif %}" id="tmTypeETN">ETN</a>
+  </div>
+  {% if summary and summary.all_issuers is defined and summary.all_issuers %}
+  <div style="display:flex; gap:8px; align-items:center;">
+    <label for="issuerFilter" style="font-size:0.72rem; color:var(--gray-500); font-weight:600; text-transform:uppercase;">Issuer:</label>
+    <select id="issuerFilter" class="select-sm" style="font-size:0.82rem; padding:4px 8px;"
+            onchange="applyTreemapFilters()">
+      <option value="All">All Issuers</option>
+      {% for iss in summary.all_issuers %}
+      <option value="{{ iss }}" {% if selected_issuer == iss %}selected{% endif %}>{{ iss }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  {% endif %}
+  {% if summary %}<span class="kpi-value" style="margin-left:auto;">{{ summary.total_aum_fmt }} total AUM</span>{% endif %}
 </div>
 
 {% if not summary or not summary.products %}
-<div style="text-align:center; padding:60px; color:#94A3B8;">
+<div style="text-align:center; padding:60px; color:var(--gray-500);">
   <p style="font-size:1.1rem;">No products found for this category.</p>
-  <p style="font-size:0.85rem;">Try selecting a different category.</p>
+  <p style="font-size:0.85rem;">Try selecting a different category or filter.</p>
 </div>
 {% else %}
 <div class="treemap-container">
@@ -33,22 +57,18 @@
 </div>
 
 {# Issuer color legend #}
-<div class="treemap-legend" style="margin-top:16px; display:flex; flex-wrap:wrap; gap:8px; align-items:center;">
-  {% set seen_issuers = [] %}
-  {% for p in summary.products %}
-    {% if p.issuer not in seen_issuers and seen_issuers|length < 8 %}
-      {% set _ = seen_issuers.append(p.issuer) %}
-    {% endif %}
-  {% endfor %}
-  <span style="font-size:0.72rem; color:#94A3B8; font-weight:600; text-transform:uppercase; margin-right:4px;">Issuers:</span>
-  {% for issuer in seen_issuers %}
-  <span class="treemap-legend-item" data-index="{{ loop.index0 }}" style="display:inline-flex; align-items:center; gap:4px; font-size:0.78rem; color:#475569;">
-    <span class="treemap-legend-dot"></span>{{ issuer }}
+{% if summary.issuers is defined %}
+<div class="treemap-legend" style="margin-top:16px; display:flex; flex-wrap:wrap; gap:10px; align-items:center;">
+  <span style="font-size:0.72rem; color:var(--gray-500); font-weight:600; text-transform:uppercase; margin-right:4px;">Issuers:</span>
+  {% for iss in summary.issuers %}
+  <span class="treemap-legend-item" data-index="{{ loop.index0 }}" style="display:inline-flex; align-items:center; gap:4px; font-size:0.78rem; color:var(--text-primary);">
+    <span class="treemap-legend-dot"></span>{{ iss.issuer }} ({{ iss.pct }}%)
   </span>
   {% endfor %}
 </div>
+{% endif %}
 <script>
-var LEGEND_COLORS = ['#1E40AF','#059669','#7C3AED','#D97706','#0891B2','#E11D48','#65A30D','#9333EA'];
+var LEGEND_COLORS = ['#1E40AF','#059669','#7C3AED','#D97706','#0891B2','#E11D48','#65A30D','#9333EA','#DC2626','#0D9488','#6366F1','#CA8A04'];
 document.querySelectorAll('.treemap-legend-item').forEach(function(el) {
   var idx = parseInt(el.getAttribute('data-index'));
   var dot = el.querySelector('.treemap-legend-dot');
@@ -60,15 +80,29 @@ document.querySelectorAll('.treemap-legend-item').forEach(function(el) {
 
 {% block market_scripts %}
 <script>
+var _tmFundType = '{{ fund_type|default("all") }}';
+
+function setTreemapFundType(val) {
+  _tmFundType = val;
+  document.querySelectorAll('[id^="tmType"]').forEach(function(el) { el.classList.remove('active'); });
+  document.getElementById('tmType' + (val === 'all' ? 'All' : val)).classList.add('active');
+  applyTreemapFilters();
+}
+
+function applyTreemapFilters() {
+  var cat = document.getElementById('catFilter').value;
+  var issuer = document.getElementById('issuerFilter') ? document.getElementById('issuerFilter').value : 'All';
+  window.location = '/market/treemap?cat=' + encodeURIComponent(cat) + '&fund_type=' + encodeURIComponent(_tmFundType) + '&issuer=' + encodeURIComponent(issuer);
+}
+
 document.addEventListener('DOMContentLoaded', function() {
   {% if summary and summary.products %}
   var products = {{ summary.products|tojson }};
 
-  // Render treemap with issuer grouping and ticker labels
   var ctx = document.getElementById('treemapChart');
   if (ctx && products.length > 0) {
     var groupColors = {};
-    var palette = ['#1E40AF','#DC2626','#059669','#D97706','#7C3AED','#DB2777','#0891B2','#65A30D'];
+    var palette = LEGEND_COLORS;
     var groups = [];
     products.forEach(function(p) {
       if (groups.indexOf(p.group) === -1) groups.push(p.group);
@@ -90,7 +124,7 @@ document.addEventListener('DOMContentLoaded', function() {
           },
           captions: {
             display: true,
-            color: '#1E293B',
+            color: function() { return RexTheme.isDark() ? '#e2e8f0' : '#1E293B'; },
             font: { size: 12, weight: 'bold' },
             align: 'left',
             padding: 4

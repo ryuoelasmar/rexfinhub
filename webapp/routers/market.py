@@ -46,7 +46,7 @@ def _parse_ts(ts: dict) -> dict[str, Any]:
 
 
 @router.get("/rex")
-def rex_view(request: Request, product_type: str = Query(default="All"), fund_structure: str = Query(default="all")):
+def rex_view(request: Request, product_type: str = Query(default="All"), fund_structure: str = Query(default="all"), category: str = Query(default="All")):
     """REX View - executive dashboard by suite."""
     svc = _svc()
     available = svc.data_available()
@@ -55,11 +55,13 @@ def rex_view(request: Request, product_type: str = Query(default="All"), fund_st
             "request": request,
             "available": False,
             "active_tab": "rex",
+            "categories": svc.ALL_CATEGORIES,
             "data_as_of": svc.get_data_as_of(),
         })
     try:
-        summary = svc.get_rex_summary(fund_structure=fund_structure)
-        trend = _parse_ts(svc.get_time_series(is_rex=True))
+        cat_arg = category if category != "All" else None
+        summary = svc.get_rex_summary(fund_structure=fund_structure, category=cat_arg)
+        trend = _parse_ts(svc.get_time_series(is_rex=True, category=cat_arg))
         return templates.TemplateResponse("market/rex.html", {
             "request": request,
             "available": True,
@@ -68,6 +70,8 @@ def rex_view(request: Request, product_type: str = Query(default="All"), fund_st
             "trend": trend,
             "product_type": product_type,
             "fund_structure": fund_structure,
+            "category": category,
+            "categories": svc.ALL_CATEGORIES,
             "data_as_of": svc.get_data_as_of(),
         })
     except Exception as e:
@@ -77,6 +81,7 @@ def rex_view(request: Request, product_type: str = Query(default="All"), fund_st
             "available": False,
             "active_tab": "rex",
             "error": str(e),
+            "categories": svc.ALL_CATEGORIES,
             "data_as_of": svc.get_data_as_of(),
         })
 
@@ -139,7 +144,7 @@ def category_view(
 
 
 @router.get("/treemap")
-def treemap_view(request: Request, cat: str = Query(default="")):
+def treemap_view(request: Request, cat: str = Query(default=""), fund_type: str = Query(default="all"), issuer: str = Query(default="All")):
     svc = _svc()
     available = svc.data_available()
 
@@ -161,15 +166,17 @@ def treemap_view(request: Request, cat: str = Query(default="")):
     if not available:
         return templates.TemplateResponse("market/treemap.html", {"request": request, "available": False, "active_tab": "treemap", "categories": available_cats, "data_as_of": svc.get_data_as_of()})
     try:
-        summary = svc.get_treemap_data(cat)
+        issuer_arg = issuer if issuer != "All" else None
+        summary = svc.get_treemap_data(cat, fund_type=fund_type, issuer_filter=issuer_arg)
         return templates.TemplateResponse("market/treemap.html", {
             "request": request, "available": True, "active_tab": "treemap",
             "summary": summary, "categories": available_cats, "category": cat,
+            "fund_type": fund_type, "selected_issuer": issuer,
             "data_as_of": svc.get_data_as_of(),
         })
     except Exception as e:
         log.error("Treemap error: %s", e, exc_info=True)
-        return templates.TemplateResponse("market/treemap.html", {"request": request, "available": True, "active_tab": "treemap", "summary": {"products": [], "total_aum_fmt": "N/A", "total_aum": 0, "categories": available_cats}, "categories": available_cats, "category": cat, "error": str(e), "data_as_of": svc.get_data_as_of()})
+        return templates.TemplateResponse("market/treemap.html", {"request": request, "available": True, "active_tab": "treemap", "summary": {"products": [], "issuers": [], "all_issuers": [], "total_aum_fmt": "N/A", "total_aum": 0, "categories": available_cats}, "categories": available_cats, "category": cat, "fund_type": fund_type, "selected_issuer": issuer, "error": str(e), "data_as_of": svc.get_data_as_of()})
 
 
 @router.get("/issuer")
@@ -277,6 +284,10 @@ def issuer_detail_view(request: Request, issuer: str = Query(default="")):
         except Exception as e:
             log.error("Issuer detail error: %s", e, exc_info=True)
 
+    error_msg = ""
+    if available and issuer and not issuer_data:
+        error_msg = f"No data found for issuer '{issuer}'. The issuer name may not match Bloomberg data."
+
     return templates.TemplateResponse("market/issuer_detail.html", {
         "request": request,
         "active_tab": "issuer",
@@ -286,7 +297,8 @@ def issuer_detail_view(request: Request, issuer: str = Query(default="")):
         "products": products,
         "categories": categories,
         "aum_trend": aum_trend,
-        "data_as_of": "",
+        "data_as_of": svc.get_data_as_of() if available else "",
+        "error": error_msg,
     })
 
 

@@ -25,15 +25,15 @@
   {% endif %}
 </div>
 
-{# ETF/ETN Filter Toggle #}
+{# ETF/ETN Filter Toggle — preserves cat parameter #}
 {% if fund_structure is defined %}
 <div class="filter-bar" style="display:flex; gap:8px; margin-bottom:16px; align-items:center;">
   <span style="font-size:0.75rem; color:#94A3B8; font-weight:600; text-transform:uppercase;">Structure:</span>
-  <a href="?fund_structure=all{{ '&cats='~(active_cats|join(',')) if active_cats is defined and active_cats else '' }}"
+  <a href="?cat={{ category|default('All')|urlencode }}&fund_structure=all"
      class="pill {% if not fund_structure or fund_structure == 'all' %}active{% endif %}">All</a>
-  <a href="?fund_structure=ETF{{ '&cats='~(active_cats|join(',')) if active_cats is defined and active_cats else '' }}"
+  <a href="?cat={{ category|default('All')|urlencode }}&fund_structure=ETF"
      class="pill {% if fund_structure == 'ETF' %}active{% endif %}">ETF</a>
-  <a href="?fund_structure=ETN{{ '&cats='~(active_cats|join(',')) if active_cats is defined and active_cats else '' }}"
+  <a href="?cat={{ category|default('All')|urlencode }}&fund_structure=ETN"
      class="pill {% if fund_structure == 'ETN' %}active{% endif %}">ETN</a>
 </div>
 {% endif %}
@@ -97,48 +97,92 @@
   </div>
 </div>
 
-{# Top Products Table #}
-{% if summary.top_products %}
-<h2 class="section-title">Top Products by AUM</h2>
-<div class="table-controls">
-  <input type="text" id="productSearch" placeholder="Search ticker or name..." oninput="MarketFilters.filterProductTable(this.value)">
-  <span class="filter-count" id="productCount">{{ summary.top_products|length }} products</span>
+{# All Products in Category #}
+<h2 class="section-title">All Products in {{ category or 'All Categories' }}</h2>
+<div class="table-controls" style="margin-bottom:12px;">
+  <input type="text" id="productSearch" placeholder="Search ticker or name..." oninput="filterCatProducts(this.value)" style="padding:6px 12px; font-size:0.85rem; border:1px solid var(--border); border-radius:var(--radius-md); background:var(--card-bg, #fff); color:var(--text-primary);">
+  <span class="filter-count" id="productCount">{{ summary.total_funds }} products</span>
 </div>
-{% with products=summary.top_products, table_id='topProducts', show_issuer=true %}
-{% include "market/_product_table.html" %}
-{% endwith %}
+
+{# REX Products Section (collapsible, open by default) #}
+{% if summary.rex_products %}
+<div class="collapsible-section" style="margin-bottom:16px;">
+  <div class="section-header" onclick="toggleSection('rexSection')" style="cursor:pointer; display:flex; align-items:center; gap:8px; padding:8px 12px; background:rgba(30,64,175,0.05); border:1px solid rgba(30,64,175,0.15); border-radius:var(--radius-md) var(--radius-md) 0 0;">
+    <span class="expand-icon" id="rexSectionIcon">&#9660;</span>
+    <span style="font-weight:600; color:#1E40AF; font-size:0.85rem;">REX Products ({{ summary.rex_products|length }})</span>
+  </div>
+  <div id="rexSection" class="section-body">
+    <div class="table-responsive">
+      <table class="data-table" id="rexProducts" style="border-top:none; border-radius:0 0 var(--radius-md) var(--radius-md);">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Ticker</th>
+            <th>Fund Name</th>
+            <th>AUM</th>
+            <th>1W Flow</th>
+            <th>1M Flow</th>
+            <th>Yield</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for p in summary.rex_products %}
+          <tr class="rex-highlight cat-product-row" data-name="{{ p.fund_name|lower }}" data-ticker="{{ p.ticker|lower }}">
+            <td>{{ p.rank if p.rank else '-' }}</td>
+            <td class="ticker-col">{{ p.ticker }}</td>
+            <td class="name-cell" title="{{ p.fund_name }}">{{ p.fund_name|truncate(45, true) }}</td>
+            <td class="num-cell">{{ p.aum_fmt }}</td>
+            <td class="num-cell {{ 'positive' if p.flow_1w > 0 else 'negative' if p.flow_1w < 0 else '' }}">{{ p.flow_1w_fmt }}</td>
+            <td class="num-cell {{ 'positive' if p.flow_1m > 0 else 'negative' if p.flow_1m < 0 else '' }}">{{ p.flow_1m_fmt }}</td>
+            <td class="num-cell">{{ p.yield_fmt if p.yield_fmt else '-' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
 {% endif %}
 
-{# REX Products Panel #}
-{% if summary.rex_products %}
-<h2 class="section-title">REX Products in {{ category or 'All Categories' }}</h2>
-<div class="table-responsive">
-  <table class="data-table rex-table" id="rexProducts">
-    <thead>
-      <tr>
-        <th>Rank</th>
-        <th>Ticker</th>
-        <th>Fund Name</th>
-        <th>AUM</th>
-        <th>1W Flow</th>
-        <th>1M Flow</th>
-        <th>Yield</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for p in summary.rex_products %}
-      <tr>
-        <td>{{ p.rank if p.rank else '-' }}</td>
-        <td class="ticker-cell">{{ p.ticker }}</td>
-        <td class="name-cell" title="{{ p.fund_name }}">{{ p.fund_name|truncate(45, true) }}</td>
-        <td class="num-cell">{{ p.aum_fmt }}</td>
-        <td class="num-cell {{ 'positive' if '+'  in p.flow_1w_fmt else 'negative' if '-' in p.flow_1w_fmt else '' }}">{{ p.flow_1w_fmt }}</td>
-        <td class="num-cell {{ 'positive' if '+' in p.flow_1m_fmt else 'negative' if '-' in p.flow_1m_fmt else '' }}">{{ p.flow_1m_fmt }}</td>
-        <td class="num-cell">{% if p.yield_val is not none and p.yield_val == p.yield_val %}{{ "%.1f"|format(p.yield_val) }}%{% else %}-{% endif %}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+{# All Other Products Section (collapsible, open by default) #}
+{% if summary.top_products %}
+<div class="collapsible-section">
+  <div class="section-header" onclick="toggleSection('allSection')" style="cursor:pointer; display:flex; align-items:center; gap:8px; padding:8px 12px; background:var(--surface-2); border:1px solid var(--border); border-radius:var(--radius-md) var(--radius-md) 0 0;">
+    <span class="expand-icon" id="allSectionIcon">&#9660;</span>
+    <span style="font-weight:600; font-size:0.85rem;">All Products ({{ summary.top_products|length }})</span>
+  </div>
+  <div id="allSection" class="section-body">
+    <div class="table-responsive">
+      <table class="data-table" id="topProducts" style="border-top:none; border-radius:0 0 var(--radius-md) var(--radius-md);">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Ticker</th>
+            <th>Fund Name</th>
+            <th>Issuer</th>
+            <th>AUM</th>
+            <th>1W Flow</th>
+            <th>1M Flow</th>
+            <th>Yield</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for p in summary.top_products %}
+          <tr class="{{ 'rex-highlight' if p.is_rex else '' }} cat-product-row" data-name="{{ p.fund_name|lower }}" data-ticker="{{ p.ticker|lower }}">
+            <td>{{ p.rank }}</td>
+            <td class="ticker-col">{{ p.ticker }}</td>
+            <td class="name-cell" title="{{ p.fund_name }}">{{ p.fund_name|truncate(40, true) }}</td>
+            <td style="font-size:0.8rem; max-width:120px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ p.issuer }}</td>
+            <td class="num-cell">{{ p.aum_fmt }}</td>
+            <td class="num-cell {{ 'positive' if p.flow_1w > 0 else 'negative' if p.flow_1w < 0 else '' }}">{{ p.flow_1w_fmt }}</td>
+            <td class="num-cell {{ 'positive' if p.flow_1m > 0 else 'negative' if p.flow_1m < 0 else '' }}">{{ p.flow_1m_fmt }}</td>
+            <td class="num-cell">{{ p.yield_fmt if p.yield_fmt else '-' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
 </div>
 {% endif %}
 
@@ -184,5 +228,36 @@ document.addEventListener('DOMContentLoaded', function() {
   }
   {% endif %}
 });
+
+function toggleSection(id) {
+  var body = document.getElementById(id);
+  var icon = document.getElementById(id + 'Icon');
+  if (!body) return;
+  if (body.style.display === 'none') {
+    body.style.display = '';
+    if (icon) icon.innerHTML = '&#9660;';
+  } else {
+    body.style.display = 'none';
+    if (icon) icon.innerHTML = '&#9654;';
+  }
+}
+
+function filterCatProducts(q) {
+  q = (q || '').toLowerCase();
+  var rows = document.querySelectorAll('.cat-product-row');
+  var shown = 0;
+  rows.forEach(function(row) {
+    var name = row.getAttribute('data-name') || '';
+    var ticker = row.getAttribute('data-ticker') || '';
+    if (!q || name.indexOf(q) >= 0 || ticker.indexOf(q) >= 0) {
+      row.style.display = '';
+      shown++;
+    } else {
+      row.style.display = 'none';
+    }
+  });
+  var countEl = document.getElementById('productCount');
+  if (countEl) countEl.textContent = shown + ' products';
+}
 </script>
 {% endblock %}

@@ -312,7 +312,6 @@ th {
   font-size: var(--text-xs); text-transform: uppercase;
   letter-spacing: 0.5px;
   white-space: nowrap; user-select: none;
-  position: sticky; top: var(--nav-height); z-index: 101;
 }
 th.sortable { cursor: pointer; }
 th.sortable:hover { background: var(--navy-light); }
@@ -327,8 +326,8 @@ tbody tr:nth-child(even) { background: var(--gray-50); }
 tbody tr:hover { background: var(--surface-2); }
 tr.today-highlight { background: var(--green-bg); }
 
-/* Data table sticky headers */
-.data-table th { position: sticky; top: var(--nav-height); z-index: 101; background: var(--surface-1); }
+/* Data table headers - no sticky inside overflow wrappers */
+.data-table th { background: var(--surface-1); }
 .data-table tr:hover { background: var(--surface-2); }
 
 td.num-col, th.num-col { text-align: right; font-family: var(--font-mono); font-size: var(--text-sm); }
@@ -949,6 +948,44 @@ body, .sticky-nav, table, th, td, .kpi, .trust-card, .trust-block,
 .rt-rex-border { border-left: 3px solid #1E40AF; }
 .rt-compact td, .rt-compact th.rt-th { padding: var(--sp-1) var(--sp-2); }
 .rt-compact { font-size: var(--text-xs); }
+
+/* ===== KEBAB MENU ===== */
+.kebab-menu { position: relative; margin-left: 8px; }
+.kebab-btn {
+  background: none; border: none; color: var(--gray-400); cursor: pointer;
+  padding: 6px; border-radius: var(--radius-md); transition: all var(--transition-fast);
+  display: flex; align-items: center;
+}
+.kebab-btn:hover { background: var(--surface-2); color: var(--gray-600); }
+.kebab-dropdown {
+  display: none; position: absolute; right: 0; top: calc(100% + 4px);
+  background: var(--card-bg, #fff); border: 1px solid var(--border);
+  border-radius: var(--radius-md); box-shadow: var(--shadow-lg, 0 4px 24px rgba(0,0,0,0.12));
+  min-width: 180px; z-index: 200; padding: 4px 0;
+}
+.kebab-dropdown.open { display: block; }
+.kebab-item {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  padding: 8px 14px; border: none; background: none; cursor: pointer;
+  font-size: var(--text-sm); color: var(--text-primary, #1e293b);
+  text-decoration: none; transition: background var(--transition-fast);
+}
+.kebab-item:hover { background: var(--surface-2); }
+.kebab-item svg { flex-shrink: 0; opacity: 0.6; }
+.kebab-user {
+  padding: 6px 14px; font-size: var(--text-xs); color: var(--gray-500);
+  border-bottom: 1px solid var(--border); margin-bottom: 2px;
+  font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px;
+}
+.kebab-logout { color: var(--red, #DC2626); }
+.kebab-logout:hover { background: rgba(220,38,38,0.08); }
+/* Theme icon visibility - use existing dark mode variables */
+[data-theme="dark"] .kebab-item .icon-sun { display: inline; }
+[data-theme="dark"] .kebab-item .icon-moon { display: none; }
+[data-theme="light"] .kebab-item .icon-sun { display: none; }
+[data-theme="light"] .kebab-item .icon-moon { display: inline; }
+:root .kebab-item .icon-sun { display: none; }
+:root .kebab-item .icon-moon { display: inline; }
 
 /* =========================================================================
    RESPONSIVE BREAKPOINTS

@@ -198,7 +198,7 @@
         <td><strong>REX Product</strong></td>
         {% for fund in fund_data %}
         {% set is_rex = fund.row.get('is_rex') %}
-        <td>{% if is_rex %}Yes{% else %}No{% endif %}</td>
+        <td style="text-align:center;">{% if is_rex %}Yes{% else %}No{% endif %}</td>
         {% endfor %}
       </tr>
     </tbody>

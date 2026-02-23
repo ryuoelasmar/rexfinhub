@@ -6,48 +6,87 @@
 {% block market_content %}
 {% if summary %}
 
-{# KPI Cards #}
-{% with kpis=summary.kpis, prefix='rex-' %}
-{% include "market/_kpi_cards.html" %}
-{% endwith %}
-
-{# ETF/ETN Filter Toggle #}
-{% if fund_structure is defined %}
-<div class="filter-bar" style="display:flex; gap:8px; margin-bottom:16px; align-items:center;">
-  <span style="font-size:0.75rem; color:#94A3B8; font-weight:600; text-transform:uppercase;">Structure:</span>
-  <a href="?fund_structure=all"
-     class="pill {% if not fund_structure or fund_structure == 'all' %}active{% endif %}">All</a>
-  <a href="?fund_structure=ETF"
-     class="pill {% if fund_structure == 'ETF' %}active{% endif %}">ETF</a>
-  <a href="?fund_structure=ETN"
-     class="pill {% if fund_structure == 'ETN' %}active{% endif %}">ETN</a>
+{# ── Filter Bar ── #}
+<div class="filter-bar" style="display:flex; gap:12px; margin-bottom:20px; align-items:center; flex-wrap:wrap;">
+  <div style="display:flex; gap:8px; align-items:center;">
+    <span style="font-size:0.72rem; color:var(--gray-500); font-weight:600; text-transform:uppercase;">Structure:</span>
+    <a href="?fund_structure=all&category={{ category|default('All') }}"
+       class="pill {% if not fund_structure or fund_structure == 'all' %}active{% endif %}">All</a>
+    <a href="?fund_structure=ETF&category={{ category|default('All') }}"
+       class="pill {% if fund_structure == 'ETF' %}active{% endif %}">ETF</a>
+    <a href="?fund_structure=ETN&category={{ category|default('All') }}"
+       class="pill {% if fund_structure == 'ETN' %}active{% endif %}">ETN</a>
+  </div>
+  {% if categories is defined %}
+  <div style="display:flex; gap:8px; align-items:center;">
+    <span style="font-size:0.72rem; color:var(--gray-500); font-weight:600; text-transform:uppercase;">Category:</span>
+    <select onchange="window.location='?fund_structure={{ fund_structure|default('all') }}&category='+this.value"
+            class="select-sm" style="font-size:0.82rem; padding:4px 8px;">
+      <option value="All" {% if not category or category == 'All' %}selected{% endif %}>All Categories</option>
+      {% for c in categories %}
+      <option value="{{ c }}" {% if category == c %}selected{% endif %}>
+        {{ c | replace('Leverage & Inverse - ', 'L&I ') | replace('Income - ', 'Inc ') }}
+      </option>
+      {% endfor %}
+    </select>
+  </div>
+  {% endif %}
 </div>
-{% else %}
-<div class="product-type-filter">
-  <a href="/market/rex?product_type=All" class="filter-btn {{ 'active' if product_type == 'All' else '' }}">All</a>
-  <a href="/market/rex?product_type=ETF" class="filter-btn {{ 'active' if product_type == 'ETF' else '' }}">ETF</a>
-  <a href="/market/rex?product_type=ETN" class="filter-btn {{ 'active' if product_type == 'ETN' else '' }}">ETN</a>
-</div>
-{% endif %}
 
-{# Charts Row #}
+{# ── KPI Cards (6 cards with mini sparklines) ── #}
+<div class="kpi-row" style="margin-bottom:24px;">
+  <div class="kpi-card">
+    <div class="kpi-label">Total REX AUM</div>
+    <div class="kpi-value">{{ summary.kpis.aum_fmt }}</div>
+    {% if summary.kpis.aum_mom_pct is defined %}
+    <div style="font-size:0.7rem; margin-top:4px;" class="{{ 'positive' if summary.kpis.aum_mom_pct >= 0 else 'negative' }}">
+      {{ '%+.1f'|format(summary.kpis.aum_mom_pct) }}% MoM
+    </div>
+    {% endif %}
+    {% if summary.kpis.sparkline is defined %}
+    <canvas id="sparkAum" width="120" height="30" style="margin-top:6px;"></canvas>
+    {% endif %}
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-label">Market Share</div>
+    <div class="kpi-value">{{ '%.2f'|format(summary.kpis.market_share_pct|default(0)) }}%</div>
+    {% if summary.kpis.market_share_mom_pct is defined %}
+    <div style="font-size:0.7rem; margin-top:4px;" class="{{ 'positive' if summary.kpis.market_share_mom_pct >= 0 else 'negative' }}">
+      {{ '%+.2f'|format(summary.kpis.market_share_mom_pct) }}pp MoM
+    </div>
+    {% endif %}
+    {% if summary.kpis.share_sparkline is defined %}
+    <canvas id="sparkShare" width="120" height="30" style="margin-top:6px;"></canvas>
+    {% endif %}
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-label"># Products</div>
+    <div class="kpi-value">{{ summary.kpis.num_products }}</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-label">1M Flows</div>
+    <div class="kpi-value {{ 'positive' if summary.kpis.flow_1m > 0 else 'negative' if summary.kpis.flow_1m < 0 else '' }}">{{ summary.kpis.flow_1m_fmt }}</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-label">Avg Yield</div>
+    <div class="kpi-value">{{ summary.kpis.avg_yield_fmt|default('N/A') }}</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-label">Best Performer</div>
+    {% if summary.kpis.best_performer %}
+    <div class="kpi-value positive" style="font-size:var(--text-md);">{{ summary.kpis.best_performer.ticker }}</div>
+    <div style="font-size:0.72rem; color:var(--green);">{{ summary.kpis.best_performer.return_1m_fmt }}</div>
+    {% else %}
+    <div class="kpi-value" style="font-size:var(--text-md);">--</div>
+    {% endif %}
+  </div>
+</div>
+
+{# ── Charts Row ── #}
 <div class="charts-row">
   <div class="chart-box">
     <h3>AUM by Suite</h3>
     <canvas id="suitesPieChart"></canvas>
-    <table class="data-table" style="margin-top:12px; font-size:0.8rem;">
-      <thead><tr><th>Suite</th><th>AUM</th><th>% Share</th><th>Products</th></tr></thead>
-      <tbody>
-        {% for suite in summary.suites %}
-        <tr>
-          <td>{{ suite.rex_name if suite.rex_name else suite.short_name }}</td>
-          <td class="text-mono">{{ suite.kpis.aum_fmt }}</td>
-          <td class="text-mono">{{ "%.1f%%"|format(suite.market_share) if suite.market_share else "—" }}</td>
-          <td>{{ suite.kpis.num_products }}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
   </div>
   <div class="chart-box">
     <h3>Total REX AUM Trend</h3>
@@ -55,70 +94,97 @@
   </div>
 </div>
 
-{# Suite Cards #}
+{# ── Flow Bar Charts ── #}
+{% if summary.flow_chart is defined and summary.flow_chart.suites %}
+<div class="chart-box" style="margin-bottom:24px;">
+  <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; flex-wrap:wrap; gap:8px;">
+    <h3 style="margin:0;">Suite Flows</h3>
+    <div style="display:flex; gap:4px;">
+      {% for period in ['1w','1m','3m','ytd'] %}
+      <button class="pill rex-flow-btn {% if loop.first %}active{% endif %}"
+              data-period="{{ period }}" onclick="showRexFlowPeriod('{{ period }}')">
+        {{ period.upper() }}
+      </button>
+      {% endfor %}
+    </div>
+  </div>
+  <canvas id="rexFlowBarChart" height="160"></canvas>
+</div>
+{% endif %}
+
+{# ── Performance Section ── #}
+{% if summary.best5 or summary.worst5 %}
+<div class="charts-row" style="margin-bottom:24px;">
+  <div class="chart-box">
+    <h3>Best 5 by 1M Return</h3>
+    <table class="data-table" style="font-size:0.82rem;">
+      <thead><tr><th>Ticker</th><th>Fund Name</th><th>1M Return</th></tr></thead>
+      <tbody>
+        {% for p in summary.best5 %}
+        <tr>
+          <td class="ticker-col">{{ p.ticker }}</td>
+          <td style="max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ p.fund_name }}</td>
+          <td class="num-cell positive">{{ p.return_1m_fmt }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="chart-box">
+    <h3>Worst 5 by 1M Return</h3>
+    <table class="data-table" style="font-size:0.82rem;">
+      <thead><tr><th>Ticker</th><th>Fund Name</th><th>1M Return</th></tr></thead>
+      <tbody>
+        {% for p in summary.worst5 %}
+        <tr>
+          <td class="ticker-col">{{ p.ticker }}</td>
+          <td style="max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ p.fund_name }}</td>
+          <td class="num-cell negative">{{ p.return_1m_fmt }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{# ── Suite Summary Table ── #}
 <h2 class="section-title">REX Suites</h2>
 
 <div class="table-responsive">
 <table class="data-table suite-table" id="suiteTable">
   <thead>
     <tr>
-      <th>Suite</th>
+      <th class="sortable" onclick="sortTable('suiteTable', 0)">Suite</th>
       <th class="sortable" onclick="sortTable('suiteTable', 1)">AUM</th>
       <th class="sortable" onclick="sortTable('suiteTable', 2)">1W Flow</th>
       <th class="sortable" onclick="sortTable('suiteTable', 3)">1M Flow</th>
       <th class="sortable" onclick="sortTable('suiteTable', 4)">Mkt Share</th>
       <th class="sortable" onclick="sortTable('suiteTable', 5)"># Funds</th>
+      <th class="sortable" onclick="sortTable('suiteTable', 6)">Avg Yield</th>
       <th>Top Mover</th>
     </tr>
   </thead>
   <tbody>
     {% for suite in summary.suites %}
-    <tr class="suite-row" data-suite="{{ suite.name }}"
-        onclick="toggleSuiteProducts('{{ suite.name | replace(' ', '-') | replace('/', '-') | lower }}')"
-        style="cursor:pointer;">
+    <tr>
       <td>
-        <span class="expand-icon" id="expand-{{ loop.index }}">&#9654;</span>
-        <a href="/market/category?cats={{ suite.name|urlencode }}" class="text-link" onclick="event.stopPropagation()" title="{{ suite.name }}">
+        <a href="/market/category?cat={{ suite.name|urlencode }}" class="text-link" style="font-weight:500;" title="{{ suite.name }}">
           {{ suite.rex_name if suite.rex_name else suite.short_name }}
         </a>
       </td>
-      <td class="num-cell" data-sort="{{ suite.kpis.total_aum|default(0) }}">{{ suite.kpis.aum_fmt }}</td>
+      <td class="num-cell" data-sort="{{ suite.kpis.total_aum|default(0) }}">
+        {{ suite.kpis.aum_fmt }}
+        {% if suite.aum_mom_pct is defined and suite.aum_mom_pct != 0 %}
+        <div style="font-size:0.65rem;" class="{{ 'positive' if suite.aum_mom_pct >= 0 else 'negative' }}">{{ '%+.1f'|format(suite.aum_mom_pct) }}%</div>
+        {% endif %}
+      </td>
       <td class="num-cell {{ 'positive' if suite.kpis.flow_1w > 0 else 'negative' if suite.kpis.flow_1w < 0 else '' }}" data-sort="{{ suite.kpis.flow_1w|default(0) }}">{{ suite.kpis.flow_1w_fmt }}</td>
       <td class="num-cell {{ 'positive' if suite.kpis.flow_1m > 0 else 'negative' if suite.kpis.flow_1m < 0 else '' }}" data-sort="{{ suite.kpis.flow_1m|default(0) }}">{{ suite.kpis.flow_1m_fmt }}</td>
       <td class="num-cell" data-sort="{{ suite.market_share|default(0) }}">{{ suite.market_share }}%</td>
       <td class="num-cell" data-sort="{{ suite.kpis.num_products|default(0) }}">{{ suite.kpis.num_products }}</td>
+      <td class="num-cell" data-sort="{{ suite.kpis.avg_yield|default(0) }}">{{ suite.kpis.avg_yield_fmt|default('--') }}</td>
       <td class="movers-cell">{% for m in suite.top_movers[:1] %}<span class="{{ 'positive' if m.flow_raw > 0 else 'negative' if m.flow_raw < 0 else '' }}">{{ m.ticker }} {{ m.flow }}</span>{% endfor %}</td>
-    </tr>
-    <tr class="suite-products-row" id="suite-products-{{ suite.name | replace(' ', '-') | replace('/', '-') | lower }}"
-        style="display:none;">
-      <td colspan="7" style="padding:0; background:#F8FAFC;">
-        <table class="data-table" style="margin:0; border:none; border-radius:0;">
-          <thead>
-            <tr>
-              <th>Ticker</th>
-              <th>Fund Name</th>
-              <th>AUM</th>
-              <th>1W Flow</th>
-              <th>Exp Ratio</th>
-              <th>REX</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for p in suite.products %}
-            <tr class="{{ 'rex-highlight' if p.is_rex else '' }}">
-              <td class="text-mono">{{ p.ticker }}</td>
-              <td style="max-width:300px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ p.fund_name }}</td>
-              <td class="text-mono">{{ p.aum_fmt }}</td>
-              <td class="text-mono {{ 'flow-positive' if p.flow_1w_fmt.startswith('+') else 'flow-negative' if p.flow_1w_fmt.startswith('-') else '' }}">{{ p.flow_1w_fmt }}</td>
-              <td class="text-mono">{{ p.expense_ratio_fmt }}</td>
-              <td>{% if p.is_rex %}<span style="color:#1E40AF;font-weight:700;">REX</span>{% endif %}</td>
-            </tr>
-            {% else %}
-            <tr><td colspan="6" style="text-align:center;color:#94A3B8;padding:12px;">No products found</td></tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </td>
     </tr>
     {% endfor %}
   </tbody>
@@ -135,25 +201,54 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
   {% if summary %}
-  // Pie chart - AUM by suite (register datalabels inline, not globally)
+
+  {# ── Mini sparklines ── #}
+  function miniSparkline(canvasId, data, color) {
+    var ctx = document.getElementById(canvasId);
+    if (!ctx || !data || data.length === 0) return;
+    new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: data.map(function(_, i) { return ''; }),
+        datasets: [{
+          data: data,
+          borderColor: color || '#1E40AF',
+          borderWidth: 1.5,
+          pointRadius: 0,
+          fill: false,
+          tension: 0.3
+        }]
+      },
+      options: {
+        responsive: false,
+        plugins: { legend: { display: false }, tooltip: { enabled: false } },
+        scales: { x: { display: false }, y: { display: false } },
+        animation: false
+      }
+    });
+  }
+
+  {% if summary.kpis.sparkline is defined %}
+  miniSparkline('sparkAum', {{ summary.kpis.sparkline|tojson }}, '#1E40AF');
+  {% endif %}
+  {% if summary.kpis.share_sparkline is defined %}
+  miniSparkline('sparkShare', {{ summary.kpis.share_sparkline|tojson }}, '#059669');
+  {% endif %}
+
+  {# ── Pie chart ── #}
   var pieData = {{ summary.pie_data|tojson }};
   var pieCtx = document.getElementById('suitesPieChart');
-  if (pieCtx) {
+  if (pieCtx && pieData.values.length > 0) {
     new Chart(pieCtx, {
       type: 'doughnut',
       plugins: [ChartDataLabels],
       data: {
-        labels: pieData.labels.map(function(l) {
-          return l.replace('Leverage & Inverse - ', 'L&I ')
-                  .replace('Income - ', 'Inc ')
-                  .replace('Index/Basket/ETF Based', 'Index/ETF')
-                  .replace('Single Stock', 'Single');
-        }),
+        labels: pieData.labels,
         datasets: [{
           data: pieData.values,
           backgroundColor: ['#1E40AF','#3B82F6','#0EA5E9','#6366F1','#8B5CF6','#A855F7','#EC4899','#F43F5E','#F97316','#EAB308','#22C55E','#14B8A6'].slice(0, pieData.values.length),
           borderWidth: 2,
-          borderColor: '#fff'
+          borderColor: RexTheme.isDark() ? '#1e293b' : '#fff'
         }]
       },
       options: {
@@ -169,17 +264,13 @@ document.addEventListener('DOMContentLoaded', function() {
               var label = ctx.chart.data.labels[ctx.dataIndex];
               return pct > 3 ? label + '\n' + pct + '%' : pct + '%';
             },
-            anchor: 'center',
-            align: 'center',
+            anchor: 'center', align: 'center',
             display: function(ctx) {
               var total = ctx.dataset.data.reduce(function(a,b){return a+b;},0);
               return total > 0 && ctx.dataset.data[ctx.dataIndex] / total > 0.02;
             }
           },
-          legend: {
-            position: 'bottom',
-            labels: { boxWidth: 12, font: { size: 11 } }
-          },
+          legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 }, color: RexTheme.isDark() ? '#94a3b8' : '#6b7280' } },
           tooltip: {
             callbacks: {
               label: function(ctx) {
@@ -196,30 +287,62 @@ document.addEventListener('DOMContentLoaded', function() {
   {% endif %}
 
   {% if trend %}
-  // Line chart - REX AUM trend (no datalabels)
+  {# ── Line chart ── #}
   var trendData = {{ trend|tojson }};
   MarketCharts.renderLineChart('rexTrendChart', trendData.labels, [
     {label: 'REX AUM', data: trendData.values, color: '#1E40AF'}
   ]);
   {% endif %}
-});
 
-function toggleSuiteProducts(key) {
-  var row = document.getElementById('suite-products-' + key);
-  var suiteRows = document.querySelectorAll('.suite-row');
-  suiteRows.forEach(function(sr) {
-    var k = sr.getAttribute('data-suite').replace(/ /g,'-').replace(/\//g,'-').toLowerCase();
-    if (k === key) {
-      var icon = sr.querySelector('.expand-icon');
-      if (row.style.display === 'none' || row.style.display === '') {
-        row.style.display = 'table-row';
-        if (icon) icon.textContent = '\u25BC';
-      } else {
-        row.style.display = 'none';
-        if (icon) icon.textContent = '\u25B6';
+  {% if summary and summary.flow_chart is defined %}
+  {# ── Flow bar chart ── #}
+  var flowData = {{ summary.flow_chart|tojson }};
+  var _rexFlowChart = null;
+
+  window.showRexFlowPeriod = function(period) {
+    document.querySelectorAll('.rex-flow-btn').forEach(function(b) {
+      b.classList.toggle('active', b.getAttribute('data-period') === period);
+    });
+    var key = 'flow_' + period;
+    var values = flowData[key];
+    if (!values) return;
+    var colors = values.map(function(v) { return v >= 0 ? '#059669' : '#DC2626'; });
+    if (_rexFlowChart) _rexFlowChart.destroy();
+    _rexFlowChart = new Chart(document.getElementById('rexFlowBarChart').getContext('2d'), {
+      type: 'bar',
+      plugins: [ChartDataLabels],
+      data: {
+        labels: flowData.suites,
+        datasets: [{ label: 'Flow $M', data: values, backgroundColor: colors }]
+      },
+      options: {
+        indexAxis: 'y',
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: { label: function(ctx) {
+            var v = ctx.parsed.x;
+            return (v >= 0 ? '+' : '') + '$' + Math.abs(v).toFixed(1) + 'M';
+          }}},
+          datalabels: {
+            anchor: 'end',
+            align: function(ctx) { return ctx.dataset.data[ctx.dataIndex] >= 0 ? 'right' : 'left'; },
+            color: RexTheme.isDark() ? '#e2e8f0' : '#1E293B',
+            font: { size: 11, weight: '600' },
+            formatter: function(value) {
+              if (value === 0) return '';
+              return (value >= 0 ? '+' : '') + '$' + Math.abs(value).toFixed(1) + 'M';
+            }
+          }
+        },
+        scales: {
+          x: { display: false },
+          y: { ticks: { font: { size: 11, weight: '600' }, color: RexTheme.isDark() ? '#94a3b8' : '#374151' }, grid: { display: false } }
+        }
       }
-    }
-  });
-}
+    });
+  };
+  if (flowData.suites && flowData.suites.length > 0) showRexFlowPeriod('1w');
+  {% endif %}
+});
 </script>
 {% endblock %}

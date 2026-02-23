@@ -195,8 +195,13 @@ _SUITE_ORDER = [
 ]
 
 
-def get_rex_summary(fund_structure: str | None = None) -> dict:
-    """Return REX overall KPIs + per-suite breakdown."""
+def get_rex_summary(fund_structure: str | None = None, category: str | None = None) -> dict:
+    """Return REX overall KPIs + per-suite breakdown.
+
+    Args:
+        fund_structure: "ETF", "ETN", or "all" to filter by fund type.
+        category: If set (and not "All"), filter to only REX products in that category.
+    """
     df = get_master_data()
 
     # ETF/ETN filter
@@ -208,17 +213,112 @@ def get_rex_summary(fund_structure: str | None = None) -> dict:
     all_cats = df[df["category_display"].notna()].copy()
     rex = df[df["is_rex"] == True].copy()
 
+    # Category filter (narrows to one category for KPIs)
+    if category and category != "All":
+        rex = rex[rex["category_display"].str.strip() == category.strip()].copy()
+        all_cats = all_cats[all_cats["category_display"].str.strip() == category.strip()].copy()
+
     overall = get_kpis(rex)
+
+    # --- MoM % change for overall AUM ---
+    aum_prev = float(rex["t_w4.aum_1"].sum()) if "t_w4.aum_1" in rex.columns else 0.0
+    aum_curr = overall["total_aum"]
+    overall["aum_mom_pct"] = round((aum_curr - aum_prev) / aum_prev * 100, 1) if aum_prev > 0 else 0.0
+
+    # --- Overall market share ---
+    total_market_aum = float(all_cats["t_w4.aum"].sum()) if not all_cats.empty else 0.0
+    overall_mkt_share = (aum_curr / total_market_aum * 100) if total_market_aum > 0 else 0.0
+    prev_market_aum = float(all_cats["t_w4.aum_1"].sum()) if "t_w4.aum_1" in all_cats.columns else 0.0
+    prev_share = (aum_prev / prev_market_aum * 100) if prev_market_aum > 0 else 0.0
+    overall["market_share_pct"] = round(overall_mkt_share, 2)
+    overall["market_share_mom_pct"] = round(overall_mkt_share - prev_share, 2)
+
+    # --- Avg yield ---
+    yield_col = "t_w3.annualized_yield"
+    if yield_col in rex.columns:
+        yields = rex[yield_col].dropna()
+        yields = yields[yields.apply(lambda v: not (isinstance(v, float) and math.isnan(v)))]
+        overall["avg_yield"] = round(float(yields.mean()), 2) if len(yields) > 0 else 0.0
+        overall["avg_yield_fmt"] = f"{overall['avg_yield']:.2f}%"
+    else:
+        overall["avg_yield"] = 0.0
+        overall["avg_yield_fmt"] = "N/A"
+
+    # --- Best performer (1M total return) ---
+    ret_col = "t_w3.total_return_1month"
+    if ret_col in rex.columns and not rex.empty:
+        best_row = rex.loc[rex[ret_col].idxmax()] if rex[ret_col].notna().any() else None
+        if best_row is not None:
+            overall["best_performer"] = {
+                "ticker": str(best_row.get("ticker_clean", best_row.get("ticker", ""))),
+                "return_1m": round(float(best_row.get(ret_col, 0)), 2),
+                "return_1m_fmt": f"{float(best_row.get(ret_col, 0)):+.2f}%",
+            }
+        else:
+            overall["best_performer"] = None
+    else:
+        overall["best_performer"] = None
+
+    # --- AUM sparkline (overall, 12 months, oldest to newest) ---
+    overall_sparkline = []
+    for i in range(12, 0, -1):
+        col = f"t_w4.aum_{i}"
+        if col in rex.columns:
+            overall_sparkline.append(round(float(rex[col].sum()), 2))
+        else:
+            overall_sparkline.append(0.0)
+    overall_sparkline.append(round(aum_curr, 2))
+    overall["sparkline"] = overall_sparkline
+
+    # --- Market share sparkline (12 months) ---
+    share_sparkline = []
+    for i in range(12, 0, -1):
+        col = f"t_w4.aum_{i}"
+        if col in rex.columns and col in all_cats.columns:
+            r_aum = float(rex[col].sum())
+            m_aum = float(all_cats[col].sum())
+            share_sparkline.append(round((r_aum / m_aum * 100) if m_aum > 0 else 0.0, 2))
+        else:
+            share_sparkline.append(0.0)
+    share_sparkline.append(round(overall_mkt_share, 2))
+    overall["share_sparkline"] = share_sparkline
+
+    # --- Best 5 / Worst 5 by 1M return ---
+    best5 = []
+    worst5 = []
+    if ret_col in rex.columns and not rex.empty:
+        valid_ret = rex[rex[ret_col].notna()].copy()
+        for _, row in valid_ret.nlargest(5, ret_col).iterrows():
+            best5.append({
+                "ticker": str(row.get("ticker_clean", row.get("ticker", ""))),
+                "fund_name": str(row.get("fund_name", "")),
+                "return_1m": round(float(row.get(ret_col, 0)), 2),
+                "return_1m_fmt": f"{float(row.get(ret_col, 0)):+.2f}%",
+            })
+        for _, row in valid_ret.nsmallest(5, ret_col).iterrows():
+            worst5.append({
+                "ticker": str(row.get("ticker_clean", row.get("ticker", ""))),
+                "fund_name": str(row.get("fund_name", "")),
+                "return_1m": round(float(row.get(ret_col, 0)), 2),
+                "return_1m_fmt": f"{float(row.get(ret_col, 0)):+.2f}%",
+            })
+
+    # --- Flow data arrays for bar chart (per suite) ---
+    flow_chart_data = {"suites": [], "flow_1w": [], "flow_1m": [], "flow_3m": [], "flow_ytd": []}
 
     suites = []
     for suite_name in _SUITE_ORDER:
-        rex_suite = rex[rex["category_display"] == suite_name]
+        rex_suite = rex[rex["category_display"].str.strip() == suite_name.strip()] if not rex.empty else rex
         if rex_suite.empty:
             continue
-        cat_suite = all_cats[all_cats["category_display"] == suite_name]
+        cat_suite = all_cats[all_cats["category_display"].str.strip() == suite_name.strip()] if not all_cats.empty else all_cats
         cat_aum = float(cat_suite["t_w4.aum"].sum())
         rex_aum = float(rex_suite["t_w4.aum"].sum())
         market_share = (rex_aum / cat_aum * 100) if cat_aum > 0 else 0.0
+
+        # MoM for suite
+        prev_rex_aum = float(rex_suite["t_w4.aum_1"].sum()) if "t_w4.aum_1" in rex_suite.columns else 0.0
+        aum_mom = round((rex_aum - prev_rex_aum) / prev_rex_aum * 100, 1) if prev_rex_aum > 0 else 0.0
 
         # Top movers by 1-week flow
         sorted_suite = rex_suite.sort_values("t_w4.fund_flow_1week", ascending=False)
@@ -233,11 +333,10 @@ def get_rex_summary(fund_structure: str | None = None) -> dict:
                 "fund_name": str(row.get("fund_name", "")),
                 "flow_1w": flow,
                 "flow_1w_fmt": fmt,
-                "flow": fmt,       # alias for _suite_card.html
-                "flow_raw": flow,  # alias for _suite_card.html
+                "flow": fmt,
+                "flow_raw": flow,
                 "positive": flow >= 0,
             })
-        # Add bottom movers if not already there
         for _, row in sorted_suite.tail(3).iterrows():
             flow = float(row.get("t_w4.fund_flow_1week", 0))
             ticker = str(row.get("ticker", ""))
@@ -249,12 +348,22 @@ def get_rex_summary(fund_structure: str | None = None) -> dict:
                 "fund_name": str(row.get("fund_name", "")),
                 "flow_1w": flow,
                 "flow_1w_fmt": fmt,
-                "flow": fmt,       # alias for _suite_card.html
-                "flow_raw": flow,  # alias for _suite_card.html
+                "flow": fmt,
+                "flow_raw": flow,
                 "positive": flow >= 0,
             })
 
         kpis = get_kpis(rex_suite)
+
+        # Suite avg yield
+        if yield_col in rex_suite.columns:
+            s_yields = rex_suite[yield_col].dropna()
+            s_yields = s_yields[s_yields.apply(lambda v: not (isinstance(v, float) and math.isnan(v)))]
+            kpis["avg_yield"] = round(float(s_yields.mean()), 2) if len(s_yields) > 0 else 0.0
+            kpis["avg_yield_fmt"] = f"{kpis['avg_yield']:.2f}%"
+        else:
+            kpis["avg_yield"] = 0.0
+            kpis["avg_yield_fmt"] = "N/A"
 
         # Sparkline: last 4 months of REX AUM in this suite (oldest to newest)
         sparkline = []
@@ -281,18 +390,32 @@ def get_rex_summary(fund_structure: str | None = None) -> dict:
                 "is_rex": bool(row.get("is_rex", False)),
             })
 
+        short = _suite_short(suite_name)
+
+        # Flow data for bar chart
+        flow_1w = float(rex_suite["t_w4.fund_flow_1week"].sum()) if "t_w4.fund_flow_1week" in rex_suite.columns else 0.0
+        flow_1m = float(rex_suite["t_w4.fund_flow_1month"].sum()) if "t_w4.fund_flow_1month" in rex_suite.columns else 0.0
+        flow_3m = float(rex_suite["t_w4.fund_flow_3month"].sum()) if "t_w4.fund_flow_3month" in rex_suite.columns else 0.0
+        flow_ytd = float(rex_suite["t_w4.fund_flow_ytd"].sum()) if "t_w4.fund_flow_ytd" in rex_suite.columns else 0.0
+        flow_chart_data["suites"].append(short)
+        flow_chart_data["flow_1w"].append(round(flow_1w, 2))
+        flow_chart_data["flow_1m"].append(round(flow_1m, 2))
+        flow_chart_data["flow_3m"].append(round(flow_3m, 2))
+        flow_chart_data["flow_ytd"].append(round(flow_ytd, 2))
+
         suites.append({
             "name": suite_name,
             "rex_name": _REX_SUITE_NAMES.get(suite_name, suite_name),
-            "short_name": _suite_short(suite_name),
+            "short_name": short,
             "kpis": kpis,
             "market_share": round(market_share, 1),
             "market_share_fmt": f"{market_share:.1f}%",
             "total_aum_fmt": _fmt_currency(rex_aum),
+            "aum_mom_pct": aum_mom,
             "top_movers": top_movers,
             "products": suite_products,
-            "category_param": suite_name,  # for link to category view
-            "sparkline_data": sparkline,  # oldest to newest
+            "category_param": suite_name,
+            "sparkline_data": sparkline,
         })
 
     # Chart data: AUM by suite for pie chart
@@ -300,12 +423,15 @@ def get_rex_summary(fund_structure: str | None = None) -> dict:
     pie_values = [round(s["kpis"]["total_aum"], 2) for s in suites]
 
     return {
-        "kpis": overall,     # renamed: templates use summary.kpis
-        "overall": overall,  # kept for backwards compat
+        "kpis": overall,
+        "overall": overall,
         "suites": suites,
         "pie_labels": json.dumps(pie_labels),
         "pie_values": json.dumps(pie_values),
-        "pie_data": {"labels": pie_labels, "values": pie_values},  # for templates
+        "pie_data": {"labels": pie_labels, "values": pie_values},
+        "best5": best5,
+        "worst5": worst5,
+        "flow_chart": flow_chart_data,
     }
 
 
@@ -522,13 +648,26 @@ def get_category_summary(category: str | None, filters: dict | None = None, fund
 
 #  Treemap
 
-def get_treemap_data(category: str | None = None) -> dict:
-    """Return product list for treemap rendering (top 200 by AUM)."""
+def get_treemap_data(category: str | None = None, fund_type: str | None = None, issuer_filter: str | None = None) -> dict:
+    """Return hierarchical issuer-grouped treemap data (top 200 by AUM).
+
+    Returns both flat `products` list (for backward compat) and `issuers` hierarchy.
+    """
     df = get_master_data()
     if category and category != "All":
-        df = df[df["category_display"] == category].copy()
+        df = df[df["category_display"].str.strip() == category.strip()].copy()
     else:
         df = df[df["category_display"].notna()].copy()
+
+    # ETF/ETN filter
+    if fund_type and fund_type != "all":
+        fund_type_col = next((c for c in df.columns if c.lower().strip() == "fund_type"), None)
+        if fund_type_col:
+            df = df[df[fund_type_col] == fund_type].copy()
+
+    # Issuer filter
+    if issuer_filter and issuer_filter != "All":
+        df = df[df["issuer_display"].fillna("").str.strip() == issuer_filter.strip()].copy()
 
     # Deduplicate on ticker within filtered df
     ticker_col = next((c for c in df.columns if c.lower().strip() == "ticker"), None)
@@ -537,27 +676,77 @@ def get_treemap_data(category: str | None = None) -> dict:
 
     df = df.sort_values("t_w4.aum", ascending=False).head(200)
 
+    total = float(df["t_w4.aum"].sum()) if not df.empty else 0.0
+
+    # Build flat product list (backward compat) AND hierarchical issuer grouping
+    products = []
+    issuer_map: dict[str, dict] = {}
+
     try:
-        products = []
         for _, row in df.iterrows():
             aum = float(row.get("t_w4.aum", 0))
-            products.append({
+            issuer_name = str(row.get("issuer_display", "Other")).strip() or "Other"
+            p = {
                 "label": str(row.get("ticker_clean", row.get("ticker", ""))),
                 "value": round(aum, 2),
-                "group": str(row.get("issuer_display", "Other")),
+                "group": issuer_name,
                 "is_rex": bool(row.get("is_rex", False)),
                 "ticker": str(row.get("ticker_clean", row.get("ticker", ""))),
                 "fund_name": str(row.get("fund_name", "")),
-                "issuer": str(row.get("issuer_display", "")),
+                "issuer": issuer_name,
                 "aum_fmt": _fmt_currency(aum),
+            }
+            products.append(p)
+
+            if issuer_name not in issuer_map:
+                issuer_map[issuer_name] = {"issuer": issuer_name, "aum": 0.0, "children": [], "is_rex": False}
+            issuer_map[issuer_name]["aum"] += aum
+            issuer_map[issuer_name]["children"].append({
+                "ticker": p["ticker"],
+                "fund_name": p["fund_name"],
+                "aum": round(aum, 2),
+                "aum_fmt": p["aum_fmt"],
+                "is_rex": p["is_rex"],
             })
+            if p["is_rex"]:
+                issuer_map[issuer_name]["is_rex"] = True
+
     except Exception as e:
         log.error("Treemap product build error: %s", e)
         products = []
 
-    total = float(df["t_w4.aum"].sum()) if not df.empty else 0.0
+    # Build hierarchical list, group small issuers (<0.5% share) into "Others"
+    threshold = total * 0.005  # 0.5%
+    issuers_list = []
+    others = {"issuer": "Others", "aum": 0.0, "pct": 0.0, "children": [], "is_rex": False}
+    for name, data in sorted(issuer_map.items(), key=lambda x: x[1]["aum"], reverse=True):
+        pct = round((data["aum"] / total * 100) if total > 0 else 0.0, 1)
+        entry = {
+            "issuer": name,
+            "aum": round(data["aum"], 2),
+            "aum_fmt": _fmt_currency(data["aum"]),
+            "pct": pct,
+            "children": data["children"],
+            "is_rex": data["is_rex"],
+        }
+        if data["aum"] < threshold and not data["is_rex"]:
+            others["aum"] += data["aum"]
+            others["children"].extend(data["children"])
+        else:
+            issuers_list.append(entry)
+    if others["children"]:
+        others["aum"] = round(others["aum"], 2)
+        others["aum_fmt"] = _fmt_currency(others["aum"])
+        others["pct"] = round((others["aum"] / total * 100) if total > 0 else 0.0, 1)
+        issuers_list.append(others)
+
+    # Available issuers for filter dropdown
+    all_issuers = sorted(issuer_map.keys())
+
     return {
         "products": products,
+        "issuers": issuers_list,
+        "all_issuers": all_issuers,
         "total_aum": round(total, 2),
         "total_aum_fmt": _fmt_currency(total) if products else "N/A",
         "categories": ALL_CATEGORIES,
@@ -570,7 +759,7 @@ def get_issuer_summary(category: str | None = None, fund_structure: str | None =
     """Return per-issuer AUM, flows, product count, market share."""
     df = get_master_data()
     if category and category != "All":
-        df = df[df["category_display"].str.strip() == category].copy()
+        df = df[df["category_display"].str.strip() == category.strip()].copy()
     else:
         df = df[df["category_display"].notna()].copy()
 
@@ -680,7 +869,7 @@ def get_issuer_share(cat: str) -> dict:
     if master.empty:
         return {}
 
-    df = master[master["category_display"] == cat].copy() if cat else master.copy()
+    df = master[master["category_display"].str.strip() == cat.strip()].copy() if cat else master.copy()
     if df.empty:
         return {}
 
@@ -713,7 +902,7 @@ def get_issuer_share(cat: str) -> dict:
     trend = {"months": [], "series": []}
     pct_trend = {"months": [], "series": []}
     if not ts.empty and "date" in ts.columns and "issuer_display" in ts.columns:
-        ts_cat = ts[ts["category_display"] == cat].copy() if cat else ts.copy()
+        ts_cat = ts[ts["category_display"].str.strip() == cat.strip()].copy() if cat else ts.copy()
         ts_cat = ts_cat.dropna(subset=["date", "issuer_display"])
         if not ts_cat.empty:
             dates = sorted(ts_cat["date"].unique())

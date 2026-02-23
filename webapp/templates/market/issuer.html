@@ -47,25 +47,23 @@
         <th onclick="sortTable('issuerTable', 4)">1W Flow</th>
         <th onclick="sortTable('issuerTable', 5)">1M Flow</th>
         <th onclick="sortTable('issuerTable', 6)"># Products</th>
-        <th>Detail</th>
       </tr>
     </thead>
     <tbody>
       {% for iss in summary.issuers %}
       <tr class="{{ 'rex-highlight' if iss.is_rex else '' }}">
         <td>{{ loop.index }}</td>
-        <td>{{ iss.issuer_name }}{% if iss.is_rex %} <span style="color:#1E40AF;font-weight:600;font-size:11px;">(REX)</span>{% endif %}</td>
+        <td>
+          <a href="/market/issuer/detail?issuer={{ iss.issuer_name|urlencode }}" class="text-link" style="font-weight:500;">
+            {{ iss.issuer_name }}
+          </a>
+          {% if iss.is_rex %} <span style="color:#1E40AF;font-weight:600;font-size:11px;">(REX)</span>{% endif %}
+        </td>
         <td class="num-cell">{{ iss.aum_fmt }}</td>
         <td class="num-cell">{{ iss.market_share_pct }}%</td>
         <td class="num-cell {{ 'positive' if iss.flow_1w > 0 else 'negative' if iss.flow_1w < 0 else '' }}">{{ iss.flow_1w_fmt }}</td>
         <td class="num-cell {{ 'positive' if iss.flow_1m > 0 else 'negative' if iss.flow_1m < 0 else '' }}">{{ iss.flow_1m_fmt }}</td>
         <td class="num-cell">{{ iss.num_products }}</td>
-        <td>
-          <a href="/market/issuer/detail?issuer={{ iss.issuer_name|urlencode }}"
-             class="btn btn-sm" style="font-size:0.72rem; padding:3px 8px;">
-            Deep Dive &rarr;
-          </a>
-        </td>
       </tr>
       {% endfor %}
     </tbody>
