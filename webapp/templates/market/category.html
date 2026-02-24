@@ -89,19 +89,36 @@
     <h3>Market Share by Issuer</h3>
     <canvas id="issuerBarChart"></canvas>
   </div>
-  <div class="chart-box">
-    <h3>Category AUM Trend</h3>
-    <canvas id="categoryTrendChart"></canvas>
+  <div class="chart-box" style="min-height:260px;">
+    <div style="display:flex; gap:4px; margin-bottom:12px; flex-wrap:wrap;">
+      <button class="pill chart-mode-btn active" data-mode="aum" onclick="switchCatChartMode('aum')">AUM</button>
+      <button class="pill chart-mode-btn" data-mode="flows" onclick="switchCatChartMode('flows')">Flows</button>
+      <button class="pill chart-mode-btn" data-mode="volume" onclick="switchCatChartMode('volume')">Volume</button>
+      <button class="pill chart-mode-btn" data-mode="spread" onclick="switchCatChartMode('spread')">Bid-Ask</button>
+      <button class="pill chart-mode-btn" data-mode="appreciation" onclick="switchCatChartMode('appreciation')">Mkt Appr</button>
+    </div>
+    <div id="catAumControls" style="margin-bottom:8px;">
+      <label style="font-size:0.82rem; cursor:pointer;">
+        <input type="checkbox" id="showIssuerBreakdown" onchange="switchCatChartMode('aum')"> Show Issuer Breakdown
+      </label>
+    </div>
+    <div id="catFlowControls" style="display:none; margin-bottom:8px;">
+      <button class="pill cat-flow-btn active" data-period="1w" onclick="showCatFlowPeriod('1w')">1W</button>
+      <button class="pill cat-flow-btn" data-period="1m" onclick="showCatFlowPeriod('1m')">1M</button>
+      <button class="pill cat-flow-btn" data-period="3m" onclick="showCatFlowPeriod('3m')">3M</button>
+      <button class="pill cat-flow-btn" data-period="6m" onclick="showCatFlowPeriod('6m')">6M</button>
+      <button class="pill cat-flow-btn" data-period="ytd" onclick="showCatFlowPeriod('ytd')">YTD</button>
+      <button class="pill cat-flow-btn" data-period="1y" onclick="showCatFlowPeriod('1y')">1Y</button>
+    </div>
+    <canvas id="catUnifiedChart" height="200"></canvas>
   </div>
 </div>
 
 {# Treemap Section #}
 {% if treemap is defined and treemap and treemap.issuers %}
-<div class="chart-box" style="margin-bottom:24px; padding:16px; padding-bottom:8px;">
+<div class="chart-box" style="margin-bottom:12px; padding:16px; padding-bottom:0;">
   <h3 style="margin-bottom:8px;">Market Landscape — {{ category or 'All Categories' }}</h3>
-  <div style="position:relative; height:480px;">
-    <canvas id="categoryTreemap"></canvas>
-  </div>
+  <canvas id="categoryTreemap" style="max-height:450px;"></canvas>
 </div>
 {% endif %}
 
@@ -246,15 +263,242 @@ document.addEventListener('DOMContentLoaded', function() {
   {% endif %}
 
   {% if trend %}
-  // Line chart - category AUM trend
-  var trendData = {{ trend|tojson }};
-  var datasets = [
-    {label: 'Category AUM', data: trendData.total_values, color: '#6B7280'}
-  ];
-  if (trendData.rex_values && trendData.rex_values.some(function(v) { return v > 0; })) {
-    datasets.push({label: 'REX AUM', data: trendData.rex_values, color: '#1E40AF'});
+  // Unified chart data
+  var catTrendData = {{ trend|tojson }};
+  {% if summary and summary.chart_data is defined %}
+  var catChartData = {{ summary.chart_data|tojson }};
+  {% else %}
+  var catChartData = {flow: {}, volume: {}, spread: {}, appreciation: {}};
+  {% endif %}
+
+  var _catUnifiedChart = null;
+  var _catChartMode = 'aum';
+  var _catFlowPeriod = '1w';
+
+  function catFmtMoney(val) {
+    if (val === null || val === undefined || isNaN(val)) return '$0';
+    var sign = val < 0 ? '-' : '';
+    var abs = Math.abs(val);
+    if (abs >= 1000) return sign + '$' + (abs / 1000).toFixed(1) + 'B';
+    if (abs >= 1) return sign + '$' + abs.toFixed(1) + 'M';
+    return sign + '$' + (abs * 1000).toFixed(0) + 'K';
   }
-  MarketCharts.renderLineChart('categoryTrendChart', trendData.labels, datasets);
+  function catFmtFlow(val) { return (val >= 0 ? '+' : '') + catFmtMoney(val); }
+  function catFmtVol(val) {
+    if (val >= 1000000) return (val/1000000).toFixed(1) + 'M';
+    if (val >= 1000) return Math.round(val/1000) + 'K';
+    return Math.round(val).toString();
+  }
+
+  var ISSUER_COLORS = ['#1E40AF','#3B82F6','#0EA5E9','#6366F1','#8B5CF6','#A855F7','#EC4899','#F43F5E','#F97316','#EAB308','#22C55E','#14B8A6'];
+
+  window.switchCatChartMode = function(mode) {
+    _catChartMode = mode;
+    document.querySelectorAll('.chart-mode-btn').forEach(function(b) {
+      b.classList.toggle('active', b.getAttribute('data-mode') === mode);
+    });
+    document.getElementById('catAumControls').style.display = mode === 'aum' ? '' : 'none';
+    document.getElementById('catFlowControls').style.display = mode === 'flows' ? '' : 'none';
+
+    if (_catUnifiedChart) { _catUnifiedChart.destroy(); _catUnifiedChart = null; }
+    var ctx = document.getElementById('catUnifiedChart');
+    if (!ctx) return;
+    var isDark = RexTheme.isDark();
+    var labelColor = isDark ? '#94a3b8' : '#6b7280';
+    var gridColor = isDark ? 'rgba(255,255,255,0.08)' : '#f3f4f6';
+
+    if (mode === 'aum') {
+      var showBreakdown = document.getElementById('showIssuerBreakdown') && document.getElementById('showIssuerBreakdown').checked;
+      var datasets = [];
+      if (showBreakdown && catChartData.flow && catChartData.flow.issuers) {
+        // Per-issuer AUM not available in time series - show category + REX lines
+        datasets.push({
+          label: 'Category AUM', data: catTrendData.total_values,
+          borderColor: '#6B7280', backgroundColor: '#6B728020',
+          fill: true, tension: 0.3, pointRadius: 2, borderWidth: 2
+        });
+        if (catTrendData.rex_values && catTrendData.rex_values.some(function(v) { return v > 0; })) {
+          datasets.push({
+            label: 'REX AUM', data: catTrendData.rex_values,
+            borderColor: '#1E40AF', backgroundColor: '#1E40AF20',
+            fill: true, tension: 0.3, pointRadius: 2, borderWidth: 2
+          });
+        }
+      } else {
+        datasets.push({
+          label: 'Category AUM', data: catTrendData.total_values,
+          borderColor: '#6B7280', backgroundColor: '#6B728020',
+          fill: true, tension: 0.3, pointRadius: 2, borderWidth: 2
+        });
+        if (catTrendData.rex_values && catTrendData.rex_values.some(function(v) { return v > 0; })) {
+          datasets.push({
+            label: 'REX AUM', data: catTrendData.rex_values,
+            borderColor: '#1E40AF', backgroundColor: '#1E40AF20',
+            fill: true, tension: 0.3, pointRadius: 2, borderWidth: 2
+          });
+        }
+      }
+      _catUnifiedChart = new Chart(ctx, {
+        type: 'line',
+        data: { labels: catTrendData.labels, datasets: datasets },
+        options: {
+          responsive: true, maintainAspectRatio: true,
+          interaction: { mode: 'index', intersect: false },
+          scales: {
+            x: { ticks: { maxRotation: 45, autoSkip: true, maxTicksLimit: 12, font: { size: 10 }, color: labelColor }, grid: { display: false } },
+            y: { ticks: { callback: function(v) { return catFmtMoney(v); }, font: { size: 10 }, color: labelColor }, grid: { color: gridColor } }
+          },
+          plugins: {
+            datalabels: { display: false },
+            legend: { display: datasets.length > 1, labels: { font: { size: 11 }, usePointStyle: true, color: labelColor } },
+            tooltip: { callbacks: { label: function(c) { return c.dataset.label + ': ' + catFmtMoney(c.parsed.y); } } }
+          }
+        }
+      });
+
+    } else if (mode === 'flows') {
+      showCatFlowPeriod(_catFlowPeriod);
+
+    } else if (mode === 'volume') {
+      var vd = catChartData.volume || {};
+      _catUnifiedChart = new Chart(ctx, {
+        type: 'bar',
+        plugins: [ChartDataLabels],
+        data: {
+          labels: vd.issuers || [],
+          datasets: [{ data: vd.values || [], backgroundColor: '#3B82F6', borderRadius: 3 }]
+        },
+        options: {
+          indexAxis: 'y', responsive: true, maintainAspectRatio: true,
+          layout: { padding: { right: 80 } },
+          scales: {
+            x: { display: false, grace: '15%' },
+            y: { ticks: { font: { size: 11, weight: '600' }, color: labelColor }, grid: { display: false } }
+          },
+          plugins: {
+            legend: { display: false },
+            tooltip: { callbacks: { label: function(c) { return catFmtVol(c.parsed.x); } } },
+            datalabels: {
+              anchor: 'end', align: 'right',
+              color: isDark ? '#e2e8f0' : '#1E293B',
+              font: { size: 11, weight: '600' },
+              formatter: function(v) { return catFmtVol(v); },
+              clip: false
+            }
+          }
+        }
+      });
+
+    } else if (mode === 'spread') {
+      var sd = catChartData.spread || {};
+      _catUnifiedChart = new Chart(ctx, {
+        type: 'bar',
+        plugins: [ChartDataLabels],
+        data: {
+          labels: sd.issuers || [],
+          datasets: [{ data: sd.values || [], backgroundColor: '#6366F1', borderRadius: 3 }]
+        },
+        options: {
+          indexAxis: 'y', responsive: true, maintainAspectRatio: true,
+          layout: { padding: { right: 80 } },
+          scales: {
+            x: { display: false, grace: '15%' },
+            y: { ticks: { font: { size: 11, weight: '600' }, color: labelColor }, grid: { display: false } }
+          },
+          plugins: {
+            legend: { display: false },
+            tooltip: { callbacks: { label: function(c) { return '$' + c.parsed.x.toFixed(4); } } },
+            datalabels: {
+              anchor: 'end', align: 'right',
+              color: isDark ? '#e2e8f0' : '#1E293B',
+              font: { size: 11, weight: '600' },
+              formatter: function(v) { return '$' + v.toFixed(4); },
+              clip: false
+            }
+          }
+        }
+      });
+
+    } else if (mode === 'appreciation') {
+      var ad = catChartData.appreciation || {};
+      var vals = ad.values || [];
+      var colors = vals.map(function(v) { return v >= 0 ? '#059669' : '#DC2626'; });
+      _catUnifiedChart = new Chart(ctx, {
+        type: 'bar',
+        plugins: [ChartDataLabels],
+        data: {
+          labels: ad.issuers || [],
+          datasets: [{ data: vals, backgroundColor: colors, borderRadius: 3 }]
+        },
+        options: {
+          indexAxis: 'y', responsive: true, maintainAspectRatio: true,
+          layout: { padding: { left: 10, right: 100 } },
+          scales: {
+            x: { display: false, grace: '20%' },
+            y: { ticks: { font: { size: 11, weight: '600' }, color: labelColor }, grid: { display: false } }
+          },
+          plugins: {
+            legend: { display: false },
+            tooltip: { callbacks: { label: function(c) { return catFmtFlow(c.parsed.x); } } },
+            datalabels: {
+              anchor: 'end',
+              align: function(c) { return c.dataset.data[c.dataIndex] >= 0 ? 'right' : 'left'; },
+              color: isDark ? '#e2e8f0' : '#1E293B',
+              font: { size: 11, weight: '600' },
+              formatter: function(v) { return v === 0 ? '' : catFmtFlow(v); },
+              clip: false
+            }
+          }
+        }
+      });
+    }
+  };
+
+  window.showCatFlowPeriod = function(period) {
+    _catFlowPeriod = period;
+    document.querySelectorAll('.cat-flow-btn').forEach(function(b) {
+      b.classList.toggle('active', b.getAttribute('data-period') === period);
+    });
+    var flowData = catChartData.flow || {};
+    var key = 'flow_' + period;
+    var values = flowData[key];
+    if (!values) return;
+    var colors = values.map(function(v) { return v >= 0 ? '#059669' : '#DC2626'; });
+    var isDark = RexTheme.isDark();
+    var labelColor = isDark ? '#94a3b8' : '#374151';
+    if (_catUnifiedChart) { _catUnifiedChart.destroy(); _catUnifiedChart = null; }
+    _catUnifiedChart = new Chart(document.getElementById('catUnifiedChart').getContext('2d'), {
+      type: 'bar',
+      plugins: [ChartDataLabels],
+      data: {
+        labels: flowData.issuers,
+        datasets: [{ label: 'Flow $M', data: values, backgroundColor: colors }]
+      },
+      options: {
+        indexAxis: 'y',
+        layout: { padding: { left: 10, right: 100 } },
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: { label: function(ctx) { return catFmtFlow(ctx.parsed.x); } } },
+          datalabels: {
+            anchor: 'end',
+            align: function(ctx) { return ctx.dataset.data[ctx.dataIndex] >= 0 ? 'right' : 'left'; },
+            color: isDark ? '#e2e8f0' : '#1E293B',
+            font: { size: 11, weight: '600' },
+            formatter: function(value) { return value === 0 ? '' : catFmtFlow(value); },
+            clip: false
+          }
+        },
+        scales: {
+          x: { display: false, grace: '20%' },
+          y: { ticks: { font: { size: 11, weight: '600' }, color: labelColor }, grid: { display: false } }
+        }
+      }
+    });
+  };
+
+  // Initialize with AUM mode
+  switchCatChartMode('aum');
   {% endif %}
 
   {% if treemap is defined and treemap and treemap.products %}

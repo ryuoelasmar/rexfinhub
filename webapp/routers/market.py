@@ -141,11 +141,11 @@ def category_view(
         summary = svc.get_category_summary(cat_arg, filter_dict, fund_structure=fund_structure, page=page, per_page=per_page)
 
         # Treemap data for this category
-        treemap_data = svc.get_treemap_data(cat_arg, fund_type=fund_structure)
+        treemap_data = svc.get_treemap_data(cat_arg, fund_type=fund_structure, filters=filter_dict)
 
         slicers = svc.get_slicer_options(cat) if cat and cat != "All" else []
-        ts_cat = _parse_ts(svc.get_time_series(category=cat_arg))
-        ts_rex = _parse_ts(svc.get_time_series(category=cat_arg, is_rex=True))
+        ts_cat = _parse_ts(svc.get_time_series(category=cat_arg, filters=filter_dict))
+        ts_rex = _parse_ts(svc.get_time_series(category=cat_arg, is_rex=True, filters=filter_dict))
         trend = {
             "labels": ts_cat["labels"],
             "total_values": ts_cat["values"],

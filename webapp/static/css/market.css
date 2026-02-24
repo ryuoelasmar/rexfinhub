@@ -164,6 +164,10 @@
   max-height: 320px;
 }
 
+.chart-box #categoryTreemap {
+  max-height: 450px;
+}
+
 /* Section title */
 .section-title {
   font-size: var(--text-lg);
