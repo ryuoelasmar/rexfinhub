@@ -59,6 +59,44 @@
   border: 1px solid #fcd34d;
 }
 
+/* KPI Hero Row (2-up wide cards with sparklines) */
+.kpi-hero-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-3);
+}
+
+.kpi-hero-card {
+  background: var(--white);
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-md);
+  padding: var(--sp-5) var(--sp-6);
+  box-shadow: var(--shadow-sm);
+}
+
+.kpi-hero-card .kpi-label {
+  font-size: var(--text-xs);
+  font-weight: 500;
+  color: var(--gray-500);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: var(--sp-1);
+}
+
+.kpi-hero-card .kpi-value {
+  font-size: var(--text-2xl);
+  font-weight: 700;
+  color: var(--gray-900);
+  font-family: var(--font-mono);
+}
+
+.kpi-hero-card canvas {
+  width: 100% !important;
+  height: 36px !important;
+  margin-top: var(--sp-2);
+}
+
 /* KPI Cards */
 .kpi-row {
   display: flex;
@@ -561,6 +599,26 @@
 .suite-table .movers-cell { font-size: 0.77rem; }
 .suite-table .mover { white-space: nowrap; }
 
+/* Suite sub-table filter */
+.suite-product-filter {
+  width: 100%;
+  max-width: 300px;
+  padding: 4px 8px;
+  margin: 6px 8px;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-sm);
+  font-size: 0.78rem;
+  font-family: var(--font-sans);
+  background: var(--white);
+  color: var(--gray-700);
+}
+
+[data-theme="dark"] .suite-product-filter {
+  background: var(--surface-2);
+  border-color: var(--gray-200);
+  color: var(--text-primary);
+}
+
 /* Category pills */
 .category-pills { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
 .category-pills .pill {
@@ -605,6 +663,10 @@
     flex-direction: column;
     gap: var(--sp-3);
     align-items: flex-start;
+  }
+
+  .kpi-hero-row {
+    grid-template-columns: 1fr;
   }
 
   .charts-row {
@@ -722,6 +784,14 @@
 [data-theme="dark"] .market-header h1 {
   color: var(--gray-900);
 }
+
+[data-theme="dark"] .kpi-hero-card {
+  background: var(--surface-1);
+  border-color: var(--gray-200);
+}
+
+[data-theme="dark"] .kpi-hero-card .kpi-label { color: var(--text-muted); }
+[data-theme="dark"] .kpi-hero-card .kpi-value { color: var(--text-primary); }
 
 [data-theme="dark"] .kpi-card {
   background: var(--surface-1);

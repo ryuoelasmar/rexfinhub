@@ -41,9 +41,9 @@
 </div>
 {% endif %}
 
-{# -- KPI Cards (5 cards - removed Avg Yield) -- #}
-<div class="kpi-row" style="margin-bottom:24px;">
-  <div class="kpi-card">
+{# -- KPI Hero Row (2 wide cards with sparklines) -- #}
+<div class="kpi-hero-row">
+  <div class="kpi-hero-card">
     <div class="kpi-label">Total REX AUM</div>
     <div class="kpi-value">{{ summary.kpis.aum_fmt }}</div>
     {% if summary.kpis.aum_mom_pct is defined %}
@@ -52,10 +52,10 @@
     </div>
     {% endif %}
     {% if summary.kpis.sparkline is defined %}
-    <canvas id="sparkAum" width="120" height="30" style="margin-top:6px;"></canvas>
+    <canvas id="sparkAum"></canvas>
     {% endif %}
   </div>
-  <div class="kpi-card">
+  <div class="kpi-hero-card">
     <div class="kpi-label">Market Share</div>
     <div class="kpi-value">{{ '%.2f'|format(summary.kpis.market_share_pct|default(0)) }}%</div>
     {% if summary.kpis.market_share_mom_pct is defined %}
@@ -64,9 +64,13 @@
     </div>
     {% endif %}
     {% if summary.kpis.share_sparkline is defined %}
-    <canvas id="sparkShare" width="120" height="30" style="margin-top:6px;"></canvas>
+    <canvas id="sparkShare"></canvas>
     {% endif %}
   </div>
+</div>
+
+{# -- KPI Cards (4 even cards, no sparklines) -- #}
+<div class="kpi-row" style="margin-bottom:24px;">
   <div class="kpi-card">
     <div class="kpi-label"># Products</div>
     <div class="kpi-value">{{ summary.kpis.num_products }}</div>
@@ -76,7 +80,7 @@
     <div class="kpi-value {{ 'positive' if summary.kpis.flow_1m > 0 else 'negative' if summary.kpis.flow_1m < 0 else '' }}">{{ summary.kpis.flow_1m_fmt }}</div>
   </div>
   <div class="kpi-card">
-    <div class="kpi-label">1M Market Growth</div>
+    <div class="kpi-label">1M Price Return</div>
     <div class="kpi-value {{ 'positive' if summary.kpis.mkt_appreciation_positive else 'negative' }}">{{ summary.kpis.mkt_appreciation_fmt }}</div>
   </div>
   <div class="kpi-card">
@@ -184,21 +188,21 @@
 <table class="data-table suite-table" id="suiteTable">
   <thead>
     <tr>
-      <th class="sortable" onclick="sortTable('suiteTable', 0)">Suite</th>
-      <th class="sortable" style="text-align:center;" onclick="sortTable('suiteTable', 1)">AUM</th>
-      <th class="sortable" style="text-align:center;" onclick="sortTable('suiteTable', 2)">1W Flow</th>
-      <th class="sortable" style="text-align:center;" onclick="sortTable('suiteTable', 3)">1M Flow</th>
-      <th class="sortable" style="text-align:center;" onclick="sortTable('suiteTable', 4)">Mkt Appr</th>
-      <th class="sortable" style="text-align:center;" onclick="sortTable('suiteTable', 5)">Avg Vol</th>
-      <th class="sortable" style="text-align:center;" onclick="sortTable('suiteTable', 6)">Avg Spread</th>
-      <th class="sortable" style="text-align:center;" onclick="sortTable('suiteTable', 7)">Mkt Share</th>
-      <th class="sortable" style="text-align:center;" onclick="sortTable('suiteTable', 8)"># Funds</th>
+      <th class="sortable" onclick="sortSuiteTable(0)">Suite</th>
+      <th class="sortable" style="text-align:center;" onclick="sortSuiteTable(1)">AUM</th>
+      <th class="sortable" style="text-align:center;" onclick="sortSuiteTable(2)">1W Flow</th>
+      <th class="sortable" style="text-align:center;" onclick="sortSuiteTable(3)">1M Flow</th>
+      <th class="sortable" style="text-align:center;" onclick="sortSuiteTable(4)">Mkt Appr</th>
+      <th class="sortable" style="text-align:center;" onclick="sortSuiteTable(5)">Avg Vol</th>
+      <th class="sortable" style="text-align:center;" onclick="sortSuiteTable(6)">Avg Spread</th>
+      <th class="sortable" style="text-align:center;" onclick="sortSuiteTable(7)">Mkt Share</th>
+      <th class="sortable" style="text-align:center;" onclick="sortSuiteTable(8)"># Funds</th>
       <th style="text-align:center;">Top Mover</th>
     </tr>
   </thead>
   <tbody>
     {% for suite in summary.suites %}
-    <tr class="suite-parent-row" onclick="toggleSuiteProducts('suite{{ loop.index }}')" style="cursor:pointer;">
+    <tr class="suite-parent-row" id="suite{{ loop.index }}Parent" data-sub-id="suite{{ loop.index }}" onclick="toggleSuiteProducts('suite{{ loop.index }}')" style="cursor:pointer;">
       <td>
         <span style="font-weight:500; color:var(--blue);" title="{{ suite.name }}">
           <span class="expand-icon" id="suite{{ loop.index }}Icon" style="font-size:0.7rem; margin-right:4px;">&#9654;</span>
@@ -221,8 +225,10 @@
       <td class="movers-cell" style="text-align:center;">{% for m in suite.top_movers[:1] %}<span class="{{ 'positive' if m.flow_raw > 0 else 'negative' if m.flow_raw < 0 else '' }}">{{ m.ticker }} {{ m.flow }}</span>{% endfor %}</td>
     </tr>
     {# Collapsible product rows for this suite #}
-    <tr id="suite{{ loop.index }}" style="display:none;">
+    <tr id="suite{{ loop.index }}" data-no-sort data-parent="suite{{ loop.index }}Parent" style="display:none;">
       <td colspan="10" style="padding:0;">
+        <input type="text" class="suite-product-filter" placeholder="Filter by ticker or name..."
+               oninput="filterSuiteProducts(this)">
         <table class="data-table" style="font-size:0.78rem; margin:0; border:none;">
           <thead>
             <tr style="background:var(--surface-2, #f1f5f9);">
@@ -259,6 +265,37 @@
 
 {% block market_scripts %}
 <script>
+// Sort suite table then reattach sub-rows under their parent
+function sortSuiteTable(colIdx) {
+  sortTable('suiteTable', colIdx);
+  var tbody = document.querySelector('#suiteTable tbody');
+  if (!tbody) return;
+  var parents = tbody.querySelectorAll('.suite-parent-row');
+  parents.forEach(function(parentRow) {
+    var subId = parentRow.getAttribute('data-sub-id');
+    if (!subId) return;
+    var subRow = document.getElementById(subId);
+    if (subRow) {
+      parentRow.after(subRow);
+    }
+  });
+}
+
+// Filter products within a suite sub-table
+function filterSuiteProducts(input) {
+  var table = input.nextElementSibling;
+  if (!table || table.tagName !== 'TABLE') return;
+  var tbody = table.querySelector('tbody');
+  if (!tbody) return;
+  var query = input.value.toLowerCase();
+  var rows = tbody.querySelectorAll('tr');
+  rows.forEach(function(row) {
+    var ticker = row.cells[0] ? row.cells[0].textContent.toLowerCase() : '';
+    var name = row.cells[1] ? row.cells[1].textContent.toLowerCase() : '';
+    row.style.display = (ticker.indexOf(query) !== -1 || name.indexOf(query) !== -1) ? '' : 'none';
+  });
+}
+
 // Fund structure toggle (multi-select)
 function toggleFundStructure(val) {
   var params = new URLSearchParams(location.search);
@@ -340,7 +377,8 @@ document.addEventListener('DOMContentLoaded', function() {
         }]
       },
       options: {
-        responsive: false,
+        responsive: true,
+        maintainAspectRatio: false,
         plugins: { legend: { display: false }, tooltip: { enabled: false } },
         scales: { x: { display: false }, y: { display: false } },
         animation: false
@@ -374,6 +412,7 @@ document.addEventListener('DOMContentLoaded', function() {
       options: {
         responsive: true,
         maintainAspectRatio: true,
+        layout: { padding: { top: 40, bottom: 40, left: 40, right: 40 } },
         plugins: {
           datalabels: {
             color: function() { return RexTheme.isDark() ? '#ffffff' : '#1E293B'; },
