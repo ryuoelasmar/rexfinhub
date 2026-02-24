@@ -560,7 +560,7 @@ def get_rex_summary(fund_structure: str | None = None, category: str | None = No
         })
 
     # Chart data: AUM by suite for pie chart
-    pie_labels = [s["short_name"] for s in suites]
+    pie_labels = [s["rex_name"] for s in suites]
     pie_values = [round(s["kpis"]["total_aum"], 2) for s in suites]
 
     # --- Suite-level time series (for AUM breakdown toggle) ---
@@ -820,6 +820,48 @@ def get_category_summary(category: str | None, filters: dict | None = None, fund
     rex_issuers = set(rex_df["issuer_display"].dropna().unique())
     issuer_is_rex = [lbl in rex_issuers for lbl in issuer_labels]
 
+    # --- Per-issuer chart_data for unified chart (top 12 by AUM) ---
+    top_issuers = issuer_aum.head(12)
+    chart_issuers = [str(i) for i in top_issuers.index.tolist()]
+    flow_chart = {"issuers": chart_issuers, "flow_1w": [], "flow_1m": [], "flow_3m": [], "flow_6m": [], "flow_ytd": [], "flow_1y": []}
+    vol_chart = {"issuers": chart_issuers, "values": []}
+    spread_chart = {"issuers": chart_issuers, "values": []}
+    appr_chart = {"issuers": chart_issuers, "values": []}
+    for iss_name in chart_issuers:
+        iss_df = df[df["issuer_display"] == iss_name]
+        # Flows
+        for col_suffix, period in [("fund_flow_1week", "1w"), ("fund_flow_1month", "1m"), ("fund_flow_3month", "3m"),
+                                   ("fund_flow_6month", "6m"), ("fund_flow_ytd", "ytd"), ("fund_flow_1year", "1y")]:
+            col = f"t_w4.{col_suffix}"
+            val = round(float(iss_df[col].sum()), 2) if col in iss_df.columns else 0.0
+            flow_chart[f"flow_{period}"].append(val)
+        # Volume (30-day avg)
+        v_col = "t_w2.average_vol_30day"
+        vol_chart["values"].append(round(float(iss_df[v_col].sum()), 0) if v_col in iss_df.columns else 0.0)
+        # Spread (AUM-weighted avg)
+        s_col = "t_w2.average_bidask_spread"
+        a_col = "t_w4.aum"
+        if s_col in iss_df.columns and a_col in iss_df.columns:
+            valid = (iss_df[a_col] > 0) & (iss_df[s_col] > 0)
+            if valid.any():
+                spread_chart["values"].append(round(float((iss_df[s_col][valid] * iss_df[a_col][valid]).sum() / iss_df[a_col][valid].sum()), 4))
+            else:
+                spread_chart["values"].append(0.0)
+        else:
+            spread_chart["values"].append(0.0)
+        # Market appreciation: aum - aum_prev - flow_1m
+        iss_aum = float(iss_df["t_w4.aum"].sum()) if "t_w4.aum" in iss_df.columns else 0.0
+        iss_aum_prev = float(iss_df["t_w4.aum_1"].sum()) if "t_w4.aum_1" in iss_df.columns else 0.0
+        iss_flow_1m = float(iss_df["t_w4.fund_flow_1month"].sum()) if "t_w4.fund_flow_1month" in iss_df.columns else 0.0
+        appr_chart["values"].append(round(iss_aum - iss_aum_prev - iss_flow_1m, 2))
+
+    chart_data = {
+        "flow": flow_chart,
+        "volume": vol_chart,
+        "spread": spread_chart,
+        "appreciation": appr_chart,
+    }
+
     return {
         "category": category or "All",
         "cat_kpis": cat_kpis,
@@ -837,6 +879,7 @@ def get_category_summary(category: str | None, filters: dict | None = None, fund
             "values": issuer_values,
             "is_rex": issuer_is_rex,
         },
+        "chart_data": chart_data,
         "total_funds": total_products,
         "page": page,
         "per_page": per_page,
@@ -846,7 +889,7 @@ def get_category_summary(category: str | None, filters: dict | None = None, fund
 
 #  Treemap
 
-def get_treemap_data(category: str | None = None, fund_type: str | None = None, issuer_filter: str | None = None) -> dict:
+def get_treemap_data(category: str | None = None, fund_type: str | None = None, issuer_filter: str | None = None, filters: dict | None = None) -> dict:
     """Return hierarchical issuer-grouped treemap data (top 200 by AUM).
 
     Returns both flat `products` list (for backward compat) and `issuers` hierarchy.
@@ -862,6 +905,15 @@ def get_treemap_data(category: str | None = None, fund_type: str | None = None, 
         fund_type_col = next((c for c in df.columns if c.lower().strip() == "fund_type"), None)
         if fund_type_col:
             df = df[df[fund_type_col] == fund_type].copy()
+
+    # Dynamic slicer filters
+    if filters:
+        for field, value in filters.items():
+            if field in df.columns and value:
+                if isinstance(value, list):
+                    df = df[df[field].isin(value)]
+                else:
+                    df = df[df[field] == value]
 
     # Issuer filter
     if issuer_filter and issuer_filter != "All":
@@ -1270,7 +1322,7 @@ def get_underlier_summary(underlier_type: str = "income", underlier: str | None 
 
 #  Time Series
 
-def get_time_series(category: str | None = None, is_rex: bool | None = None, fund_type: str | None = None) -> dict:
+def get_time_series(category: str | None = None, is_rex: bool | None = None, fund_type: str | None = None, filters: dict | None = None) -> dict:
     """Return aggregated monthly AUM time series for charts.
 
     Args:
@@ -1278,6 +1330,7 @@ def get_time_series(category: str | None = None, is_rex: bool | None = None, fun
         is_rex: Filter to REX-only (True) or non-REX (False).
         fund_type: "ETF", "ETN", or "ETF,ETN" to filter by fund structure.
                    Requires joining with master data by ticker.
+        filters: Dynamic slicer filters dict (field -> value).
     """
     ts = get_time_series_df()
 
@@ -1298,6 +1351,20 @@ def get_time_series(category: str | None = None, is_rex: bool | None = None, fun
             types = [t.strip() for t in fund_type.split(",") if t.strip()]
             valid_tickers = set(master[master[fund_type_col].isin(types)]["ticker"].dropna().unique())
             ts = ts[ts[ticker_col].isin(valid_tickers)]
+
+    # Dynamic slicer filters: filter by matching tickers from master data
+    if filters:
+        master = get_master_data()
+        filt = master.copy()
+        for field, value in filters.items():
+            if field in filt.columns and value:
+                if isinstance(value, list):
+                    filt = filt[filt[field].isin(value)]
+                else:
+                    filt = filt[filt[field] == value]
+        valid_tickers = set(filt["ticker"].dropna().unique())
+        if "ticker" in ts.columns:
+            ts = ts[ts["ticker"].isin(valid_tickers)]
 
     if ts.empty or "date" not in ts.columns:
         return {"labels": "[]", "values": "[]"}
