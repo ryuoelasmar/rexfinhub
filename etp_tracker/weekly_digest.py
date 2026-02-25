@@ -355,47 +355,30 @@ def _render_scorecard_unavailable() -> str:
 </td></tr>"""
 
 
-def _render_donut_svg(segments: list[tuple[str, float, str]], total_label: str = "",
-                      size: int = 150, radius: int = 55, stroke: int = 25) -> str:
-    """Render an inline SVG donut chart. segments = [(name, value, color), ...]."""
+def _render_stacked_bar(segments: list[tuple[str, float, str]], total_label: str = "") -> str:
+    """Render an email-safe stacked horizontal bar. segments = [(name, value, color), ...]."""
     total = sum(v for _, v, _ in segments) or 1
-    circumference = 2 * math.pi * radius
-    cx = cy = size // 2
-    arcs = []
-    offset = 0
+    bar_cells = []
     for name, val, color in segments:
-        pct = val / total
-        dash = pct * circumference
-        gap = circumference - dash
-        arcs.append(
-            f'<circle cx="{cx}" cy="{cy}" r="{radius}" fill="none" '
-            f'stroke="{color}" stroke-width="{stroke}" '
-            f'stroke-dasharray="{dash:.1f} {gap:.1f}" '
-            f'stroke-dashoffset="{-offset:.1f}" '
-            f'transform="rotate(-90 {cx} {cy})"/>'
-        )
-        offset += dash
-    center_text = ""
-    if total_label:
-        center_text = (
-            f'<text x="{cx}" y="{cy - 6}" text-anchor="middle" '
-            f'font-size="18" font-weight="700" fill="{_NAVY}" '
-            f'font-family="-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,sans-serif">'
-            f'{_esc(total_label)}</text>'
-            f'<text x="{cx}" y="{cy + 10}" text-anchor="middle" '
-            f'font-size="9" fill="{_GRAY}" '
-            f'font-family="-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,sans-serif">'
-            f'TOTAL AUM</text>'
+        pct = val / total * 100
+        if pct < 0.5:
+            continue
+        bar_cells.append(
+            f'<td style="background:{color};height:18px;width:{pct:.1f}%;"></td>'
         )
     return (
-        f'<svg viewBox="0 0 {size} {size}" width="{size}" height="{size}" '
-        f'xmlns="http://www.w3.org/2000/svg">'
-        f'{"".join(arcs)}{center_text}</svg>'
+        f'<table width="100%" cellpadding="0" cellspacing="0" border="0" '
+        f'style="border-radius:6px;overflow:hidden;border-collapse:collapse;">'
+        f'<tr>{"".join(bar_cells)}</tr></table>'
+        f'<div style="font-size:15px;font-weight:700;color:{_NAVY};text-align:center;'
+        f'margin-top:6px;">{_esc(total_label)}'
+        f'<span style="font-size:9px;color:{_GRAY};font-weight:400;margin-left:4px;">'
+        f'TOTAL AUM</span></div>'
     )
 
 
 def _render_aum_stacked_bar(suites: list[dict], rex_df: pd.DataFrame = None) -> str:
-    """AUM by Suite as an SVG donut chart with legend."""
+    """AUM by Suite as an email-safe stacked bar with legend."""
     filtered = _filter_suites(suites)
     if not filtered:
         return ""
@@ -427,20 +410,14 @@ def _render_aum_stacked_bar(suites: list[dict], rex_df: pd.DataFrame = None) -> 
     if not segments:
         return ""
 
-    donut = _render_donut_svg(segments, _fmt_currency_safe(total))
+    bar = _render_stacked_bar(segments, _fmt_currency_safe(total))
 
     return f"""
 <tr><td style="padding:15px 30px;">
   <div style="{_SECTION_TITLE}">AUM by Suite</div>
+  <div style="padding:8px 0;">{bar}</div>
   <table width="100%" cellpadding="0" cellspacing="0" border="0">
-    <tr>
-      <td width="45%" align="center" style="padding:8px;">{donut}</td>
-      <td width="55%" valign="middle">
-        <table width="100%" cellpadding="0" cellspacing="0" border="0">
-          {''.join(legend_rows)}
-        </table>
-      </td>
-    </tr>
+    {''.join(legend_rows)}
   </table>
 </td></tr>"""
 
@@ -487,7 +464,8 @@ def _render_bar_chart(title: str, items: list[tuple[str, float]], subtitle: str 
 
 
 def _render_diverging_bar_chart(title: str, items: list[tuple[str, float]], subtitle: str = "") -> str:
-    """Diverging horizontal bar chart: bars grow left/right from a center line."""
+    """Diverging horizontal bar chart: bars grow left/right from a center line.
+    Uses single-level table cells with background-color (no nested tables)."""
     if not items:
         return ""
 
@@ -502,50 +480,47 @@ def _render_diverging_bar_chart(title: str, items: list[tuple[str, float]], subt
 
     rows = []
     for label, val in items:
-        bar_pct = abs(val) / max_abs * 100
+        bar_pct = abs(val) / max_abs * 50  # 50% = half the bar area
         val_fmt = _fmt_flow_safe(val)
         val_color = _flow_color(val)
         bar_color = _BLUE if val >= 0 else _RED
 
+        # Build a single-row bar: left half (50%) | center line | right half (50%)
+        # Negative bars fill the left half right-to-left; positive fill right half left-to-right
         if val < 0:
-            # Negative: bar in left half, right-aligned (grows leftward from center)
-            left_cell = (
-                f'<td style="padding:0;">'
-                f'<table width="100%" cellpadding="0" cellspacing="0" border="0">'
-                f'<tr><td width="{100 - bar_pct:.1f}%"></td>'
-                f'<td width="{bar_pct:.1f}%" style="background:{bar_color};'
-                f'height:16px;border-radius:3px 0 0 3px;"></td></tr>'
-                f'</table></td>'
+            left_empty = 50 - bar_pct
+            bar_html = (
+                f'<td style="width:{left_empty:.1f}%;padding:0;"></td>'
+                f'<td style="width:{bar_pct:.1f}%;background:{bar_color};'
+                f'height:16px;border-radius:3px 0 0 3px;padding:0;"></td>'
+                f'<td style="width:2px;background:{_BORDER};padding:0;"></td>'
+                f'<td style="width:50%;padding:0;"></td>'
             )
-            right_cell = '<td style="padding:0;"></td>'
         elif val > 0:
-            # Positive: bar in right half, left-aligned (grows rightward from center)
-            left_cell = '<td style="padding:0;"></td>'
-            right_cell = (
-                f'<td style="padding:0;">'
-                f'<table width="100%" cellpadding="0" cellspacing="0" border="0">'
-                f'<tr><td width="{bar_pct:.1f}%" style="background:{bar_color};'
-                f'height:16px;border-radius:0 3px 3px 0;"></td>'
-                f'<td width="{100 - bar_pct:.1f}%"></td></tr>'
-                f'</table></td>'
+            right_empty = 50 - bar_pct
+            bar_html = (
+                f'<td style="width:50%;padding:0;"></td>'
+                f'<td style="width:2px;background:{_BORDER};padding:0;"></td>'
+                f'<td style="width:{bar_pct:.1f}%;background:{bar_color};'
+                f'height:16px;border-radius:0 3px 3px 0;padding:0;"></td>'
+                f'<td style="width:{right_empty:.1f}%;padding:0;"></td>'
             )
         else:
-            left_cell = '<td style="padding:0;"></td>'
-            right_cell = '<td style="padding:0;"></td>'
+            bar_html = (
+                f'<td style="width:50%;padding:0;"></td>'
+                f'<td style="width:2px;background:{_BORDER};padding:0;"></td>'
+                f'<td style="width:50%;padding:0;"></td>'
+            )
 
         rows.append(
             f'<tr>'
-            f'<td style="padding:4px 8px;font-size:12px;font-weight:600;width:110px;'
+            f'<td style="padding:4px 6px;font-size:12px;font-weight:600;width:60px;'
             f'white-space:nowrap;">{_esc(label)}</td>'
-            f'<td width="40%" style="padding:4px 0;">'
+            f'<td style="padding:4px 0;">'
             f'<table width="100%" cellpadding="0" cellspacing="0" border="0">'
-            f'<tr>{left_cell}</tr></table></td>'
-            f'<td width="2px" style="background:{_BORDER};"></td>'
-            f'<td width="40%" style="padding:4px 0;">'
-            f'<table width="100%" cellpadding="0" cellspacing="0" border="0">'
-            f'<tr>{right_cell}</tr></table></td>'
-            f'<td style="padding:4px 8px;font-size:12px;text-align:right;width:80px;'
-            f'font-weight:600;color:{val_color};">{val_fmt}</td>'
+            f'<tr>{bar_html}</tr></table></td>'
+            f'<td style="padding:4px 6px;font-size:12px;text-align:right;width:70px;'
+            f'font-weight:600;color:{val_color};white-space:nowrap;">{val_fmt}</td>'
             f'</tr>'
         )
 
@@ -573,7 +548,8 @@ def _render_flow_chart(suites: list[dict], flow_chart: dict) -> str:
     for name, val in zip(suite_names, flow_1w):
         if name in _EXCLUDED_SUITES:
             continue
-        items.append((name, val))
+        abbrev = _SUITE_ABBREVS.get(name, name)
+        items.append((abbrev, val))
 
     # Sort by value descending (most positive at top)
     items.sort(key=lambda x: x[1], reverse=True)
