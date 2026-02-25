@@ -123,8 +123,8 @@ TRUST_CIKS = {
     "1454889": "Schwab Strategic Trust",
     "1650149": "Series Portfolios Trust",
     "1506213": "Strategy Shares",
-    "1795351": "T. Rowe Price Exchange-Traded Funds, Inc.",
-    "1496608": "AB Active ETFs, Inc.",
+    "1795351": "T. Rowe Price Exchange-Traded Funds Inc",
+    "1496608": "AB Active ETFs Inc",
     "1970751": "Advisor Managed Portfolios",
     "1371571": "Invesco DB US Dollar Index Trust",
     "1516212": "SSGA Active Trust",  # State Street Global Advisors
