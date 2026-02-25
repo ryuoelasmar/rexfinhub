@@ -474,28 +474,7 @@ def _gather_daily_data(db_session, since_date: str | None = None) -> dict:
     except Exception:
         pass
 
-    # Fallback to DB if no Bloomberg launches
-    if not launches:
-        launch_rows = db_session.execute(
-            select(
-                FundStatus.ticker, FundStatus.fund_name, FundStatus.effective_date,
-                Trust.name.label("trust_name"), Trust.is_rex,
-            )
-            .join(Trust, Trust.id == FundStatus.trust_id)
-            .where(FundStatus.status == "EFFECTIVE")
-            .where(FundStatus.effective_date >= since_dt)
-            .where(FundStatus.effective_date <= date_type.today())
-            .order_by(Trust.is_rex.desc(), FundStatus.effective_date.desc())
-        ).all()
-        for r in launch_rows:
-            ticker = _clean_ticker(r.ticker)
-            launches.append({
-                "ticker": ticker if ticker else "--",
-                "fund_name": r.fund_name or "",
-                "trust_name": r.trust_name or "",
-                "effective_date": str(r.effective_date) if r.effective_date else "",
-                "is_rex": r.is_rex,
-            })
+    # Bloomberg-only: no DB fallback (SEC effective dates are not launch dates)
 
     # --- New filings: 485 forms, REX trusts first, then by date ---
     filing_rows = db_session.execute(
