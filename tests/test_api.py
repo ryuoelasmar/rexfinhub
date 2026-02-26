@@ -17,8 +17,7 @@ def test_health(client):
 def test_dashboard(client):
     r = client.get("/")
     assert r.status_code == 200
-    assert "ETP Filing Tracker" in r.text
-    assert "Test Trust" in r.text
+    assert "REX Financial" in r.text
 
 
 def test_fund_list(client):

@@ -317,14 +317,14 @@ def test_screener_page(client):
     """Test that /screener/ returns 200."""
     r = client.get("/screener/")
     assert r.status_code == 200
-    assert "Launch Screener" in r.text
+    assert "Competitive Filing Landscape" in r.text
 
 
 def test_screener_rex_funds(client):
     """Test that /screener/rex-funds returns 200."""
     r = client.get("/screener/rex-funds")
     assert r.status_code == 200
-    assert "REX Fund Portfolio" in r.text
+    assert "REX Track Record" in r.text
 
 
 def test_screener_stock_detail(client):
