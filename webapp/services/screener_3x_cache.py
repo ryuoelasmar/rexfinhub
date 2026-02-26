@@ -7,7 +7,7 @@ On startup, the disk cache is loaded to avoid "No Bloomberg Data" on Render.
 from __future__ import annotations
 
 import logging
-import pickle
+import json
 import threading
 import time
 from datetime import datetime
@@ -21,7 +21,7 @@ _cache_timestamp: float = 0
 _CACHE_TTL = 3600  # 1 hour safety net
 _warming: bool = False
 
-_DISK_CACHE_PATH = Path("data/SCREENER/cache.pkl")
+_DISK_CACHE_PATH = Path("data/SCREENER/cache.json")
 
 
 def is_warming() -> bool:
@@ -60,7 +60,7 @@ def _save_to_disk(data: dict) -> None:
     """Persist cache to disk so it survives restarts."""
     try:
         _DISK_CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
-        _DISK_CACHE_PATH.write_bytes(pickle.dumps(data))
+        _DISK_CACHE_PATH.write_text(json.dumps(data, default=str), encoding="utf-8")
         log.info("Cache persisted to %s", _DISK_CACHE_PATH)
     except Exception as e:
         log.warning("Failed to persist cache to disk: %s", e)
@@ -70,7 +70,7 @@ def _load_from_disk() -> dict | None:
     """Load cache from disk if available."""
     try:
         if _DISK_CACHE_PATH.exists():
-            data = pickle.loads(_DISK_CACHE_PATH.read_bytes())
+            data = json.loads(_DISK_CACHE_PATH.read_text(encoding="utf-8"))
             log.info("Cache loaded from disk (%d keys)", len(data))
             return data
     except Exception as e:

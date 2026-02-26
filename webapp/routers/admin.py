@@ -24,8 +24,24 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 templates = Jinja2Templates(directory="webapp/templates")
 log = logging.getLogger(__name__)
 
-ADMIN_PASSWORD = "ryu123"
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+
+
+def _load_admin_password() -> str:
+    """Load ADMIN_PASSWORD from config/.env or environment."""
+    import os
+    env_file = PROJECT_ROOT / "config" / ".env"
+    if env_file.exists():
+        for line in env_file.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                key, val = line.split("=", 1)
+                if key.strip() == "ADMIN_PASSWORD":
+                    return val.strip().strip('"').strip("'")
+    return os.environ.get("ADMIN_PASSWORD", "")
+
+
+ADMIN_PASSWORD = _load_admin_password()
 RECIPIENTS_FILE = PROJECT_ROOT / "config" / "email_recipients.txt"
 OUTPUT_DIR = PROJECT_ROOT / "outputs"
 
@@ -457,17 +473,17 @@ async def upload_dashboard(request: Request, file: UploadFile = File(...)):
         log.info("Dashboard uploaded: %.1f MB -> %s", size_mb, dest)
         return JSONResponse({"ok": True, "path": str(dest), "size_mb": round(size_mb, 2)})
     except Exception as e:
-        log.error("Dashboard upload failed: %s", e)
-        return JSONResponse({"error": str(e)}, status_code=500)
+        log.error("Dashboard upload failed: %s", e, exc_info=True)
+        return JSONResponse({"error": "Upload failed. Check server logs."}, status_code=500)
 
 
 @router.post("/upload/screener-cache")
 async def upload_screener_cache(request: Request, file: UploadFile = File(...)):
-    """Upload a pre-computed screener cache.pkl directly into memory + disk."""
+    """Upload a pre-computed screener cache.json directly into memory + disk."""
     if not _is_admin(request):
         return JSONResponse({"error": "Unauthorized"}, status_code=403)
 
-    dest = PROJECT_ROOT / "data" / "SCREENER" / "cache.pkl"
+    dest = PROJECT_ROOT / "data" / "SCREENER" / "cache.json"
     dest.parent.mkdir(parents=True, exist_ok=True)
 
     try:
@@ -475,13 +491,13 @@ async def upload_screener_cache(request: Request, file: UploadFile = File(...)):
         dest.write_bytes(data)
 
         # Load into memory immediately (don't wait for restart)
-        import pickle
+        import json
         from webapp.services.screener_3x_cache import set_3x_analysis
-        cache = pickle.loads(data)
+        cache = json.loads(data)
         set_3x_analysis(cache)
 
         log.info("Screener cache uploaded: %d bytes, %d keys", len(data), len(cache))
         return JSONResponse({"ok": True, "keys": list(cache.keys()), "size_bytes": len(data)})
     except Exception as e:
         log.error("Screener cache upload failed: %s", e)
-        return JSONResponse({"error": str(e)}, status_code=500)
+        return JSONResponse({"error": "Cache upload failed. Check server logs."}, status_code=500)

@@ -35,11 +35,11 @@ def _load_api_key() -> str:
 
 def verify_api_key(x_api_key: str = Header(default="")):
     """Verify API key from X-API-Key header."""
+    import hmac
     expected = _load_api_key()
     if not expected:
-        # No API key configured = API is open (dev mode)
-        return
-    if x_api_key != expected:
+        raise HTTPException(status_code=503, detail="API not configured")
+    if not hmac.compare_digest(x_api_key, expected):
         raise HTTPException(status_code=401, detail="Invalid API key")
 
 
@@ -227,4 +227,6 @@ async def upload_db(
             os.unlink(tmp.name)
         except OSError:
             pass
-        raise HTTPException(status_code=500, detail=str(e))
+        import logging
+        logging.getLogger(__name__).error("DB upload failed: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error")

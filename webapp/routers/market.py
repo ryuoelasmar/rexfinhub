@@ -371,7 +371,8 @@ def api_rex_summary():
         svc = _svc()
         return JSONResponse(svc.get_rex_summary())
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=500)
+        log.error("Request failed: %s", e, exc_info=True)
+        return JSONResponse({"error": "Internal server error"}, status_code=500)
 
 
 @router.get("/api/category-summary")
@@ -386,7 +387,8 @@ def api_category_summary(
         data = svc.get_category_summary(cat, filter_dict)
         return JSONResponse(data)
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=500)
+        log.error("Request failed: %s", e, exc_info=True)
+        return JSONResponse({"error": "Internal server error"}, status_code=500)
 
 
 @router.get("/api/time-series")
@@ -412,7 +414,8 @@ def api_time_series(
             }
         return JSONResponse(data)
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=500)
+        log.error("Request failed: %s", e, exc_info=True)
+        return JSONResponse({"error": "Internal server error"}, status_code=500)
 
 
 @router.get("/api/slicers/{category:path}")
@@ -421,7 +424,8 @@ def api_slicers(category: str):
         svc = _svc()
         return JSONResponse(svc.get_slicer_options(category))
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=500)
+        log.error("Request failed: %s", e, exc_info=True)
+        return JSONResponse({"error": "Internal server error"}, status_code=500)
 
 
 @router.get("/api/treemap")
@@ -431,7 +435,8 @@ def api_treemap(category: str = Query(default="All")):
         cat = category if category != "All" else None
         return JSONResponse(svc.get_treemap_data(cat))
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=500)
+        log.error("Request failed: %s", e, exc_info=True)
+        return JSONResponse({"error": "Internal server error"}, status_code=500)
 
 
 @router.get("/api/issuer")
@@ -441,7 +446,8 @@ def api_issuer(category: str = Query(default="All")):
         cat = category if category != "All" else None
         return JSONResponse(svc.get_issuer_summary(cat))
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=500)
+        log.error("Request failed: %s", e, exc_info=True)
+        return JSONResponse({"error": "Internal server error"}, status_code=500)
 
 
 @router.get("/api/share")
@@ -449,7 +455,8 @@ def api_share():
     try:
         return JSONResponse(_svc().get_market_share_timeline())
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=500)
+        log.error("Request failed: %s", e, exc_info=True)
+        return JSONResponse({"error": "Internal server error"}, status_code=500)
 
 
 @router.get("/api/underlier")
@@ -457,14 +464,18 @@ def api_underlier(type: str = Query(default="income"), underlier: str = Query(de
     try:
         return JSONResponse(_svc().get_underlier_summary(type, underlier))
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=500)
+        log.error("Request failed: %s", e, exc_info=True)
+        return JSONResponse({"error": "Internal server error"}, status_code=500)
 
 
 @router.post("/api/invalidate-cache")
-def api_invalidate_cache():
+def api_invalidate_cache(request: Request):
     """Clear the market data cache (admin utility)."""
+    if not request.session.get("is_admin"):
+        return JSONResponse({"error": "Unauthorized"}, status_code=403)
     try:
         _svc().invalidate_cache()
         return JSONResponse({"status": "ok"})
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=500)
+        log.error("Cache invalidation failed: %s", e, exc_info=True)
+        return JSONResponse({"error": "Cache invalidation failed"}, status_code=500)

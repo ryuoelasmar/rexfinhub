@@ -46,6 +46,30 @@ def _load_site_password() -> str:
 
 SITE_PASSWORD = _load_site_password()
 
+
+def _load_admin_password() -> str:
+    """Load ADMIN_PASSWORD from config/.env or environment."""
+    env_file = PROJECT_ROOT / "config" / ".env"
+    if env_file.exists():
+        for line in env_file.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                key, val = line.split("=", 1)
+                if key.strip() == "ADMIN_PASSWORD":
+                    return val.strip().strip('"').strip("'")
+    return os.environ.get("ADMIN_PASSWORD", "")
+
+
+_ADMIN_PASSWORD = _load_admin_password()
+
+
+def _safe_redirect(url: str) -> str:
+    """Ensure redirect target is a safe relative path."""
+    if not url or not url.startswith("/") or url.startswith("//"):
+        return "/"
+    return url
+
+
 # Paths that don't require site auth
 _PUBLIC_PREFIXES = ("/login", "/static/", "/health", "/api/v1/", "/favicon")
 
@@ -61,6 +85,21 @@ class SiteAuthMiddleware(BaseHTTPMiddleware):
             next_url = quote(path, safe="/")
             return StarletteRedirect(f"/login?next={next_url}", status_code=302)
         return await call_next(request)
+
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """Add security headers to all responses."""
+
+    async def dispatch(self, request, call_next):
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+        if os.environ.get("RENDER"):
+            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        return response
 
 
 # ---------------------------------------------------------------------------
@@ -99,7 +138,8 @@ def create_app() -> FastAPI:
     # SiteAuthMiddleware needs session -> add it first (inner),
     # then SessionMiddleware (outer, decodes session before auth check).
     app.add_middleware(SiteAuthMiddleware)
-    app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET)
+    app.add_middleware(SecurityHeadersMiddleware)
+    app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET, max_age=28800, same_site="lax", https_only=bool(os.environ.get("RENDER")))
 
     # Static files (CSS, JS)
     static_dir = WEBAPP_DIR / "static"
@@ -122,11 +162,11 @@ def create_app() -> FastAPI:
         password: str = Form(...),
         next: str = Form("/"),
     ):
-        if password == SITE_PASSWORD or password == "ryu123":
+        if password == SITE_PASSWORD or password == _ADMIN_PASSWORD:
             request.session["site_auth"] = True
-            if password == "ryu123":
+            if password == _ADMIN_PASSWORD:
                 request.session["is_admin"] = True
-            return RedirectResponse(next or "/", status_code=303)
+            return RedirectResponse(_safe_redirect(next), status_code=303)
         return templates.TemplateResponse(
             "login.html",
             {"request": request, "error": "Invalid password", "next_url": next},
@@ -176,13 +216,17 @@ def create_app() -> FastAPI:
                 "message": _maintenance_msg["message"] if _maintenance_msg else ""}
 
     @app.post("/api/v1/maintenance")
-    def set_maintenance(message: str = Form(...)):
+    def set_maintenance(request: Request, message: str = Form(...)):
+        if not request.session.get("is_admin"):
+            return JSONResponse({"error": "Unauthorized"}, status_code=403)
         global _maintenance_msg
         _maintenance_msg = {"message": message}
         return {"ok": True}
 
     @app.delete("/api/v1/maintenance")
-    def clear_maintenance():
+    def clear_maintenance(request: Request):
+        if not request.session.get("is_admin"):
+            return JSONResponse({"error": "Unauthorized"}, status_code=403)
         global _maintenance_msg
         _maintenance_msg = None
         return {"ok": True}

@@ -74,6 +74,8 @@ def subscribe_submit(request: Request, email: str = Form(...), db: Session = Dep
 @router.post("/send")
 def send_digest(request: Request):
     """Send the digest email now (admin action)."""
+    if not request.session.get("is_admin"):
+        return RedirectResponse("/digest/subscribe?error=unauthorized", status_code=303)
     try:
         from etp_tracker.email_alerts import send_digest_email
 
