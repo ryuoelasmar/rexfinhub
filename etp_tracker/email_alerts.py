@@ -764,7 +764,7 @@ def _render_daily_html(data: dict, dashboard_url: str = "", custom_message: str 
     {_title} | {today.strftime('%Y-%m-%d')}
   </div>
   <div style="font-size:10px;color:{_GRAY};text-align:center;margin-top:4px;">
-    {_data_source} | To unsubscribe, contact relasmar@rexfin.com
+    {_data_source} | Reply to this email to unsubscribe
   </div>
 </td></tr>"""
 
