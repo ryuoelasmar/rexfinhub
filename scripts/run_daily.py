@@ -150,14 +150,26 @@ def main():
     upload_db_to_render()
 
     # Step 5: Save digest + send email if configured
-    print("\n[5/5] Building digest...")
-    from etp_tracker.email_alerts import build_digest_html, send_digest_email
-    html = build_digest_html(OUTPUT_DIR, DASHBOARD_URL)
+    edition = "evening" if datetime.now().hour >= 14 else "morning"
+    _label = "Evening Update" if edition == "evening" else "Morning Brief"
+    print(f"\n[5/5] Building digest ({_label})...")
+    from etp_tracker.email_alerts import build_digest_html_from_db
+    from webapp.database import SessionLocal as _SL
+    _db = _SL()
+    try:
+        html = build_digest_html_from_db(_db, DASHBOARD_URL, edition=edition)
+    finally:
+        _db.close()
     digest_path = OUTPUT_DIR / "daily_digest.html"
     digest_path.write_text(html, encoding="utf-8")
     print(f"  Saved: {digest_path}")
 
-    sent = send_digest_email(OUTPUT_DIR, DASHBOARD_URL)
+    from etp_tracker.email_alerts import send_digest_from_db
+    _db2 = _SL()
+    try:
+        sent = send_digest_from_db(_db2, DASHBOARD_URL, edition=edition)
+    finally:
+        _db2.close()
     if not sent:
         print("  Email skipped (SMTP not configured). Opening digest in browser...")
         import webbrowser

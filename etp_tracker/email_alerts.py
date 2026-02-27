@@ -182,17 +182,26 @@ def _dashboard_cta(dash_link: str) -> str:
     )
 
 
-def _render_daily_html(data: dict, dashboard_url: str = "", custom_message: str = "") -> str:
-    """Render the daily brief HTML from pre-gathered data."""
+def _render_daily_html(data: dict, dashboard_url: str = "", custom_message: str = "",
+                       edition: str = "morning") -> str:
+    """Render the daily brief HTML from pre-gathered data.
+
+    edition: "morning" (full daily brief) or "evening" (intraday update).
+    """
     today = datetime.now()
     dash_link = _esc(dashboard_url) if dashboard_url else ""
+
+    _is_evening = edition == "evening"
+    _title = "REX ETF Evening Update" if _is_evening else "REX ETF Morning Brief"
+    _header_bg = "#2d3436" if _is_evening else _NAVY
+    _accent = _ORANGE if _is_evening else _BLUE
 
     # --- Custom message ---
     msg_html = ""
     if custom_message:
         msg_html = (
             f'<tr><td style="padding:12px 30px 0;">'
-            f'<div style="padding:10px 14px;background:#eef3f8;border-left:3px solid {_BLUE};'
+            f'<div style="padding:10px 14px;background:#eef3f8;border-left:3px solid {_accent};'
             f'border-radius:4px;font-size:13px;color:{_NAVY};">'
             f'{_esc(custom_message)}</div>'
             f'</td></tr>'
@@ -200,9 +209,9 @@ def _render_daily_html(data: dict, dashboard_url: str = "", custom_message: str 
 
     # --- Header ---
     header = f"""
-<tr><td style="background:{_NAVY};padding:24px 30px;">
+<tr><td style="background:{_header_bg};padding:24px 30px;">
   <table width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
-    <td style="color:{_WHITE};font-size:22px;font-weight:700;">REX ETF Daily Brief</td>
+    <td style="color:{_WHITE};font-size:22px;font-weight:700;">{_title}</td>
     <td align="right" style="color:rgba(255,255,255,0.7);font-size:13px;">{today.strftime('%A, %B %d, %Y')}</td>
   </tr></table>
 </td></tr>"""
@@ -486,7 +495,7 @@ def _render_daily_html(data: dict, dashboard_url: str = "", custom_message: str 
     footer = f"""
 <tr><td style="padding:16px 30px;border-top:1px solid {_BORDER};">
   <div style="font-size:11px;color:{_GRAY};text-align:center;">
-    REX ETF Daily Brief | {today.strftime('%Y-%m-%d')}
+    {_title} | {today.strftime('%Y-%m-%d')}
   </div>
   <div style="font-size:10px;color:{_GRAY};text-align:center;margin-top:4px;">
     Data sourced from SEC EDGAR | To unsubscribe, contact relasmar@rexfin.com
@@ -499,7 +508,7 @@ def _render_daily_html(data: dict, dashboard_url: str = "", custom_message: str 
     return f"""<!DOCTYPE html>
 <html lang="en"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>REX ETF Daily Brief - {today.strftime('%Y-%m-%d')}</title>
+<title>{_title} - {today.strftime('%Y-%m-%d')}</title>
 </head>
 <body style="margin:0;padding:0;background:{_LIGHT};
   font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
@@ -515,15 +524,22 @@ def _render_daily_html(data: dict, dashboard_url: str = "", custom_message: str 
 </body></html>"""
 
 
-def _gather_daily_data(db_session, since_date: str | None = None) -> dict:
-    """Query DB + Bloomberg master data for daily brief."""
+def _gather_daily_data(db_session, since_date: str | None = None,
+                       edition: str = "morning") -> dict:
+    """Query DB + Bloomberg master data for daily brief.
+
+    edition: "morning" looks back 24h, "evening" looks at today only.
+    """
     from sqlalchemy import func, select
     from datetime import date as date_type
     from webapp.models import Trust, FundStatus, Filing, FundExtraction
 
     today = datetime.now()
     if not since_date:
-        since_date = (today - timedelta(days=1)).strftime("%Y-%m-%d")
+        if edition == "evening":
+            since_date = today.strftime("%Y-%m-%d")  # today only
+        else:
+            since_date = (today - timedelta(days=1)).strftime("%Y-%m-%d")  # last 24h
     since_dt = date_type.fromisoformat(since_date)
     yesterday = date_type.today() - timedelta(days=1)
 
@@ -683,15 +699,19 @@ def build_digest_html_from_db(
     dashboard_url: str = "",
     since_date: str | None = None,
     custom_message: str = "",
+    edition: str = "morning",
 ) -> str:
     """Build daily brief from SQLite database."""
-    data = _gather_daily_data(db_session, since_date)
-    return _render_daily_html(data, dashboard_url, custom_message=custom_message)
+    data = _gather_daily_data(db_session, since_date, edition=edition)
+    return _render_daily_html(data, dashboard_url, custom_message=custom_message,
+                              edition=edition)
 
 
-def _send_html_digest(html_body: str, recipients: list[str]) -> bool:
+def _send_html_digest(html_body: str, recipients: list[str],
+                      edition: str = "morning") -> bool:
     """Send pre-built HTML digest via Azure Graph or SMTP."""
-    subject = f"REX ETF Daily Brief - {datetime.now().strftime('%Y-%m-%d')}"
+    _label = "Evening Update" if edition == "evening" else "Morning Brief"
+    subject = f"REX ETF {_label} - {datetime.now().strftime('%Y-%m-%d')}"
 
     # Try Azure Graph API first
     try:
@@ -730,6 +750,7 @@ def send_digest_from_db(
     dashboard_url: str = "",
     since_date: str | None = None,
     custom_message: str = "",
+    edition: str = "morning",
 ) -> bool:
     """Build digest from database and send. Always works without CSV files."""
     recipients = _load_recipients()
@@ -737,12 +758,13 @@ def send_digest_from_db(
     if not recipients and not private:
         return False
     html_body = build_digest_html_from_db(db_session, dashboard_url, since_date,
-                                           custom_message=custom_message)
+                                           custom_message=custom_message,
+                                           edition=edition)
     ok = True
     if recipients:
-        ok = _send_html_digest(html_body, recipients)
+        ok = _send_html_digest(html_body, recipients, edition=edition)
     if private:
-        _send_html_digest(html_body, private)
+        _send_html_digest(html_body, private, edition=edition)
     return ok
 
 

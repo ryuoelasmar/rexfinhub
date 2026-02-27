@@ -112,9 +112,10 @@ def upload_db() -> bool:
         return False
 
 
-def send_email() -> bool:
+def send_email(edition: str = "morning") -> bool:
     """Send the daily email digest (DB-based)."""
-    print("\n--- Email Digest ---")
+    _label = "Evening Update" if edition == "evening" else "Morning Brief"
+    print(f"\n--- Email Digest ({_label}) ---")
     try:
         from webapp.database import init_db, SessionLocal
         from etp_tracker.email_alerts import send_digest_from_db
@@ -122,9 +123,9 @@ def send_email() -> bool:
         init_db()
         db = SessionLocal()
         try:
-            sent = send_digest_from_db(db)
+            sent = send_digest_from_db(db, edition=edition)
             if sent:
-                print("  Email sent.")
+                print(f"  {_label} sent.")
             else:
                 print("  Email skipped (SMTP not configured or no recipients).")
             return True
@@ -143,7 +144,14 @@ def main():
     parser.add_argument("--skip-market", action="store_true", help="Skip market pipeline")
     parser.add_argument("--skip-email", action="store_true", help="Skip email digest")
     parser.add_argument("--force-market", action="store_true", help="Force market pipeline even if data unchanged")
+    parser.add_argument("--edition", choices=["morning", "evening"], default=None,
+                        help="Digest edition (auto-detected from time of day if omitted)")
     args = parser.parse_args()
+
+    # Auto-detect edition from time of day if not specified
+    edition = args.edition
+    if not edition:
+        edition = "evening" if datetime.now().hour >= 14 else "morning"
 
     # Setup logging
     timestamp = datetime.now().strftime("%Y%m%d_%H%M")
@@ -184,7 +192,7 @@ def main():
         print("\n--- Email Digest (SKIPPED) ---")
         results["email"] = "skipped"
     else:
-        ok = send_email()
+        ok = send_email(edition=edition)
         results["email"] = "ok" if ok else "FAILED"
 
     # Summary
