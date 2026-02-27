@@ -15,7 +15,8 @@
 
 $ErrorActionPreference = "Stop"
 
-$PythonExe = "python"
+# Use the full path -- the WindowsApps "python" alias doesn't work from Task Scheduler
+$PythonExe = "C:\Users\RyuEl-Asmar\AppData\Local\Microsoft\WindowsApps\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\python.exe"
 $Script = "C:\Projects\rexfinhub\scripts\run_all_pipelines.py"
 $WorkingDir = "C:\Projects\rexfinhub"
 
