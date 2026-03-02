@@ -66,7 +66,7 @@
     </select>
     <select name="form_type" style="padding:6px 12px; border:1px solid var(--border); border-radius:4px; font-size:13px;">
       <option value="">All Forms</option>
-      {% for ft in ['485BPOS','485BXT','485APOS','497'] %}
+      {% for ft in ['485BPOS','485BXT','485APOS','497','S-1','S-3','EFFECT','POS AM'] %}
       <option value="{{ ft }}" {% if form_type == ft %}selected{% endif %}>{{ ft }}</option>
       {% endfor %}
     </select>
@@ -182,20 +182,18 @@
         {% if t.is_rex %}<span class="rex-badge">[REX]</span>{% endif %}
       </div>
     </div>
-    {% if t.total == 0 %}
-      {% if t.act_type == '33' %}
+    {% if t.scrape_status == 'pending' %}
+      <div class="trust-card-pending" style="color:var(--gray-400);">
+        Awaiting initial scrape <span>data appears after next run</span>
+      </div>
+    {% elif t.scrape_status == 's1_filer' %}
       <div class="trust-card-pending" style="color:var(--blue);">
-        33 Act Filer - N-1A <span>(S-1 / 10-K registration)</span>
+        33 Act Filer <span>(S-1 / S-3 registration)</span>
       </div>
-      {% elif t.filing_count > 0 %}
+    {% elif t.scrape_status == 'no_etf_funds' %}
       <div class="trust-card-pending">
-        No 485 filings found <span>(S-1 / 10-K filer)</span>
+        No ETF funds found <span>(mutual-fund-only or S-1 filer)</span>
       </div>
-      {% else %}
-      <div class="trust-card-pending">
-        Pipeline pending... <span>data appears after next run</span>
-      </div>
-      {% endif %}
     {% else %}
     <div class="trust-card-stats">
       <span class="trust-stat"><strong>{{ t.total }}</strong> funds</span>

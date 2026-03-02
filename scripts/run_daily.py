@@ -22,8 +22,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 os.chdir(PROJECT_ROOT)
 
-from etp_tracker.run_pipeline import run_pipeline
-from etp_tracker.trusts import get_all_ciks, get_overrides
+from etp_tracker.run_pipeline import run_pipeline, load_ciks_from_db
 from etp_tracker.email_alerts import send_digest_email
 
 
@@ -107,9 +106,10 @@ def main():
 
     # Step 1: Run pipeline
     print("\n[1/5] Running pipeline...")
+    ciks, overrides = load_ciks_from_db()
     n = run_pipeline(
-        ciks=get_all_ciks(),
-        overrides=get_overrides(),
+        ciks=ciks,
+        overrides=overrides,
         since=SINCE_DATE,
         refresh_submissions=True,
         user_agent=USER_AGENT,
