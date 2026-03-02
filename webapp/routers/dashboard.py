@@ -105,14 +105,24 @@ def _trust_stats(db: Session) -> list[dict]:
                 act_type = _legacy_act_type(r.cik)
             except Exception:
                 act_type = "40"
-        trusts.append({
+        t = {
             "id": r.id, "name": r.name, "slug": r.slug, "is_rex": r.is_rex,
             "total": r.total or 0, "effective": r.effective or 0,
             "pending": r.pending or 0, "delayed": r.delayed or 0,
             "filing_count": r.filing_count or 0,
             "act_type": act_type,
             "entity_type": getattr(r, 'entity_type', None),
-        })
+        }
+        # Classify scrape status for display
+        if t["filing_count"] == 0:
+            t["scrape_status"] = "pending"
+        elif t["total"] == 0 and t["act_type"] == "33":
+            t["scrape_status"] = "s1_filer"
+        elif t["total"] == 0:
+            t["scrape_status"] = "no_etf_funds"
+        else:
+            t["scrape_status"] = "active"
+        trusts.append(t)
 
     # Sort: priority trusts first, then alphabetical
     def sort_key(t):
@@ -152,7 +162,7 @@ def dashboard(
         days = 7
 
     # Recent filings with configurable filters (prospectus-related only)
-    _PROSPECTUS_PREFIXES = ("485A", "485B", "497")
+    _PROSPECTUS_PREFIXES = ("485A", "485B", "497", "S-1", "S-3", "EFFECT", "POS AM")
     filing_query = (
         select(
             Filing,
