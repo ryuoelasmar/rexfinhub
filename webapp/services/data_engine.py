@@ -110,6 +110,71 @@ _BASE_FIELDS = [
 ]
 
 
+def _build_from_split_sheets(xl: pd.ExcelFile) -> pd.DataFrame:
+    """Build the equivalent of cleaned data_import from separate w1-w4 sheets.
+
+    The bloomberg_daily_file.xlsm splits the old data_import into 4 sheets.
+    Read each, rename columns to canonical names, merge on ticker, then
+    apply the same t_w2/t_w3/t_w4 prefixing that _clean_data_import does.
+    """
+    from market.config import W1_COL_MAP, W2_COL_MAP, W3_COL_MAP, W4_FLOW_COL_MAP
+
+    w1 = _read_sheet(xl, "w1").rename(columns=W1_COL_MAP)
+    w1 = w1.dropna(subset=["ticker"])
+
+    w2 = _read_sheet(xl, "w2").rename(columns=W2_COL_MAP)
+    if "Fund Name" in w2.columns:
+        w2 = w2.drop(columns=["Fund Name"])
+
+    w3 = _read_sheet(xl, "w3").rename(columns=W3_COL_MAP)
+    if "Fund Name" in w3.columns:
+        w3 = w3.drop(columns=["Fund Name"])
+
+    w4 = _read_sheet(xl, "w4").rename(columns=W4_FLOW_COL_MAP)
+    if "Fund Name" in w4.columns:
+        w4 = w4.drop(columns=["Fund Name"])
+    # AUM is the first non-flow, non-ticker column
+    for col in w4.columns:
+        if col not in W4_FLOW_COL_MAP.values() and col not in ("ticker", "Fund Name"):
+            w4 = w4.rename(columns={col: "aum"})
+            break
+    if "aum" not in w4.columns and len(w4.columns) > 10:
+        w4 = w4.rename(columns={w4.columns[10]: "aum"})
+    # Also pick up aum_1..aum_36 from remaining positional columns
+    aum_idx = 1
+    found_aum = False
+    for col in w4.columns:
+        if col == "aum":
+            found_aum = True
+            continue
+        if found_aum and col not in W4_FLOW_COL_MAP.values() and col != "ticker":
+            w4 = w4.rename(columns={col: f"aum_{aum_idx}"})
+            aum_idx += 1
+
+    # Merge on ticker
+    df = w1.copy()
+    for sheet_df in [w2, w3, w4]:
+        if "ticker" in sheet_df.columns:
+            merge_cols = [c for c in sheet_df.columns if c != "ticker" and c not in df.columns]
+            if merge_cols:
+                df = df.merge(sheet_df[["ticker"] + merge_cols], on="ticker", how="left")
+
+    # Apply t_w2/t_w3/t_w4 prefixes (same as _clean_data_import)
+    rename_map = {}
+    for field in _W2_FIELDS:
+        if field in df.columns:
+            rename_map[field] = f"t_w2.{field}"
+    for field in _W3_FIELDS:
+        if field in df.columns:
+            rename_map[field] = f"t_w3.{field}"
+    for field in _W4_FIELDS:
+        if field in df.columns:
+            rename_map[field] = f"t_w4.{field}"
+    df = df.rename(columns=rename_map)
+
+    return df
+
+
 def _clean_data_import(df: pd.DataFrame) -> pd.DataFrame:
     """
     Clean data_import: keep only useful columns, rename work-table columns
@@ -270,10 +335,15 @@ def build_master_data(xl: pd.ExcelFile = None) -> pd.DataFrame:
     if xl is None:
         xl = _load_excel()
 
-    # Step 1 & 2: Read and clean data_import
-    raw = _read_sheet(xl, "data_import")
-    raw = raw.dropna(subset=["ticker"])
-    df = _clean_data_import(raw)
+    # Step 1 & 2: Read and clean data_import (or build from w1-w4)
+    if "data_import" in xl.sheet_names:
+        raw = _read_sheet(xl, "data_import")
+        raw = raw.dropna(subset=["ticker"])
+        df = _clean_data_import(raw)
+    elif "w1" in xl.sheet_names:
+        df = _build_from_split_sheets(xl)
+    else:
+        raise ValueError("Data file has neither data_import nor w1 sheet")
 
     # Step 3: Join fund_mapping -> adds etp_category
     # Deduplicate on (ticker, etp_category) to avoid row multiplication
@@ -283,7 +353,19 @@ def build_master_data(xl: pd.ExcelFile = None) -> pd.DataFrame:
         fm = fm.drop_duplicates(subset=["ticker", "etp_category"])
         df = df.merge(fm, on="ticker", how="left")
     except Exception:
-        df["etp_category"] = pd.NA
+        # Fall back to CSV rules
+        from market.config import RULES_DIR
+        csv_path = RULES_DIR / "fund_mapping.csv"
+        if csv_path.exists():
+            fm = pd.read_csv(csv_path, engine="python", on_bad_lines="skip")
+            if {"ticker", "etp_category"}.issubset(fm.columns):
+                fm = fm[["ticker", "etp_category"]].dropna(subset=["ticker"])
+                fm = fm.drop_duplicates(subset=["ticker", "etp_category"])
+                df = df.merge(fm, on="ticker", how="left")
+            else:
+                df["etp_category"] = pd.NA
+        else:
+            df["etp_category"] = pd.NA
 
     # Step 4: Join issuer_mapping -> adds issuer_nickname
     # Deduplicate to avoid row multiplication
@@ -295,7 +377,19 @@ def build_master_data(xl: pd.ExcelFile = None) -> pd.DataFrame:
         im = im.drop_duplicates(subset=["etp_category", "issuer"])
         df = df.merge(im, on=["etp_category", "issuer"], how="left")
     except Exception:
-        df["issuer_nickname"] = pd.NA
+        # Fall back to CSV rules
+        from market.config import RULES_DIR
+        csv_path = RULES_DIR / "issuer_mapping.csv"
+        if csv_path.exists():
+            im = pd.read_csv(csv_path, engine="python", on_bad_lines="skip")
+            if {"etp_category", "issuer", "issuer_nickname"}.issubset(im.columns):
+                im = im[["etp_category", "issuer", "issuer_nickname"]].dropna(subset=["etp_category", "issuer"])
+                im = im.drop_duplicates(subset=["etp_category", "issuer"])
+                df = df.merge(im, on=["etp_category", "issuer"], how="left")
+            else:
+                df["issuer_nickname"] = pd.NA
+        else:
+            df["issuer_nickname"] = pd.NA
 
     # Step 5: Join category_attributes -> adds map_* columns
     try:
