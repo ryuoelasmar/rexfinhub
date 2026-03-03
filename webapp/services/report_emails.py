@@ -159,9 +159,9 @@ def build_li_email(dashboard_url: str = "") -> str:
     from webapp.services.report_data import get_li_report
     data = get_li_report()
 
-    if not data.get("available"):
+    if not data.get("available") or not data.get("kpis"):
         return _wrap_email("U.S. Leveraged & Inverse ETP Report", _TEAL,
-                           '<tr><td style="padding:20px 30px;">Bloomberg data not available.</td></tr>',
+                           '<tr><td style="padding:20px 30px;">Bloomberg data not available or no L&I funds found.</td></tr>',
                            dashboard_url)
 
     kpis = data["kpis"]
@@ -169,10 +169,10 @@ def build_li_email(dashboard_url: str = "") -> str:
 
     # KPIs
     body += _kpi_row([
-        ("Total ETPs", str(kpis["count"]), _NAVY),
-        ("Total AUM", kpis["total_aum"], _NAVY),
-        ("1W Net Flow", kpis["flow_1w"], _GREEN if kpis["flow_1w_positive"] else _RED),
-        ("YTD Net Flow", kpis["flow_ytd"], _GREEN if kpis["flow_ytd_positive"] else _RED),
+        ("Total ETPs", str(kpis.get("count", 0)), _NAVY),
+        ("Total AUM", kpis.get("total_aum", "$0"), _NAVY),
+        ("1W Net Flow", kpis.get("flow_1w", "$0"), _GREEN if kpis.get("flow_1w_positive", True) else _RED),
+        ("YTD Net Flow", kpis.get("flow_ytd", "$0"), _GREEN if kpis.get("flow_ytd_positive", True) else _RED),
     ])
 
     # Provider Summary (top 15)
@@ -215,9 +215,9 @@ def build_cc_email(dashboard_url: str = "") -> str:
     from webapp.services.report_data import get_cc_report
     data = get_cc_report()
 
-    if not data.get("available"):
+    if not data.get("available") or not data.get("kpis"):
         return _wrap_email("Covered Call ETFs AUM and Flows", _TEAL,
-                           '<tr><td style="padding:20px 30px;">Bloomberg data not available.</td></tr>',
+                           '<tr><td style="padding:20px 30px;">Bloomberg data not available or no CC funds found.</td></tr>',
                            dashboard_url)
 
     kpis = data["kpis"]
@@ -225,10 +225,10 @@ def build_cc_email(dashboard_url: str = "") -> str:
 
     # KPIs
     body += _kpi_row([
-        ("CC Funds", str(kpis["count"]), _NAVY),
-        ("Total AUM", kpis["total_aum"], _NAVY),
-        ("1W Net Flow", kpis["flow_1w"], _GREEN if kpis["flow_1w_positive"] else _RED),
-        ("Avg Yield", kpis["avg_yield"], _TEAL),
+        ("CC Funds", str(kpis.get("count", 0)), _NAVY),
+        ("Total AUM", kpis.get("total_aum", "$0"), _NAVY),
+        ("1W Net Flow", kpis.get("flow_1w", "$0"), _GREEN if kpis.get("flow_1w_positive", True) else _RED),
+        ("Avg Yield", kpis.get("avg_yield", "0.0%"), _TEAL),
     ])
 
     # REX CC Funds
@@ -286,9 +286,9 @@ def build_ss_email(dashboard_url: str = "") -> str:
     from webapp.services.report_data import get_ss_report, _get_cache, _fmt_currency
     data = get_ss_report()
 
-    if not data.get("available"):
+    if not data.get("available") or not data.get("kpis"):
         return _wrap_email("Single-Stock Leveraged ETFs", _TEAL,
-                           '<tr><td style="padding:20px 30px;">Bloomberg data not available.</td></tr>',
+                           '<tr><td style="padding:20px 30px;">Bloomberg data not available or no SS funds found.</td></tr>',
                            dashboard_url)
 
     kpis = data["kpis"]
@@ -296,10 +296,10 @@ def build_ss_email(dashboard_url: str = "") -> str:
 
     # KPIs
     body += _kpi_row([
-        ("SS ETFs", str(kpis["count"]), _NAVY),
-        ("Total AUM", kpis["total_aum"], _NAVY),
-        ("Issuers", str(kpis["issuers"]), _NAVY),
-        ("Top Underlying", kpis["top_underlier"], _TEAL),
+        ("SS ETFs", str(kpis.get("count", 0)), _NAVY),
+        ("Total AUM", kpis.get("total_aum", "$0"), _NAVY),
+        ("Issuers", str(kpis.get("issuers", 0)), _NAVY),
+        ("Top Underlying", kpis.get("top_underlier", "N/A"), _TEAL),
     ])
 
     # AUM by Issuer (table instead of pie)
