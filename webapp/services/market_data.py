@@ -103,9 +103,9 @@ def _load_fresh() -> dict[str, Any]:
         master = pd.read_excel(DATA_FILE, sheet_name="q_master_data", engine="openpyxl")
         ts_sheet = "q_aum_time_series_labeled" if "q_aum_time_series_labeled" in available_sheets else None
         ts = pd.read_excel(DATA_FILE, sheet_name=ts_sheet, engine="openpyxl") if ts_sheet else pd.DataFrame()
-    elif "data_import" in available_sheets:
-        # Build from raw sheets using data_engine
-        log.info("No q_master_data sheet, building via data_engine...")
+    elif "data_import" in available_sheets or {"w1", "w2", "w3", "w4"}.issubset(available_sheets):
+        # Build from raw sheets using data_engine (data_import or w1-w4 format)
+        log.info("Building market data via data_engine...")
         try:
             from webapp.services.data_engine import build_all
             result = build_all(DATA_FILE)
@@ -115,7 +115,7 @@ def _load_fresh() -> dict[str, Any]:
             log.error("data_engine build failed: %s", e)
             return {"master": pd.DataFrame(), "ts": pd.DataFrame()}
     else:
-        log.warning("Data file has neither q_master_data nor data_import sheet")
+        log.warning("Data file has neither q_master_data nor data_import/w1-w4 sheets")
         return {"master": pd.DataFrame(), "ts": pd.DataFrame()}
 
     # Normalise booleans that may come in as object columns
