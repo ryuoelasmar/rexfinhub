@@ -402,6 +402,10 @@ class MktMasterData(Base):
     map_crypto_underlier: Mapped[str | None] = mapped_column(String(200))
     map_defined_category: Mapped[str | None] = mapped_column(String(100))
     map_thematic_category: Mapped[str | None] = mapped_column(String(100))
+    # Covered call / structured product attributes
+    cc_type: Mapped[str | None] = mapped_column(String(50))
+    cc_category: Mapped[str | None] = mapped_column(String(100))
+    ticker_clean: Mapped[str | None] = mapped_column(String(30))
     # Multi-dimensional classification columns (from auto-classify)
     strategy: Mapped[str | None] = mapped_column(String(50))
     strategy_confidence: Mapped[str | None] = mapped_column(String(10))
@@ -438,6 +442,22 @@ class MktTimeSeries(Base):
         Index("idx_mkt_ts_fck", "fund_category_key"),
         Index("idx_mkt_ts_run", "pipeline_run_id"),
     )
+
+
+class MktReportCache(Base):
+    """Pre-computed report data stored as JSON.
+
+    Reports are computed during the local sync pipeline and serialized
+    here so Render can serve them without holding DataFrames in memory.
+    """
+    __tablename__ = "mkt_report_cache"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    pipeline_run_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("mkt_pipeline_runs.id"))
+    report_key: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
+    data_json: Mapped[str | None] = mapped_column(Text)
+    data_as_of: Mapped[str | None] = mapped_column(String(30))
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
 
 class MktStockData(Base):
@@ -497,6 +517,59 @@ class MktFundClassification(Base):
         Index("idx_mkt_class_run", "pipeline_run_id"),
         Index("idx_mkt_class_sector", "sector"),
         Index("idx_mkt_class_geography", "geography"),
+    )
+
+
+class MktGlobalEtp(Base):
+    """Global ETP universe supplement data (~16,534 rows).
+
+    Aggregates key columns from 7 Bloomberg global sheets (assets, cost,
+    performance, flows, liquidity, gics, geographic, structure), joined by
+    ticker. Infrastructure table -- no UI yet.
+    """
+    __tablename__ = "mkt_global_etp"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    pipeline_run_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("mkt_pipeline_runs.id"))
+    # Identity
+    ticker: Mapped[str] = mapped_column(String(30), nullable=False)
+    name: Mapped[str | None] = mapped_column(String(300))
+    # Assets
+    class_aum: Mapped[float | None] = mapped_column(Float)
+    fund_aum: Mapped[float | None] = mapped_column(Float)
+    nav: Mapped[float | None] = mapped_column(Float)
+    holdings_count: Mapped[int | None] = mapped_column(Integer)
+    # Cost
+    expense_ratio: Mapped[float | None] = mapped_column(Float)
+    mgmt_fee: Mapped[float | None] = mapped_column(Float)
+    bid_ask_spread: Mapped[float | None] = mapped_column(Float)
+    nav_tracking_error: Mapped[float | None] = mapped_column(Float)
+    premium: Mapped[float | None] = mapped_column(Float)
+    # Performance
+    return_mtd: Mapped[float | None] = mapped_column(Float)
+    return_5y: Mapped[float | None] = mapped_column(Float)
+    return_10y: Mapped[float | None] = mapped_column(Float)
+    high_52w: Mapped[float | None] = mapped_column(Float)
+    low_52w: Mapped[float | None] = mapped_column(Float)
+    yield_12m: Mapped[float | None] = mapped_column(Float)
+    # Liquidity
+    volume_1d: Mapped[float | None] = mapped_column(Float)
+    avg_volume_30d: Mapped[float | None] = mapped_column(Float)
+    implied_liquidity: Mapped[float | None] = mapped_column(Float)
+    agg_traded_val: Mapped[float | None] = mapped_column(Float)
+    # Structure
+    fund_type: Mapped[str | None] = mapped_column(String(100))
+    structure: Mapped[str | None] = mapped_column(String(100))
+    is_ucits: Mapped[str | None] = mapped_column(String(20))
+    leverage: Mapped[str | None] = mapped_column(String(50))
+    inception_date: Mapped[str | None] = mapped_column(String(30))
+    # Sector/Geo (packed as JSON)
+    gics_json: Mapped[str | None] = mapped_column(Text)
+    geo_json: Mapped[str | None] = mapped_column(Text)
+
+    __table_args__ = (
+        Index("idx_mkt_global_etp_ticker", "ticker"),
+        Index("idx_mkt_global_etp_run", "pipeline_run_id"),
     )
 
 

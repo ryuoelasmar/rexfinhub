@@ -16,7 +16,6 @@
 <div class="report-tabs">
   <a href="/reports/li" class="report-tab {% if active_tab == 'li' %}active{% endif %}">Leveraged & Inverse</a>
   <a href="/reports/cc" class="report-tab {% if active_tab == 'cc' %}active{% endif %}">Covered Call</a>
-  <a href="/reports/ss" class="report-tab {% if active_tab == 'ss' %}active{% endif %}">Single-Stock</a>
 </div>
 
 {% if not available %}
@@ -169,6 +168,22 @@
   </div>
 </div>
 
+{# Chart: Daily Net Flow Trend #}
+<h2 class="report-section-title">Daily Net Flow Trend (7-Day Avg)</h2>
+<div class="report-chart-row-1">
+  <div class="report-chart-box">
+    <canvas id="chartDailyFlow" height="300"></canvas>
+  </div>
+</div>
+
+{# Chart: Daily Trading Volume #}
+<h2 class="report-section-title">Daily Trading Volume (10-Day Avg)</h2>
+<div class="report-chart-row-1">
+  <div class="report-chart-box">
+    <canvas id="chartDailyVolume" height="300"></canvas>
+  </div>
+</div>
+
 {% endif %}
 {% endblock %}
 
@@ -312,6 +327,56 @@
       }
     });
   }
+
+  // Chart 3: Daily Net Flow Trend (7-Day Avg)
+  function renderDailyLineChart(canvasId, chartDataObj) {
+    if (!chartDataObj || !chartDataObj.labels || chartDataObj.labels.length === 0) return;
+    var ds = [];
+    chartDataObj.datasets.forEach(function(d, i) {
+      ds.push({
+        label: d.label,
+        data: d.data,
+        borderColor: i === 0 ? (isDark ? '#E5E7EB' : '#111827') : palette[(i - 1) % palette.length],
+        backgroundColor: 'transparent',
+        borderWidth: i === 0 ? 2.5 : 1.5,
+        pointRadius: 0,
+        tension: 0.1,
+      });
+    });
+    new Chart(document.getElementById(canvasId), {
+      type: 'line',
+      data: { labels: chartDataObj.labels, datasets: ds },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: {
+            position: 'bottom',
+            labels: { color: textColor, boxWidth: 12, padding: 10, font: { size: 11 } }
+          },
+          tooltip: {
+            callbacks: {
+              label: function(ctx) { return ctx.dataset.label + ': ' + fmtMoney(ctx.parsed.y); }
+            }
+          },
+        },
+        scales: {
+          x: {
+            grid: { display: false },
+            ticks: { color: textColor, font: { size: 10 }, maxRotation: 45, autoSkip: true, maxTicksLimit: 12 }
+          },
+          y: {
+            grid: { color: gridColor },
+            ticks: { color: textColor, font: { size: 10 }, callback: function(v) { return fmtMoney(v); } }
+          }
+        }
+      }
+    });
+  }
+
+  renderDailyLineChart('chartDailyFlow', {{ daily_flow_chart | default({}) | tojson }});
+  renderDailyLineChart('chartDailyVolume', {{ daily_volume_chart | default({}) | tojson }});
 })();
 </script>
 {% endif %}

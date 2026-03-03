@@ -6,27 +6,30 @@ Provides data for three weekly reports:
 - Covered Call (CC)
 - Single-Stock (SS)
 
-Thread-safe cache with 1-hour TTL, same pattern as market_data.py.
+On Render: reads pre-computed JSON from mkt_report_cache (zero memory).
+Locally: computes from files via _get_cache() (used during sync).
 """
 from __future__ import annotations
 
+import json
 import logging
 import math
+import os
 import threading
 import time
 from pathlib import Path
 from typing import Any
 
 import pandas as pd
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 
-from market.config import (
-    DATA_FILE,
-    RULES_DIR,
-    W1_COL_MAP,
-    W2_COL_MAP,
-    W3_COL_MAP,
-    W4_FLOW_COL_MAP,
-)
+from webapp.models import MktReportCache
+
+# market.config imports are lazy (inside _load_all) so Render never loads
+# openpyxl or resolves the Excel file path at import time.
+
+_ON_RENDER = bool(os.environ.get("RENDER"))
 
 log = logging.getLogger(__name__)
 
@@ -96,6 +99,21 @@ def _safe_float(val: Any) -> float:
         return 0.0
 
 
+def _optimise_dtypes(df: pd.DataFrame) -> None:
+    """Downcast numeric columns to float32 and low-cardinality strings to category."""
+    _CATEGORY_COLS = {"etp_category", "issuer_display", "issuer"}
+    _SENTINEL_VALUES = ("Unknown", "")
+    for col in df.columns:
+        if col in _CATEGORY_COLS:
+            cat = df[col].astype("category")
+            missing = [v for v in _SENTINEL_VALUES if v not in cat.cat.categories]
+            if missing:
+                cat = cat.cat.add_categories(missing)
+            df[col] = cat
+        elif df[col].dtype == "float64":
+            df[col] = df[col].astype("float32")
+
+
 # ---------------------------------------------------------------------------
 # Data loading
 # ---------------------------------------------------------------------------
@@ -110,7 +128,8 @@ def _read_sheet(name: str, index_col: int | None = None) -> pd.DataFrame:
         log.info("Reading %s from CSV", name)
         return pd.read_csv(csv_path, index_col=index_col, engine="python", on_bad_lines="skip")
 
-    # Fall back to Excel
+    # Fall back to Excel (local only — never reached on Render)
+    from market.config import DATA_FILE
     path = DATA_FILE
     if not path.exists():
         return pd.DataFrame()
@@ -119,7 +138,12 @@ def _read_sheet(name: str, index_col: int | None = None) -> pd.DataFrame:
 
 
 def _load_all() -> dict[str, Any]:
-    """Load Bloomberg sheets + rules CSVs, build master dataframe."""
+    """Load Bloomberg sheets + rules CSVs, build master dataframe.
+
+    Only called locally (never on Render — _ON_RENDER guards prevent it).
+    """
+    from market.config import DATA_FILE, RULES_DIR, W1_COL_MAP, W2_COL_MAP, W3_COL_MAP, W4_FLOW_COL_MAP
+
     # Check if we have CSVs or the Excel file
     has_csvs = (_CSV_SHEETS_DIR / "w1.csv").exists()
     has_excel = DATA_FILE.exists()
@@ -299,6 +323,8 @@ def _load_all() -> dict[str, Any]:
 
     log.info("Report data loaded: %d funds, timeseries=%s", len(master), has_timeseries)
 
+    _optimise_dtypes(master)
+
     return {
         "available": True,
         "master": master,
@@ -322,11 +348,51 @@ def _read_csv(path: Path) -> pd.DataFrame:
     return pd.read_csv(path, engine="python", on_bad_lines="skip")
 
 
-def data_available() -> bool:
+def _read_report_cache(db: Session | None, key: str) -> dict | None:
+    """Read a pre-computed report from mkt_report_cache.
+
+    Returns the deserialized dict if found, None otherwise.
+    """
+    if db is None:
+        return None
+    try:
+        row = db.execute(
+            select(MktReportCache).where(MktReportCache.report_key == key)
+        ).scalar_one_or_none()
+        if row and row.data_json:
+            return json.loads(row.data_json)
+    except Exception as e:
+        log.debug("Report cache read failed for %s: %s", key, e)
+    return None
+
+
+def data_available(db: Session | None = None) -> bool:
+    if db is not None:
+        try:
+            row = db.execute(
+                select(MktReportCache.id).limit(1)
+            ).scalar_one_or_none()
+            if row is not None:
+                return True
+        except Exception:
+            pass
+    if _ON_RENDER:
+        return False
     return _get_cache().get("available", False)
 
 
-def get_data_as_of() -> str:
+def get_data_as_of(db: Session | None = None) -> str:
+    if db is not None:
+        try:
+            row = db.execute(
+                select(MktReportCache.data_as_of).limit(1)
+            ).scalar_one_or_none()
+            if row:
+                return row or ""
+        except Exception:
+            pass
+    if _ON_RENDER:
+        return ""
     return _get_cache().get("data_as_of", "")
 
 
@@ -550,8 +616,21 @@ def _compute_aum_wow(data_aum: pd.DataFrame, tickers: list[str]) -> tuple[str, b
 # ---------------------------------------------------------------------------
 # L&I Report
 # ---------------------------------------------------------------------------
-def get_li_report() -> dict:
-    """Data for Leveraged & Inverse report."""
+def get_li_report(db: Session | None = None) -> dict:
+    """Data for Leveraged & Inverse report.
+
+    If db is provided, reads from mkt_report_cache (zero memory).
+    Otherwise computes from files (used during local sync).
+    """
+    cached = _read_report_cache(db, "li_report")
+    if cached is not None:
+        return cached
+
+    # On Render, never fall through to file-based cache (prevents OOM)
+    if _ON_RENDER:
+        log.warning("LI report: DB cache miss on Render, returning empty")
+        return {"available": False, "data_as_of": "", "data_as_of_short": ""}
+
     cache = _get_cache()
     if not cache.get("available"):
         return {"available": False, "data_as_of": "", "data_as_of_short": ""}
@@ -559,6 +638,7 @@ def get_li_report() -> dict:
     master = cache["master"].copy()
     data_aum = cache["data_aum"]
     data_flow = cache["data_flow"]
+    data_notional = cache["data_notional"]
     rex_tickers = cache["rex_tickers"]
 
     # Filter to LI tickers
@@ -591,7 +671,7 @@ def get_li_report() -> dict:
     # Provider summary: group by issuer display name
     issuer_col = "issuer_display" if "issuer_display" in li.columns else ("issuer" if "issuer" in li.columns else "fund_name")
     providers = []
-    for issuer, grp in li.groupby(issuer_col):
+    for issuer, grp in li.groupby(issuer_col, observed=False):
         if not issuer or (isinstance(issuer, float) and math.isnan(issuer)):
             continue
         aum = float(grp["aum"].sum())
@@ -640,6 +720,10 @@ def get_li_report() -> dict:
     # Cumulative flow chart
     flow_chart = _cumulative_flow(data_flow, li_tickers, issuer_grp_map, top_n=5)
 
+    # Daily charts (7D rolling flow, 10D rolling volume)
+    daily_flow_chart = _daily_series(data_flow, li_tickers, issuer_grp_map, top_n=5, rolling_window=7)
+    daily_volume_chart = _daily_series(data_notional, li_tickers, issuer_grp_map, top_n=5, rolling_window=10)
+
     return {
         "available": True,
         "data_as_of": cache["data_as_of"], "data_as_of_short": cache.get("data_as_of_short", ""),
@@ -650,6 +734,8 @@ def get_li_report() -> dict:
         "bottom10": bottom10,
         "chart": chart,
         "flow_chart": flow_chart,
+        "daily_flow_chart": daily_flow_chart,
+        "daily_volume_chart": daily_volume_chart,
     }
 
 
@@ -678,8 +764,20 @@ def _fund_rows(df: pd.DataFrame, total_aum: float) -> list[dict]:
 # ---------------------------------------------------------------------------
 # Covered Call Report
 # ---------------------------------------------------------------------------
-def get_cc_report() -> dict:
-    """Data for Covered Call report."""
+def get_cc_report(db: Session | None = None) -> dict:
+    """Data for Covered Call report.
+
+    If db is provided, reads from mkt_report_cache (zero memory).
+    Otherwise computes from files (used during local sync).
+    """
+    cached = _read_report_cache(db, "cc_report")
+    if cached is not None:
+        return cached
+
+    if _ON_RENDER:
+        log.warning("CC report: DB cache miss on Render, returning empty")
+        return {"available": False, "data_as_of": "", "data_as_of_short": ""}
+
     cache = _get_cache()
     if not cache.get("available"):
         return {"available": False, "data_as_of": "", "data_as_of_short": ""}
@@ -687,6 +785,7 @@ def get_cc_report() -> dict:
     master = cache["master"].copy()
     data_aum = cache["data_aum"]
     data_flow = cache["data_flow"]
+    data_notional = cache["data_notional"]
     rex_tickers = cache["rex_tickers"]
 
     # Filter to CC tickers
@@ -769,7 +868,7 @@ def get_cc_report() -> dict:
     # Table 4: AUM by cc_category
     aum_by_category = []
     if "cc_category" in cc.columns:
-        for cat, grp in cc.groupby("cc_category"):
+        for cat, grp in cc.groupby("cc_category", observed=False):
             if not cat or (isinstance(cat, float) and math.isnan(cat)):
                 continue
             aum = float(grp["aum"].sum())
@@ -789,7 +888,7 @@ def get_cc_report() -> dict:
     # Table 5: Issuer ranking
     issuers = []
     issuer_col = "issuer_display" if "issuer_display" in cc.columns else "issuer"
-    for issuer, grp in cc.groupby(issuer_col):
+    for issuer, grp in cc.groupby(issuer_col, observed=False):
         if not issuer or (isinstance(issuer, float) and math.isnan(issuer)):
             continue
         aum = float(grp["aum"].sum())
@@ -830,6 +929,10 @@ def get_cc_report() -> dict:
     cc_issuer_map = dict(zip(cc["ticker_clean"], cc[issuer_col].fillna("Unknown").astype(str)))
     flow_chart = _cumulative_flow(data_flow, cc_tickers, cc_issuer_map, top_n=5)
 
+    # Daily charts (7D rolling flow, 10D rolling volume)
+    daily_flow_chart = _daily_series(data_flow, cc_tickers, cc_issuer_map, top_n=5, rolling_window=7)
+    daily_volume_chart = _daily_series(data_notional, cc_tickers, cc_issuer_map, top_n=5, rolling_window=10)
+
     return {
         "available": True,
         "data_as_of": cache["data_as_of"], "data_as_of_short": cache.get("data_as_of_short", ""),
@@ -844,6 +947,8 @@ def get_cc_report() -> dict:
         "issuer_aum_chart": issuer_aum_chart,
         "rex_ts_chart": rex_ts_chart,
         "flow_chart": flow_chart,
+        "daily_flow_chart": daily_flow_chart,
+        "daily_volume_chart": daily_volume_chart,
     }
 
 
@@ -895,8 +1000,20 @@ def _rex_market_share_ts(data_aum: pd.DataFrame, all_cc_tickers: list[str],
 # ---------------------------------------------------------------------------
 # Single-Stock Report
 # ---------------------------------------------------------------------------
-def get_ss_report() -> dict:
-    """Data for Single-Stock Leveraged ETFs report."""
+def get_ss_report(db: Session | None = None) -> dict:
+    """Data for Single-Stock Leveraged ETFs report.
+
+    If db is provided, reads from mkt_report_cache (zero memory).
+    Otherwise computes from files (used during local sync).
+    """
+    cached = _read_report_cache(db, "ss_report")
+    if cached is not None:
+        return cached
+
+    if _ON_RENDER:
+        log.warning("SS report: DB cache miss on Render, returning empty")
+        return {"available": False, "data_as_of": "", "data_as_of_short": ""}
+
     cache = _get_cache()
     if not cache.get("available"):
         return {"available": False, "data_as_of": "", "data_as_of_short": ""}
@@ -940,7 +1057,7 @@ def get_ss_report() -> dict:
 
     # AUM pie by issuer
     aum_by_issuer = {}
-    for issuer, grp in ss.groupby(issuer_col):
+    for issuer, grp in ss.groupby(issuer_col, observed=False):
         if not issuer or (isinstance(issuer, float) and math.isnan(issuer)):
             continue
         aum_by_issuer[str(issuer)] = float(grp["aum"].sum())
