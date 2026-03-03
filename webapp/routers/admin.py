@@ -383,11 +383,15 @@ def preview_li_report(request: Request):
     """Preview L&I report email in browser."""
     if not _is_admin(request):
         return RedirectResponse("/admin/", status_code=302)
-    from webapp.services.report_emails import build_li_email
-    dashboard_url = str(request.base_url).rstrip("/")
-    html = build_li_email(dashboard_url=dashboard_url)
     from fastapi.responses import HTMLResponse
-    return HTMLResponse(content=html)
+    try:
+        from webapp.services.report_emails import build_li_email
+        dashboard_url = str(request.base_url).rstrip("/")
+        html = build_li_email(dashboard_url=dashboard_url)
+        return HTMLResponse(content=html)
+    except Exception as e:
+        log.error("L&I email preview failed: %s", e, exc_info=True)
+        return HTMLResponse(content=f"<h2>Error building L&I email</h2><pre>{e}</pre>", status_code=200)
 
 
 @router.get("/reports/preview-cc")
@@ -395,11 +399,15 @@ def preview_cc_report(request: Request):
     """Preview CC report email in browser."""
     if not _is_admin(request):
         return RedirectResponse("/admin/", status_code=302)
-    from webapp.services.report_emails import build_cc_email
-    dashboard_url = str(request.base_url).rstrip("/")
-    html = build_cc_email(dashboard_url=dashboard_url)
     from fastapi.responses import HTMLResponse
-    return HTMLResponse(content=html)
+    try:
+        from webapp.services.report_emails import build_cc_email
+        dashboard_url = str(request.base_url).rstrip("/")
+        html = build_cc_email(dashboard_url=dashboard_url)
+        return HTMLResponse(content=html)
+    except Exception as e:
+        log.error("CC email preview failed: %s", e, exc_info=True)
+        return HTMLResponse(content=f"<h2>Error building CC email</h2><pre>{e}</pre>", status_code=200)
 
 
 @router.get("/reports/preview-ss")
@@ -407,11 +415,15 @@ def preview_ss_report(request: Request):
     """Preview SS report email in browser."""
     if not _is_admin(request):
         return RedirectResponse("/admin/", status_code=302)
-    from webapp.services.report_emails import build_ss_email
-    dashboard_url = str(request.base_url).rstrip("/")
-    html = build_ss_email(dashboard_url=dashboard_url)
     from fastapi.responses import HTMLResponse
-    return HTMLResponse(content=html)
+    try:
+        from webapp.services.report_emails import build_ss_email
+        dashboard_url = str(request.base_url).rstrip("/")
+        html = build_ss_email(dashboard_url=dashboard_url)
+        return HTMLResponse(content=html)
+    except Exception as e:
+        log.error("SS email preview failed: %s", e, exc_info=True)
+        return HTMLResponse(content=f"<h2>Error building SS email</h2><pre>{e}</pre>", status_code=200)
 
 
 @router.post("/reports/send-test-li")

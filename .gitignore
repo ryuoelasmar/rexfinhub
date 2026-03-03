@@ -22,6 +22,7 @@ Excel/
 backup/
 data/
 !data/rules/
+!data/DASHBOARD/bloomberg_daily_file.xlsm
 nul
 
 # Environment variables and secrets
