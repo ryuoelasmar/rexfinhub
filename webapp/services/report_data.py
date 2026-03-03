@@ -182,8 +182,15 @@ def _load_all() -> dict[str, Any]:
         log.error("Error reading sheets: %s", e)
         return {"available": False}
 
+    # Drop unnamed index column that to_csv(index=True) produces
+    for sheet in [w1, w2, w3, w4_raw]:
+        if sheet.columns[0].startswith("Unnamed"):
+            sheet.drop(columns=[sheet.columns[0]], inplace=True)
+
     # Rename w1 columns
     w1 = w1.rename(columns=W1_COL_MAP)
+    w1 = w1.dropna(subset=["ticker"])
+    w1 = w1.drop_duplicates(subset=["ticker"], keep="first")
 
     # Rename w2 (drop Fund Name if present)
     w2 = w2.rename(columns=W2_COL_MAP)
@@ -206,13 +213,13 @@ def _load_all() -> dict[str, Any]:
         w4 = w4.drop(columns=["Fund Name"])
     # AUM is typically column index 10 (after ticker + name + 8 flows)
     # Find it by position: first column after the flow columns that isn't already named
+    _W4_SKIP = set(W4_FLOW_COL_MAP.values()) | {"ticker", "Ticker", "Fund Name"}
     aum_col = None
     for col in w4.columns:
-        if col not in W4_FLOW_COL_MAP.values() and col not in ("ticker", "Fund Name"):
-            if aum_col is None:
-                w4 = w4.rename(columns={col: "aum"})
-                aum_col = "aum"
-                break
+        if col not in _W4_SKIP:
+            w4 = w4.rename(columns={col: "aum"})
+            aum_col = "aum"
+            break
     # If AUM column is at a known position
     if "aum" not in w4.columns and len(w4.columns) > 10:
         w4 = w4.rename(columns={w4.columns[10]: "aum"})
@@ -669,13 +676,15 @@ def get_li_report(db: Session | None = None) -> dict:
     }
 
     # Provider summary: group by issuer display name
+    # Include leveraged/inverse split if map_li_direction is available
     issuer_col = "issuer_display" if "issuer_display" in li.columns else ("issuer" if "issuer" in li.columns else "fund_name")
+    has_direction = "map_li_direction" in li.columns
     providers = []
-    for issuer, grp in li.groupby(issuer_col, observed=False):
+    for issuer, grp in li.groupby(issuer_col, observed=True):
         if not issuer or (isinstance(issuer, float) and math.isnan(issuer)):
             continue
         aum = float(grp["aum"].sum())
-        providers.append({
+        p = {
             "issuer": str(issuer),
             "count": len(grp),
             "aum": aum,
@@ -688,10 +697,25 @@ def get_li_report(db: Session | None = None) -> dict:
             "flow_ytd_fmt": _fmt_flow(float(grp["fund_flow_ytd"].sum())),
             "market_share": (aum / total_aum * 100) if total_aum > 0 else 0.0,
             "is_rex": bool(grp["is_rex"].any()),
-        })
+        }
+        if has_direction:
+            lev = grp[grp["map_li_direction"].str.lower().isin(["long", "leveraged"])]
+            inv = grp[~grp["map_li_direction"].str.lower().isin(["long", "leveraged"])]
+            p["num_leveraged"] = len(lev)
+            p["num_inverse"] = len(inv)
+            p["aum_leveraged"] = float(lev["aum"].sum())
+            p["aum_leveraged_fmt"] = _fmt_currency(float(lev["aum"].sum()))
+            p["aum_inverse"] = float(inv["aum"].sum())
+            p["aum_inverse_fmt"] = _fmt_currency(float(inv["aum"].sum()))
+            p["flow_1w_leveraged"] = float(lev["fund_flow_1week"].sum())
+            p["flow_1w_leveraged_fmt"] = _fmt_flow(float(lev["fund_flow_1week"].sum()))
+            p["flow_1w_inverse"] = float(inv["fund_flow_1week"].sum())
+            p["flow_1w_inverse_fmt"] = _fmt_flow(float(inv["fund_flow_1week"].sum()))
+        providers.append(p)
     providers.sort(key=lambda x: x["aum"], reverse=True)
 
     # Total row
+    flow_1m_total = float(li["fund_flow_1month"].sum())
     total_row = {
         "issuer": "Total",
         "count": len(li),
@@ -699,13 +723,26 @@ def get_li_report(db: Session | None = None) -> dict:
         "aum_fmt": _fmt_currency(total_aum),
         "flow_1w": flow_1w,
         "flow_1w_fmt": _fmt_flow(flow_1w),
-        "flow_1m": float(li["fund_flow_1month"].sum()),
-        "flow_1m_fmt": _fmt_flow(float(li["fund_flow_1month"].sum())),
+        "flow_1m": flow_1m_total,
+        "flow_1m_fmt": _fmt_flow(flow_1m_total),
         "flow_ytd": flow_ytd,
         "flow_ytd_fmt": _fmt_flow(flow_ytd),
         "market_share": 100.0,
         "is_rex": False,
     }
+    if has_direction:
+        lev_all = li[li["map_li_direction"].str.lower().isin(["long", "leveraged"])]
+        inv_all = li[~li["map_li_direction"].str.lower().isin(["long", "leveraged"])]
+        total_row["num_leveraged"] = len(lev_all)
+        total_row["num_inverse"] = len(inv_all)
+        total_row["aum_leveraged"] = float(lev_all["aum"].sum())
+        total_row["aum_leveraged_fmt"] = _fmt_currency(float(lev_all["aum"].sum()))
+        total_row["aum_inverse"] = float(inv_all["aum"].sum())
+        total_row["aum_inverse_fmt"] = _fmt_currency(float(inv_all["aum"].sum()))
+        total_row["flow_1w_leveraged"] = float(lev_all["fund_flow_1week"].sum())
+        total_row["flow_1w_leveraged_fmt"] = _fmt_flow(float(lev_all["fund_flow_1week"].sum()))
+        total_row["flow_1w_inverse"] = float(inv_all["fund_flow_1week"].sum())
+        total_row["flow_1w_inverse_fmt"] = _fmt_flow(float(inv_all["fund_flow_1week"].sum()))
 
     # Top 10 / Bottom 10 by 1W flow
     li_sorted = li.sort_values("fund_flow_1week", ascending=False)
@@ -745,10 +782,21 @@ def _fund_rows(df: pd.DataFrame, total_aum: float) -> list[dict]:
         ticker = str(r.get("ticker_clean", r.get("ticker", "")))
         aum = _safe_float(r.get("aum", 0))
         issuer_display = str(r.get("issuer_display", r.get("issuer", "")))
+        direction = str(r.get("map_li_direction", "")).lower()
+        leverage = _safe_float(r.get("map_li_leverage_amount", 0))
+        # Product type label
+        if direction in ("short", "inverse"):
+            ptype = "Inverse"
+            lev_factor = f"-{leverage * 100:.0f}%" if leverage else ""
+        else:
+            ptype = "Leveraged"
+            lev_factor = f"{leverage * 100:.0f}%" if leverage else ""
         rows.append({
             "ticker": ticker,
             "fund_name": str(r.get("fund_name", "")),
             "issuer": issuer_display,
+            "product_type": ptype,
+            "leverage_factor": lev_factor,
             "aum": aum,
             "aum_fmt": _fmt_currency(aum),
             "flow_1d": _safe_float(r.get("fund_flow_1day", 0)),
@@ -868,7 +916,7 @@ def get_cc_report(db: Session | None = None) -> dict:
     # Table 4: AUM by cc_category
     aum_by_category = []
     if "cc_category" in cc.columns:
-        for cat, grp in cc.groupby("cc_category", observed=False):
+        for cat, grp in cc.groupby("cc_category", observed=True):
             if not cat or (isinstance(cat, float) and math.isnan(cat)):
                 continue
             aum = float(grp["aum"].sum())
@@ -888,7 +936,7 @@ def get_cc_report(db: Session | None = None) -> dict:
     # Table 5: Issuer ranking
     issuers = []
     issuer_col = "issuer_display" if "issuer_display" in cc.columns else "issuer"
-    for issuer, grp in cc.groupby(issuer_col, observed=False):
+    for issuer, grp in cc.groupby(issuer_col, observed=True):
         if not issuer or (isinstance(issuer, float) and math.isnan(issuer)):
             continue
         aum = float(grp["aum"].sum())
@@ -1057,7 +1105,7 @@ def get_ss_report(db: Session | None = None) -> dict:
 
     # AUM pie by issuer
     aum_by_issuer = {}
-    for issuer, grp in ss.groupby(issuer_col, observed=False):
+    for issuer, grp in ss.groupby(issuer_col, observed=True):
         if not issuer or (isinstance(issuer, float) and math.isnan(issuer)):
             continue
         aum_by_issuer[str(issuer)] = float(grp["aum"].sum())
@@ -1068,6 +1116,31 @@ def get_ss_report(db: Session | None = None) -> dict:
     }
     if len(sorted_issuers) > 8:
         aum_pie["values"].append(round(sum(aum_by_issuer[i] for i in sorted_issuers[8:]), 1))
+
+    # Provider summary (for email)
+    ss_providers = []
+    for issuer, grp in ss.groupby(issuer_col, observed=True):
+        if not issuer or (isinstance(issuer, float) and math.isnan(issuer)):
+            continue
+        aum = float(grp["aum"].sum())
+        ss_providers.append({
+            "issuer": str(issuer),
+            "count": len(grp),
+            "aum": aum,
+            "aum_fmt": _fmt_currency(aum),
+            "flow_1w": float(grp["fund_flow_1week"].sum()),
+            "flow_1w_fmt": _fmt_flow(float(grp["fund_flow_1week"].sum())),
+            "flow_1m": float(grp["fund_flow_1month"].sum()),
+            "flow_1m_fmt": _fmt_flow(float(grp["fund_flow_1month"].sum())),
+            "market_share": (aum / total_aum * 100) if total_aum > 0 else 0.0,
+            "is_rex": bool(grp["is_rex"].any()),
+        })
+    ss_providers.sort(key=lambda x: x["aum"], reverse=True)
+
+    # Top 10 / Bottom 10 by 1W flow
+    ss_sorted = ss.sort_values("fund_flow_1week", ascending=False)
+    ss_top10 = _fund_rows(ss_sorted.head(10), total_aum)
+    ss_bottom10 = _fund_rows(ss_sorted.tail(10).sort_values("fund_flow_1week", ascending=True), total_aum)
 
     # Build group maps
     ss_tickers = ss["ticker_clean"].tolist()
@@ -1117,6 +1190,9 @@ def get_ss_report(db: Session | None = None) -> dict:
         "data_as_of": cache["data_as_of"], "data_as_of_short": cache.get("data_as_of_short", ""),
         "kpis": kpis,
         "aum_pie": aum_pie,
+        "providers": ss_providers,
+        "top10": ss_top10,
+        "bottom10": ss_bottom10,
         "flow_charts": flow_charts,
         "aum_charts": aum_charts,
         "volume_charts": volume_charts,
