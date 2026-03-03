@@ -1,0 +1,18 @@
+code,description
+ACTV,Active
+DLST,Delisted
+ACQU,Acquired
+UNLS,Unlisted
+SUSP,Suspended
+HALT,Halted
+PRIV,Private Company
+EXPD,Expired
+POST,Postponed
+PEND,Pending Listing
+TKCH,Ticker Change
+LIQU,Liquidated
+INAC,Inactive
+WHIS,When Issued
+PRNA,Price Not Available
+INFO,Additional Information on DES
+RCNA,Reason not available
