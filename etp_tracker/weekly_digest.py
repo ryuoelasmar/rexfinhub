@@ -152,18 +152,18 @@ def _filter_suites(suites: list[dict]) -> list[dict]:
 # ---------------------------------------------------------------------------
 # Data gathering
 # ---------------------------------------------------------------------------
-def _gather_market_data() -> dict | None:
+def _gather_market_data(db=None) -> dict | None:
     """Gather Bloomberg data: ETF-only summary + raw DataFrame for category breakdowns."""
     try:
         from webapp.services.market_data import (
             data_available, get_rex_summary, get_data_as_of,
             get_category_summary, get_master_data,
         )
-        if not data_available():
+        if not data_available(db):
             return None
 
-        summary = get_rex_summary(fund_structure="ETF")
-        master = get_master_data()
+        summary = get_rex_summary(db, fund_structure="ETF")
+        master = get_master_data(db)
 
         # Filter master to ETF-only for rex_df
         fund_type_col = next((c for c in master.columns if c.lower().strip() == "fund_type"), None)
@@ -180,7 +180,7 @@ def _gather_market_data() -> dict | None:
         landscape = {}
         for cat_name, display_name, color in _LANDSCAPE_CATS:
             try:
-                cat_data = get_category_summary(cat_name)
+                cat_data = get_category_summary(db, cat_name)
                 landscape[cat_name] = cat_data
             except Exception as exc:
                 log.warning("Category summary failed for %s: %s", cat_name, exc)
@@ -190,7 +190,7 @@ def _gather_market_data() -> dict | None:
             "suites": summary.get("suites", []),
             "flow_chart": summary.get("flow_chart", {}),
             "perf_metrics": summary.get("perf_metrics", {}),
-            "data_as_of": get_data_as_of(),
+            "data_as_of": get_data_as_of(db),
             "rex_df": rex_df,
             "master": master,
             "landscape": landscape,
@@ -1028,7 +1028,7 @@ def build_weekly_digest_html(
     week_ending = today.strftime("%B %d, %Y")
     dash_url = dashboard_url or _DEFAULT_DASHBOARD_URL
 
-    market = _gather_market_data()
+    market = _gather_market_data(db=db_session)
     filing = _gather_filing_data(db_session, days=7)
 
     data_as_of = market["data_as_of"] if market else ""
