@@ -21,6 +21,7 @@ outputs/
 Excel/
 backup/
 data/
+!data/rules/
 nul
 
 # Environment variables and secrets

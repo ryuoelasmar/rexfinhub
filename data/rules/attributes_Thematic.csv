@@ -1,0 +1,346 @@
+ticker,map_thematic_category
+TRFM US,Consumer
+FWD US,Innovation
+ACES US,Clean Energy
+CCNR US,Natural Resources
+DTEC US,Innovation
+ELFY US,Infrastructure
+OGIG US,Tech & Communications
+AOTG US,Innovation
+ARKQ US,Robotics & Automation
+ARKF US,FinTech
+ARKG US,Healthcare
+ARKK US,Innovation
+ARKW US,Cloud Computing
+ARKX US,Space
+WUGI US,5G
+NXTE US,Environment
+ABOT US,Innovation
+ABLD US,Strategy
+YOLO US,Cannabis and Psychedelics
+VICE US,Cannabis and Psychedelics
+BEDZ US,"Travel, Vacation & Leisure"
+PSIL US,Cannabis and Psychedelics
+EATZ US,"Travel, Vacation & Leisure"
+ENFR US,Infrastructure
+MGNR US,Natural Resources
+MJ US,Cannabis and Psychedelics
+AIVC US,Artificial Intelligence
+ITEQ US,Tech & Communications
+HACK US,Cybersecurity
+IPAY US,FinTech
+ETHO US,Low Carbon
+BATT US,Electric Car & Battery
+NDIV US,Natural Resources
+IBUY US,Consumer
+BLOK US,Blockchain & Crypto
+AWAY US,"Travel, Vacation & Leisure"
+GAMR US,Sports & Esports
+PPI US,Inflation
+AVIE US,Inflation
+BKGI US,Infrastructure
+BITQ US,Blockchain & Crypto
+BWEB US,Tech & Communications
+TOKE US,Cannabis and Psychedelics
+CCSO US,Low Carbon
+WGMI US,Blockchain & Crypto
+INFR US,Infrastructure
+TIME US,Innovation
+CSNR US,Natural Resources
+INCO US,Consumer
+ECON US,Consumer
+SPC US,IPO & SPAC
+SIXG US,5G
+QTUM US,Quantum Computing
+DMCY US,Corporate Culture
+WFH US,Environment
+XOVR US,Corporate Culture
+SPCZ US,IPO & SPAC
+RNWZ US,Clean Energy
+LRNZ US,Artificial Intelligence
+EMQQ US,EM Tech
+FMQQ US,EM Tech
+FRNW US,Clean Energy
+FCLD US,Cloud Computing
+FDIG US,Blockchain & Crypto
+FBOT US,Robotics & Automation
+FDCF US,5G
+FDFF US,FinTech
+FMED US,Healthcare
+FDTX US,Tech & Communications
+FDRV US,Electric Car & Battery
+FCPI US,Inflation
+RBLD US,Infrastructure
+FAI US,Artificial Intelligence
+EMDM US,Corporate Culture
+FTIF US,Inflation
+SKYY US,Cloud Computing
+XPND US,Tech & Communications
+FAN US,Clean Energy
+FPXE US,IPO & SPAC
+MISL US,Defense
+FTAG US,Agriculture
+FTRI US,Natural Resources
+LEGR US,Blockchain & Crypto
+MDEV US,Healthcare
+ARVR US,Metaverse & Video Gaming
+NXTG US,5G
+ILDR US,Innovation
+FPXI US,IPO & SPAC
+QCLN US,Clean Energy
+GRID US,Infrastructure
+CIBR US,Cybersecurity
+ROBT US,Robotics & Automation
+EKG US,Healthcare
+EMLP US,Infrastructure
+ISHP US,E-Commerce
+CARZ US,Electric Car & Battery
+BNGE US,Sports & Esports
+CRPT US,Blockchain & Crypto
+FPX US,IPO & SPAC
+FIW US,Water
+GUNR US,Natural Resources
+NFRA US,Infrastructure
+BUYZ US,E-Commerce
+XDAT US,Tech & Communications
+HELX US,Healthcare
+IQM US,Artificial Intelligence
+GAST US,Artificial Intelligence
+GCAD US,Space
+GGRW US,Innovation
+LOPP US,Environment
+KROP US,Future of Food
+AIQ US,Artificial Intelligence
+DRIV US,Electric Car & Battery
+BKCH US,Blockchain & Crypto
+AQWA US,Water
+CTEC US,Clean Energy
+CLOU US,Cloud Computing
+BUG US,Cybersecurity
+DTCR US,5G
+SHLD US,Defense
+EBIZ US,E-Commerce
+FINX US,FinTech
+MILN US,Consumer
+DMAT US,Transition Metals
+GNOM US,Healthcare
+HEAL US,Healthcare
+HYDR US,Clean Energy
+IPAV US,Infrastructure
+SNSR US,Tech & Communications
+LIT US,Electric Car & Battery
+MLPX US,Infrastructure
+MLPA US,Infrastructure
+RNRG US,Clean Energy
+BOTZ US,Robotics & Automation
+SOCL US,Tech & Communications
+PAVE US,Infrastructure
+URA US,Nuclear
+HERO US,Sports & Esports
+GBUY US,Consumer
+GDOC US,Healthcare
+GINN US,Innovation
+DARP US,Innovation
+MEDI US,Healthcare
+HAPI US,Corporate Culture
+HAPS US,Corporate Culture
+TEC US,Tech & Communications
+BCDF US,Blockchain & Crypto
+INFL US,Inflation
+MEDX US,Healthcare
+SPAQ US,IPO & SPAC
+HOMZ US,Housing
+WCEO US,Corporate Culture
+INQQ US,EM Tech
+WOMN US,Corporate Culture
+SCAP US,Infrastructure
+LOUP US,Artificial Intelligence
+ISMD US,Corporate Culture
+PPA US,Defense
+BLKC US,Blockchain & Crypto
+SATO US,Blockchain & Crypto
+BMVP US,Strategy
+POWA US,Strategy
+PKB US,Infrastructure
+PBD US,Clean Energy
+PIO US,Water
+PEJ US,"Travel, Vacation & Leisure"
+CUT US,Agriculture
+GBLD US,Environment
+ERTH US,Environment
+QQQS US,Innovation
+KNCT US,Tech & Communications
+GGME US,Sports & Esports
+CGW US,Water
+CSD US,IPO & SPAC
+TAN US,Clean Energy
+PIPE US,Infrastructure
+PHO US,Water
+PBW US,Clean Energy
+ETEC US,Environment
+TEMP US,Low Carbon
+JTEK US,Tech & Communications
+SSPX US,Environment
+AGIX US,Artificial Intelligence
+KWEB US,EM Tech
+KARS US,Electric Car & Battery
+KTEC US,Tech & Communications
+KGRN US,Clean Energy
+OBOR US,Infrastructure
+KLXY US,Consumer
+KQQQ US,Tech & Communications
+PWER US,Clean Energy
+BILD US,Infrastructure
+IQRA US,Infrastructure
+NBDS US,Innovation
+NBET US,Infrastructure
+PJBF US,Environment
+KDEF US,Defense
+USAI US,Infrastructure
+ODDS US,Sports & Esports
+BULD US,Robotics & Automation
+SRVR US,Infrastructure
+TRFK US,Tech & Communications
+SHPP US,Infrastructure
+TOLZ US,Infrastructure
+ANEW US,Innovation
+TINY US,Tech & Communications
+OND US,Consumer
+SUPL US,Infrastructure
+UFO US,Space
+DAT US,Tech & Communications
+VERS US,Metaverse & Video Gaming
+ONLN US,Consumer
+PAWZ US,Consumer
+ION US,Electric Car & Battery
+CTEX US,Clean Energy
+SYNB US,Innovation
+PFUT US,Environment
+HTEC US,Healthcare
+ROBO US,Robotics & Automation
+NUKZ US,Nuclear
+IPO US,IPO & SPAC
+IPOS US,IPO & SPAC
+THNQ US,Artificial Intelligence
+METV US,Metaverse & Video Gaming
+WEED US,Cannabis and Psychedelics
+OZEM US,Healthcare
+CHAT US,Artificial Intelligence
+HUMN US,Robotics & Automation
+BETZ US,Sports & Esports
+NERD US,Metaverse & Video Gaming
+SPCX US,IPO & SPAC
+XITK US,Tech & Communications
+DECO US,Blockchain & Crypto
+HECO US,Blockchain & Crypto
+TEKX US,Tech & Communications
+NZAC US,Low Carbon
+NZUS US,Low Carbon
+SHE US,Corporate Culture
+XAR US,Defense
+GII US,Infrastructure
+GNR US,Natural Resources
+XHB US,Housing
+CNRG US,Clean Energy
+ROKT US,Space
+SIMS US,Infrastructure
+KOMP US,Artificial Intelligence
+HAIL US,Electric Car & Battery
+NANR US,Natural Resources
+XSW US,Tech & Communications
+XTL US,Tech & Communications
+URAN US,Nuclear
+STCE US,Blockchain & Crypto
+EUAD US,Defense
+PINK US,Healthcare
+SURI US,Healthcare
+TESL US,Electric Car & Battery
+BLCN US,Blockchain & Crypto
+MOTO US,Electric Car & Battery
+SOLR US,Clean Energy
+BOAT US,Infrastructure
+SPRX US,Innovation
+URNJ US,Nuclear
+LITP US,Electric Car & Battery
+URNM US,Nuclear
+CHGX US,Environment
+SAGP US,Strategy
+STXD US,Strategy
+FTWO US,Natural Resources
+AIFD US,Artificial Intelligence
+SUPP US,Strategy
+PWRD US,Low Carbon
+RSHO US,Strategy
+TOLL US,Strategy
+HRTS US,Healthcare
+CANC US,Healthcare
+GTEK US,Innovation
+CLOD US,Cloud Computing
+SPAM US,Cybersecurity
+FINE US,Consumer
+WISE US,Artificial Intelligence
+BOTT US,Robotics & Automation
+LIMI US,Electric Car & Battery
+NATO US,Defense
+HWAY US,Infrastructure
+HEAT US,Environment
+COPY US,Cannabis and Psychedelics
+JETS US,"Travel, Vacation & Leisure"
+WAR US,Defense
+VEGN US,Environment
+ZSC US,Clean Energy
+MOO US,Agriculture
+DGIN US,EM Tech
+DAPP US,Blockchain & Crypto
+EVX US,Environment
+BJK US,Sports & Esports
+GMET US,Transition Metals
+HAP US,Natural Resources
+NODE US,Blockchain & Crypto
+IBOT US,Robotics & Automation
+NLR US,Nuclear
+ESPO US,Sports & Esports
+VCLN US,Clean Energy
+VRAI US,Infrastructure
+JOET US,Strategy
+AIS US,Artificial Intelligence
+WCLD US,Cloud Computing
+WCBR US,Cybersecurity
+WTAI US,Artificial Intelligence
+WDNA US,Healthcare
+XAIX US,Artificial Intelligence
+PSWD US,Cybersecurity
+EMCR US,Low Carbon
+USNZ US,Low Carbon
+NRES US,Natural Resources
+UPGR US,Infrastructure
+BAI US,Artificial Intelligence
+IBLC US,Blockchain & Crypto
+IHAK US,Cybersecurity
+EMIF US,Infrastructure
+EFRA US,Environment
+ERET US,Environment
+BPAY US,FinTech
+ARTY US,Artificial Intelligence
+IVRS US,Metaverse & Video Gaming
+IDNA US,Healthcare
+ICLN US,Clean Energy
+IGF US,Infrastructure
+WOOD US,Agriculture
+BMED US,Healthcare
+ILIT US,Electric Car & Battery
+VEGI US,Agriculture
+TCHI US,EM Tech
+IBRN US,Healthcare
+IGE US,Natural Resources
+IDRV US,Electric Car & Battery
+ITA US,Defense
+ITB US,Housing
+IFRA US,Infrastructure
+IHI US,Healthcare
+TECB US,Tech & Communications
+BMAX US,Blockchain & Crypto
+DRNZ US,Drones
+FMET US,Metaverse & Video Gaming
+MINV US,Tech & Communications
+RIFR US,Infrastructure
