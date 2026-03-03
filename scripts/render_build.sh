@@ -1,14 +1,15 @@
 #!/bin/bash
-# Render build step: stash git-tracked data files before the persistent disk hides them.
+# Render build step: stash git-tracked data files + export CSVs for low-memory loading.
 # At build time, data/ contains the git repo files (disk not yet mounted).
 # We copy them to .data_sync/ so render_start.sh can restore them at runtime.
+# We also export Excel sheets to CSV so the app never needs to open the 25MB xlsm.
 
 set -e
 
 SRC="/opt/render/project/src"
 SYNC="$SRC/.data_sync"
 
-mkdir -p "$SYNC/rules"
+mkdir -p "$SYNC/rules" "$SYNC/sheets"
 
 # Stash rules CSVs
 if [ -d "$SRC/data/rules" ]; then
@@ -16,10 +17,14 @@ if [ -d "$SRC/data/rules" ]; then
     echo "Stashed $(ls "$SYNC/rules/" | wc -l) rules files"
 fi
 
-# Stash bloomberg_daily_file.xlsm
-if [ -f "$SRC/data/DASHBOARD/bloomberg_daily_file.xlsm" ]; then
-    cp "$SRC/data/DASHBOARD/bloomberg_daily_file.xlsm" "$SYNC/bloomberg_daily_file.xlsm"
-    echo "Stashed bloomberg_daily_file.xlsm ($(stat -c%s "$SYNC/bloomberg_daily_file.xlsm") bytes)"
+# Export Excel sheets to CSV (much lower memory at runtime)
+XLSM="$SRC/data/DASHBOARD/bloomberg_daily_file.xlsm"
+if [ -f "$XLSM" ]; then
+    echo "Exporting Excel sheets to CSV..."
+    python3 "$SRC/scripts/export_sheets.py" "$XLSM" "$SYNC/sheets"
+    echo "CSV export complete: $(ls "$SYNC/sheets/" | wc -l) files"
+    # Also keep the raw xlsm as fallback
+    cp "$XLSM" "$SYNC/bloomberg_daily_file.xlsm"
 fi
 
 echo "Build stash complete"

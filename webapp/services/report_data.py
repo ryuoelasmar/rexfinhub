@@ -99,39 +99,63 @@ def _safe_float(val: Any) -> float:
 # ---------------------------------------------------------------------------
 # Data loading
 # ---------------------------------------------------------------------------
-def _load_all() -> dict[str, Any]:
-    """Load Bloomberg sheets + rules CSVs, build master dataframe."""
+# Pre-exported CSV directory (created by scripts/render_build.sh)
+_CSV_SHEETS_DIR = Path("data/DASHBOARD/sheets")
+
+
+def _read_sheet(name: str, index_col: int | None = None) -> pd.DataFrame:
+    """Read a sheet from pre-exported CSV (fast, low memory) or fall back to Excel."""
+    csv_path = _CSV_SHEETS_DIR / f"{name}.csv"
+    if csv_path.exists():
+        log.info("Reading %s from CSV", name)
+        return pd.read_csv(csv_path, index_col=index_col, engine="python", on_bad_lines="skip")
+
+    # Fall back to Excel
     path = DATA_FILE
     if not path.exists():
-        log.warning("Bloomberg data file not found: %s", path)
+        return pd.DataFrame()
+    log.info("Reading %s from Excel (slow path)", name)
+    return pd.read_excel(path, sheet_name=name, engine="openpyxl", index_col=index_col)
+
+
+def _load_all() -> dict[str, Any]:
+    """Load Bloomberg sheets + rules CSVs, build master dataframe."""
+    # Check if we have CSVs or the Excel file
+    has_csvs = (_CSV_SHEETS_DIR / "w1.csv").exists()
+    has_excel = DATA_FILE.exists()
+
+    if not has_csvs and not has_excel:
+        log.warning("No data source found (no CSVs at %s, no Excel at %s)", _CSV_SHEETS_DIR, DATA_FILE)
         return {"available": False}
 
-    log.info("Loading report data from %s", path)
+    source = "CSV" if has_csvs else "Excel"
+    log.info("Loading report data from %s", source)
 
-    # Check which sheets are available
-    try:
-        import openpyxl
-        wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
-        available_sheets = set(wb.sheetnames)
-        wb.close()
-    except Exception as e:
-        log.error("Cannot open data file %s: %s", path, e)
-        return {"available": False}
+    if has_excel and not has_csvs:
+        # Verify required sheets exist in the Excel file
+        try:
+            import openpyxl
+            wb = openpyxl.load_workbook(DATA_FILE, read_only=True, data_only=True)
+            available_sheets = set(wb.sheetnames)
+            wb.close()
+        except Exception as e:
+            log.error("Cannot open data file %s: %s", DATA_FILE, e)
+            return {"available": False}
 
-    required = {"w1", "w2", "w3", "w4"}
-    if not required.issubset(available_sheets):
-        missing = required - available_sheets
-        log.warning("Data file missing required sheets %s: %s", missing, path)
-        return {"available": False}
+        required = {"w1", "w2", "w3", "w4"}
+        if not required.issubset(available_sheets):
+            missing = required - available_sheets
+            log.warning("Data file missing required sheets %s", missing)
+            return {"available": False}
 
     # Read w1-w4
     try:
-        w1 = pd.read_excel(path, sheet_name="w1", engine="openpyxl")
-        w2 = pd.read_excel(path, sheet_name="w2", engine="openpyxl")
-        w3 = pd.read_excel(path, sheet_name="w3", engine="openpyxl")
-        w4_raw = pd.read_excel(path, sheet_name="w4", engine="openpyxl")
+        w1 = _read_sheet("w1")
+        w2 = _read_sheet("w2")
+        w3 = _read_sheet("w3")
+        w4_raw = _read_sheet("w4")
     except Exception as e:
-        log.error("Error reading sheets from %s: %s", path, e)
+        log.error("Error reading sheets: %s", e)
         return {"available": False}
 
     # Rename w1 columns
@@ -199,9 +223,9 @@ def _load_all() -> dict[str, Any]:
 
     # Read time-series sheets (wide format: dates as index, tickers as columns)
     try:
-        data_aum = pd.read_excel(path, sheet_name="data_aum", engine="openpyxl", index_col=0)
-        data_flow = pd.read_excel(path, sheet_name="data_flow", engine="openpyxl", index_col=0)
-        data_notional = pd.read_excel(path, sheet_name="data_notional", engine="openpyxl", index_col=0)
+        data_aum = _read_sheet("data_aum", index_col=0)
+        data_flow = _read_sheet("data_flow", index_col=0)
+        data_notional = _read_sheet("data_notional", index_col=0)
 
         # Strip " Equity" suffix from column names
         for df in [data_aum, data_flow, data_notional]:
