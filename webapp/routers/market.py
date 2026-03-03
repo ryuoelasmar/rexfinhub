@@ -178,8 +178,7 @@ def rex_view(request: Request, db: Session = Depends(get_db), product_type: str 
     """REX View - executive dashboard by suite."""
     svc = _svc()
     available = svc.data_available(db)
-    # Filter out "Defined Outcome" from categories (no REX products)
-    rex_categories = [c for c in svc.ALL_CATEGORIES if c != "Defined Outcome"]
+    rex_categories = svc.REX_SUITES
     if not available:
         return templates.TemplateResponse("market/rex.html", {
             "request": request,

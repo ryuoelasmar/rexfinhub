@@ -390,6 +390,8 @@ class MktMasterData(Base):
     issuer_display: Mapped[str | None] = mapped_column(String(200))
     is_rex: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     fund_category_key: Mapped[str | None] = mapped_column(String(200))
+    primary_category: Mapped[str | None] = mapped_column(String(20))
+    rex_suite: Mapped[str | None] = mapped_column(String(50))
     # Category attributes
     map_li_category: Mapped[str | None] = mapped_column(String(100))
     map_li_subcategory: Mapped[str | None] = mapped_column(String(100))

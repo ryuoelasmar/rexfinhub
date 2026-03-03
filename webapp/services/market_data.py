@@ -38,16 +38,8 @@ _ts_time: float = 0.0
 
 _CACHE_TTL = 3600  # 1 hour
 
-_REX_SUITE_NAMES = {
-    "Leverage & Inverse - Single Stock": "T-REX",
-    "Leverage & Inverse - Index/Basket/ETF Based": "MicroSector",
-    "Income - Single Stock": "Growth & Income",
-    "Income - Index/Basket/ETF Based": "Premium Income",
-    "Crypto": "Crypto",
-    "Defined Outcome": "Defined Outcome",
-    "Thematic": "Thematic",
-    "Leverage & Inverse - Unknown/Miscellaneous": "L&I Other",
-}
+
+
 
 # ---------------------------------------------------------------------------
 # Column mapping: flat DB names -> legacy prefixed names (backward compat)
@@ -107,7 +99,7 @@ _EMPTY_MASTER_COLS = [
     "ticker", "fund_name", "issuer", "etp_category", "category_display",
     "issuer_display", "is_rex", "ticker_clean", "fund_type",
     "t_w4.aum", "t_w4.fund_flow_1week", "t_w4.fund_flow_1month",
-    "t_w4.fund_flow_ytd",
+    "t_w4.fund_flow_ytd", "primary_category", "rex_suite",
 ]
 
 
@@ -327,11 +319,15 @@ def get_kpis(df: pd.DataFrame) -> dict:
 #  REX Summary 
 
 _SUITE_ORDER = [
-    "Leverage & Inverse - Single Stock",
-    "Leverage & Inverse - Index/Basket/ETF Based",
+    "T-REX",
+    "MicroSectors",
+    "Equity Premium Income",
+    "Growth & Income",
+    "IncomeMax",
+    "Autocallable",
     "Crypto",
-    "Income - Single Stock",
-    "Income - Index/Basket/ETF Based",
+    "Osprey",
+    "T-Bill",
     "Thematic",
 ]
 
@@ -360,10 +356,14 @@ def get_rex_summary(db: Session, fund_structure: str | None = None, category: st
     if "ticker_clean" in rex.columns:
         rex = rex.drop_duplicates(subset=["ticker_clean"], keep="first")
 
-    # Category filter (narrows to one category for KPIs)
+    # Category filter (narrows to one suite for KPIs)
     if category and category != "All":
-        rex = rex[rex["category_display"].str.strip() == category.strip()].copy()
-        all_cats = all_cats[all_cats["category_display"].str.strip() == category.strip()].copy()
+        # Support filtering by rex_suite name
+        if "rex_suite" in rex.columns and category.strip() in _SUITE_ORDER:
+            rex = rex[rex["rex_suite"].fillna("").str.strip() == category.strip()].copy()
+        else:
+            rex = rex[rex["category_display"].str.strip() == category.strip()].copy()
+            all_cats = all_cats[all_cats["category_display"].str.strip() == category.strip()].copy()
 
     overall = get_kpis(rex)
 
@@ -534,21 +534,27 @@ def get_rex_summary(db: Session, fund_structure: str | None = None, category: st
     appreciation_chart_data = {"suites": [], "values": []}
 
     suites = []
+    has_rex_suite = "rex_suite" in rex.columns and rex["rex_suite"].notna().any()
     for suite_name in _SUITE_ORDER:
-        rex_suite = rex[rex["category_display"].str.strip() == suite_name.strip()] if not rex.empty else rex
-        if rex_suite.empty:
+        if has_rex_suite:
+            rex_suite_df = rex[rex["rex_suite"].fillna("").str.strip() == suite_name.strip()] if not rex.empty else rex
+        else:
+            rex_suite_df = rex[rex["category_display"].str.strip() == suite_name.strip()] if not rex.empty else rex
+        if rex_suite_df.empty:
             continue
-        cat_suite = all_cats[all_cats["category_display"].str.strip() == suite_name.strip()] if not all_cats.empty else all_cats
+        # Market share: REX AUM in this suite's primary_category vs total category AUM
+        suite_categories = set(rex_suite_df["category_display"].dropna().unique()) if "category_display" in rex_suite_df.columns else set()
+        cat_suite = all_cats[all_cats["category_display"].isin(suite_categories)] if suite_categories and not all_cats.empty else all_cats
         cat_aum = float(cat_suite["t_w4.aum"].sum())
-        rex_aum = float(rex_suite["t_w4.aum"].sum())
+        rex_aum = float(rex_suite_df["t_w4.aum"].sum())
         market_share = (rex_aum / cat_aum * 100) if cat_aum > 0 else 0.0
 
         # MoM for suite
-        prev_rex_aum = float(rex_suite["t_w4.aum_1"].sum()) if "t_w4.aum_1" in rex_suite.columns else 0.0
+        prev_rex_aum = float(rex_suite_df["t_w4.aum_1"].sum()) if "t_w4.aum_1" in rex_suite_df.columns else 0.0
         aum_mom = round((rex_aum - prev_rex_aum) / prev_rex_aum * 100, 1) if prev_rex_aum > 0 else 0.0
 
         # Top movers by 1-week flow
-        sorted_suite = rex_suite.sort_values("t_w4.fund_flow_1week", ascending=False)
+        sorted_suite = rex_suite_df.sort_values("t_w4.fund_flow_1week", ascending=False)
         top_movers = []
         for _, row in sorted_suite.head(5).iterrows():
             flow = float(row.get("t_w4.fund_flow_1week", 0))
@@ -580,20 +586,20 @@ def get_rex_summary(db: Session, fund_structure: str | None = None, category: st
                 "positive": flow >= 0,
             })
 
-        kpis = get_kpis(rex_suite)
+        kpis = get_kpis(rex_suite_df)
 
         # Suite market appreciation
-        s_aum_curr = float(rex_suite["t_w4.aum"].sum())
-        s_aum_prev = float(rex_suite["t_w4.aum_1"].sum()) if "t_w4.aum_1" in rex_suite.columns else 0.0
-        s_flow_1m = float(rex_suite["t_w4.fund_flow_1month"].sum()) if "t_w4.fund_flow_1month" in rex_suite.columns else 0.0
+        s_aum_curr = float(rex_suite_df["t_w4.aum"].sum())
+        s_aum_prev = float(rex_suite_df["t_w4.aum_1"].sum()) if "t_w4.aum_1" in rex_suite_df.columns else 0.0
+        s_flow_1m = float(rex_suite_df["t_w4.fund_flow_1month"].sum()) if "t_w4.fund_flow_1month" in rex_suite_df.columns else 0.0
         s_mkt_appr = s_aum_curr - s_aum_prev - s_flow_1m
         kpis["mkt_appreciation"] = round(s_mkt_appr, 2)
         kpis["mkt_appreciation_fmt"] = _fmt_flow(s_mkt_appr)
         kpis["mkt_appreciation_positive"] = s_mkt_appr >= 0
 
         # Suite volume (30-day avg sum)
-        if "t_w2.average_vol_30day" in rex_suite.columns:
-            s_vol = float(rex_suite["t_w2.average_vol_30day"].sum())
+        if "t_w2.average_vol_30day" in rex_suite_df.columns:
+            s_vol = float(rex_suite_df["t_w2.average_vol_30day"].sum())
             kpis["volume"] = round(s_vol, 0)
             if s_vol >= 1_000_000:
                 kpis["volume_fmt"] = f"{s_vol/1_000_000:,.1f}M"
@@ -606,9 +612,9 @@ def get_rex_summary(db: Session, fund_structure: str | None = None, category: st
             kpis["volume_fmt"] = "N/A"
 
         # Suite bid-ask spread (AUM-weighted avg)
-        if "t_w2.average_bidask_spread" in rex_suite.columns:
-            s_aum_col = rex_suite["t_w4.aum"]
-            s_spread_col = rex_suite["t_w2.average_bidask_spread"]
+        if "t_w2.average_bidask_spread" in rex_suite_df.columns:
+            s_aum_col = rex_suite_df["t_w4.aum"]
+            s_spread_col = rex_suite_df["t_w2.average_bidask_spread"]
             s_valid = (s_aum_col > 0) & (s_spread_col > 0)
             if s_valid.any():
                 s_weighted = float((s_spread_col[s_valid] * s_aum_col[s_valid]).sum() / s_aum_col[s_valid].sum())
@@ -622,8 +628,8 @@ def get_rex_summary(db: Session, fund_structure: str | None = None, category: st
             kpis["avg_spread_fmt"] = "N/A"
 
         # Suite avg yield
-        if yield_col in rex_suite.columns:
-            s_yields = rex_suite[yield_col].dropna()
+        if yield_col in rex_suite_df.columns:
+            s_yields = rex_suite_df[yield_col].dropna()
             s_yields = s_yields[s_yields.apply(lambda v: not (isinstance(v, float) and math.isnan(v)))]
             kpis["avg_yield"] = round(float(s_yields.mean()), 2) if len(s_yields) > 0 else 0.0
             kpis["avg_yield_fmt"] = f"{kpis['avg_yield']:.2f}%"
@@ -634,14 +640,14 @@ def get_rex_summary(db: Session, fund_structure: str | None = None, category: st
         # Sparkline: last 4 months of REX AUM in this suite (oldest to newest)
         sparkline = []
         for col in ["t_w4.aum_4", "t_w4.aum_3", "t_w4.aum_2", "t_w4.aum_1"]:
-            if col in rex_suite.columns:
-                sparkline.append(round(float(rex_suite[col].sum()), 2))
+            if col in rex_suite_df.columns:
+                sparkline.append(round(float(rex_suite_df[col].sum()), 2))
             else:
                 sparkline.append(0.0)
 
         # Top 50 products in this suite by AUM
         suite_products = []
-        top_suite = rex_suite.nlargest(min(50, len(rex_suite)), "t_w4.aum")
+        top_suite = rex_suite_df.nlargest(min(50, len(rex_suite_df)), "t_w4.aum")
         for _, row in top_suite.iterrows():
             p_ticker = str(row.get("ticker_clean", row.get("ticker", "")))
             p_aum = float(row.get("t_w4.aum", 0) or 0)
@@ -656,16 +662,15 @@ def get_rex_summary(db: Session, fund_structure: str | None = None, category: st
                 "is_rex": bool(row.get("is_rex", False)),
             })
 
-        short = _suite_short(suite_name)
-        display_name = _REX_SUITE_NAMES.get(suite_name, short)
+        display_name = suite_name  # rex_suite values are already display names
 
-        # Flow data for bar chart (use REX display names)
-        flow_1w = float(rex_suite["t_w4.fund_flow_1week"].sum()) if "t_w4.fund_flow_1week" in rex_suite.columns else 0.0
-        flow_1m = float(rex_suite["t_w4.fund_flow_1month"].sum()) if "t_w4.fund_flow_1month" in rex_suite.columns else 0.0
-        flow_3m = float(rex_suite["t_w4.fund_flow_3month"].sum()) if "t_w4.fund_flow_3month" in rex_suite.columns else 0.0
-        flow_6m = float(rex_suite["t_w4.fund_flow_6month"].sum()) if "t_w4.fund_flow_6month" in rex_suite.columns else 0.0
-        flow_ytd = float(rex_suite["t_w4.fund_flow_ytd"].sum()) if "t_w4.fund_flow_ytd" in rex_suite.columns else 0.0
-        flow_1y = float(rex_suite["t_w4.fund_flow_1year"].sum()) if "t_w4.fund_flow_1year" in rex_suite.columns else 0.0
+        # Flow data for bar chart
+        flow_1w = float(rex_suite_df["t_w4.fund_flow_1week"].sum()) if "t_w4.fund_flow_1week" in rex_suite_df.columns else 0.0
+        flow_1m = float(rex_suite_df["t_w4.fund_flow_1month"].sum()) if "t_w4.fund_flow_1month" in rex_suite_df.columns else 0.0
+        flow_3m = float(rex_suite_df["t_w4.fund_flow_3month"].sum()) if "t_w4.fund_flow_3month" in rex_suite_df.columns else 0.0
+        flow_6m = float(rex_suite_df["t_w4.fund_flow_6month"].sum()) if "t_w4.fund_flow_6month" in rex_suite_df.columns else 0.0
+        flow_ytd = float(rex_suite_df["t_w4.fund_flow_ytd"].sum()) if "t_w4.fund_flow_ytd" in rex_suite_df.columns else 0.0
+        flow_1y = float(rex_suite_df["t_w4.fund_flow_1year"].sum()) if "t_w4.fund_flow_1year" in rex_suite_df.columns else 0.0
         flow_chart_data["suites"].append(display_name)
         flow_chart_data["flow_1w"].append(round(flow_1w, 2))
         flow_chart_data["flow_1m"].append(round(flow_1m, 2))
@@ -684,8 +689,8 @@ def get_rex_summary(db: Session, fund_structure: str | None = None, category: st
 
         suites.append({
             "name": suite_name,
-            "rex_name": _REX_SUITE_NAMES.get(suite_name, suite_name),
-            "short_name": short,
+            "rex_name": display_name,
+            "short_name": display_name,
             "kpis": kpis,
             "market_share": round(market_share, 1),
             "market_share_fmt": f"{market_share:.1f}%",
@@ -738,6 +743,8 @@ def _build_suite_time_series(rex_df: pd.DataFrame, fund_structure: str | None = 
     total_vals = []
     suite_vals: dict[str, list[float]] = {}
 
+    has_rex_suite = "rex_suite" in rex_df.columns and rex_df["rex_suite"].notna().any()
+
     # Build 12-month + current = 13 data points
     aum_cols = [(i, f"t_w4.aum_{i}") for i in range(12, 0, -1)] + [(0, "t_w4.aum")]
     for i, col in aum_cols:
@@ -753,26 +760,20 @@ def _build_suite_time_series(rex_df: pd.DataFrame, fund_structure: str | None = 
         total_vals.append(round(float(rex_df[col].sum()), 2))
 
         for suite_name in _SUITE_ORDER:
-            display_name = _REX_SUITE_NAMES.get(suite_name, suite_name)
-            if display_name not in suite_vals:
-                suite_vals[display_name] = []
-            suite_df = rex_df[rex_df["category_display"].str.strip() == suite_name.strip()] if not rex_df.empty else rex_df
-            suite_vals[display_name].append(round(float(suite_df[col].sum()), 2))
+            if suite_name not in suite_vals:
+                suite_vals[suite_name] = []
+            if has_rex_suite:
+                suite_df = rex_df[rex_df["rex_suite"].fillna("").str.strip() == suite_name.strip()] if not rex_df.empty else rex_df
+            else:
+                suite_df = rex_df[rex_df["category_display"].str.strip() == suite_name.strip()] if not rex_df.empty else rex_df
+            suite_vals[suite_name].append(round(float(suite_df[col].sum()), 2))
 
     return {"labels": labels, "total": total_vals, "suites": suite_vals}
 
 
 def _suite_short(name: str) -> str:
-    mapping = {
-        "Leverage & Inverse - Single Stock": "L&I Single Stock",
-        "Leverage & Inverse - Index/Basket/ETF Based": "L&I Index/ETF",
-        "Crypto": "Crypto",
-        "Income - Single Stock": "Income Single Stock",
-        "Income - Index/Basket/ETF Based": "Income Index/ETF",
-        "Thematic": "Thematic",
-        "Defined Outcome": "Defined Outcome",
-    }
-    return mapping.get(name, name)
+    """Short display name for a suite (used in charts/labels)."""
+    return name  # rex_suite names are already short enough
 
 
 def _apply_slicer_filter(df: pd.DataFrame, field: str, value) -> pd.DataFrame:
@@ -839,6 +840,8 @@ ALL_CATEGORIES = [
     "Defined Outcome",
     "Thematic",
 ]
+
+REX_SUITES = list(_SUITE_ORDER)
 
 
 def get_slicer_options(db: Session, category: str) -> list[dict]:

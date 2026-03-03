@@ -34,26 +34,34 @@ from etp_tracker.email_alerts import (
 
 log = logging.getLogger(__name__)
 
-# Suites to exclude from the digest
-_EXCLUDED_SUITES = {"MicroSector", "L&I Other"}
+# Suites to exclude from the digest (London products not in US reports)
+_EXCLUDED_SUITES = {"London"}
 
-# Suite colors (v3 palette)
+# Suite colors (v3 palette -- matches rex_suite names from rex_suite_mapping.csv)
 _SUITE_COLORS = {
     "T-REX": "#e74c3c",
+    "MicroSectors": "#2d3436",
+    "Equity Premium Income": "#0984e3",
     "Growth & Income": "#f39c12",
-    "Premium Income": "#0984e3",
+    "IncomeMax": "#6c5ce7",
+    "Autocallable": "#00cec9",
     "Crypto": "#8e44ad",
+    "Osprey": "#fdcb6e",
+    "T-Bill": "#636e72",
     "Thematic": "#27ae60",
-    "Defined Outcome": "#00b894",
 }
 
 _SUITE_ABBREVS = {
     "T-REX": "T-REX",
+    "MicroSectors": "MicroS",
+    "Equity Premium Income": "EPI",
     "Growth & Income": "G&I",
-    "Premium Income": "Prem",
+    "IncomeMax": "IMAX",
+    "Autocallable": "Auto",
     "Crypto": "Crypto",
+    "Osprey": "Osprey",
+    "T-Bill": "T-Bill",
     "Thematic": "Thm",
-    "Defined Outcome": "DO",
 }
 
 # Income categories for yield filtering

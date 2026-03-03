@@ -1,4 +1,4 @@
-"""Excel ingest: read Bloomberg data (bbg_data.xlsx or legacy) and join ETP sheets on ticker."""
+"""Excel ingest: read bloomberg_daily_file.xlsm sheets (w1-w4, s1) into canonical format."""
 from __future__ import annotations
 
 import logging
@@ -7,29 +7,22 @@ from pathlib import Path
 import pandas as pd
 
 from market.config import (
-    DATA_FILE, BASE_FIELDS, W2_FIELDS, W3_FIELDS, W4_FIELDS,
+    DATA_FILE,
     W2_PREFIX, W3_PREFIX, W4_PREFIX,
     SHEET_W1, SHEET_W2, SHEET_W3, SHEET_W4, SHEET_S1, SHEET_MKT_STATUS,
     W1_COL_MAP, W2_COL_MAP, W3_COL_MAP, W4_FLOW_COL_MAP,
-    SHEET_ETP_BASE, SHEET_ETP_METRICS, SHEET_ETP_RETURNS,
-    SHEET_ETP_FLOWS, SHEET_STOCK_DATA,
 )
 
 log = logging.getLogger(__name__)
 
 
 def read_input(data_file: Path | str | None = None) -> dict:
-    """Read the input Excel file.
-
-    Auto-detects format:
-    - New BBG format: w1/w2/w3/w4/s1/mkt_status sheets
-    - Legacy 5-sheet: etp_base/etp_metrics/etp_returns/etp_flows/stock_data
-    - Legacy single-sheet: data_import
+    """Read bloomberg_daily_file.xlsm (w1/w2/w3/w4/s1 sheets).
 
     Returns dict with keys:
     - etp_combined: all ETP sheets joined on ticker with prefixed columns
-    - stock_data: raw stock_data sheet
-    - mkt_status: market status reference (new format only)
+    - stock_data: raw s1 sheet
+    - mkt_status: market status reference (if present)
     - source_path: str path to input file
     """
     path = Path(data_file) if data_file else DATA_FILE
@@ -40,22 +33,12 @@ def read_input(data_file: Path | str | None = None) -> dict:
     xl = pd.ExcelFile(path, engine="openpyxl")
     sheets = xl.sheet_names
 
-    # Detect format
-    if SHEET_W1 in sheets:
-        etp, stock, mkt_status = _read_bbg_format(xl)
-    elif SHEET_ETP_BASE in sheets:
-        etp = _read_5sheet(xl)
-        stock = _read_stock(xl, SHEET_STOCK_DATA)
-        mkt_status = pd.DataFrame()
-    elif "data_import" in sheets:
-        etp = _read_legacy(xl)
-        stock = _read_stock(xl, "stock_data")
-        mkt_status = pd.DataFrame()
-    else:
+    if SHEET_W1 not in sheets:
         raise ValueError(
-            f"Unrecognized input format. Expected sheets: "
-            f"{SHEET_W1} or {SHEET_ETP_BASE} or data_import. Found: {sheets}"
+            f"bloomberg_daily_file missing required w1 sheet. Found: {sheets}"
         )
+
+    etp, stock, mkt_status = _read_bbg_format(xl)
 
     return {
         "etp_combined": etp,
@@ -172,96 +155,6 @@ def _process_w4(w4: pd.DataFrame) -> pd.DataFrame:
 
 
 # ---------------------------------------------------------------------------
-# Legacy 5-sheet format (etp_base/etp_metrics/etp_returns/etp_flows)
-# ---------------------------------------------------------------------------
-
-def _read_5sheet(xl: pd.ExcelFile) -> pd.DataFrame:
-    """Read legacy 5-sheet format and join ETP sheets on ticker."""
-    base = _read_sheet(xl, SHEET_ETP_BASE)
-    metrics = _read_sheet(xl, SHEET_ETP_METRICS)
-    returns = _read_sheet(xl, SHEET_ETP_RETURNS)
-    flows = _read_sheet(xl, SHEET_ETP_FLOWS)
-
-    # Validate ticker column exists
-    for name, df in [("etp_base", base), ("etp_metrics", metrics),
-                     ("etp_returns", returns), ("etp_flows", flows)]:
-        if "ticker" not in df.columns:
-            raise ValueError(f"Sheet '{name}' missing 'ticker' column")
-
-    # Drop rows with null ticker
-    base = base.dropna(subset=["ticker"])
-    metrics = metrics.dropna(subset=["ticker"])
-    returns = returns.dropna(subset=["ticker"])
-    flows = flows.dropna(subset=["ticker"])
-
-    log.info("etp_base: %d rows, etp_metrics: %d, etp_returns: %d, etp_flows: %d",
-             len(base), len(metrics), len(returns), len(flows))
-
-    # Rename metrics/returns/flows columns with prefixes (except ticker)
-    metrics_rename = {c: f"{W2_PREFIX}{c}" for c in metrics.columns if c != "ticker"}
-    returns_rename = {c: f"{W3_PREFIX}{c}" for c in returns.columns if c != "ticker"}
-    flows_rename = {c: f"{W4_PREFIX}{c}" for c in flows.columns if c != "ticker"}
-
-    metrics = metrics.rename(columns=metrics_rename)
-    returns = returns.rename(columns=returns_rename)
-    flows = flows.rename(columns=flows_rename)
-
-    # Join on ticker (left join from base)
-    combined = base
-    combined = combined.merge(metrics, on="ticker", how="left")
-    combined = combined.merge(returns, on="ticker", how="left")
-    combined = combined.merge(flows, on="ticker", how="left")
-
-    log.info("ETP combined (5-sheet): %d rows x %d cols", *combined.shape)
-    return combined
-
-
-# ---------------------------------------------------------------------------
-# Legacy single-sheet format (data_import)
-# ---------------------------------------------------------------------------
-
-def _read_legacy(xl: pd.ExcelFile) -> pd.DataFrame:
-    """Read legacy single-sheet data_import format."""
-    raw = _read_sheet(xl, "data_import")
-    raw = raw.dropna(subset=["ticker"])
-
-    # Build rename map (case-insensitive)
-    w2_lower = {f.lower() for f in W2_FIELDS}
-    w3_lower = {f.lower() for f in W3_FIELDS}
-    w4_lower = {f.lower() for f in W4_FIELDS}
-    base_lower = {f.lower() for f in BASE_FIELDS}
-
-    # Keep only first occurrence of each field name
-    seen_lower = set()
-    keep_cols = []
-    for col in raw.columns:
-        col_lower = col.lower().strip()
-        if col_lower in seen_lower:
-            continue
-        if col_lower in base_lower or col_lower in w2_lower or \
-           col_lower in w3_lower or col_lower in w4_lower:
-            keep_cols.append(col)
-            seen_lower.add(col_lower)
-
-    raw = raw[keep_cols].copy()
-
-    # Apply prefixes
-    rename = {}
-    for col in raw.columns:
-        cl = col.lower().strip()
-        if cl in w2_lower:
-            rename[col] = f"{W2_PREFIX}{cl}"
-        elif cl in w3_lower:
-            rename[col] = f"{W3_PREFIX}{cl}"
-        elif cl in w4_lower:
-            rename[col] = f"{W4_PREFIX}{cl}"
-
-    raw = raw.rename(columns=rename)
-    log.info("Legacy data_import: %d rows x %d cols", *raw.shape)
-    return raw
-
-
-# ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
@@ -270,12 +163,3 @@ def _read_sheet(xl: pd.ExcelFile, sheet: str) -> pd.DataFrame:
     df = xl.parse(sheet)
     df.columns = [str(c).strip() for c in df.columns]
     return df
-
-
-def _read_stock(xl: pd.ExcelFile, sheet_name: str) -> pd.DataFrame:
-    """Read stock data sheet if it exists."""
-    if sheet_name in xl.sheet_names:
-        stock = _read_sheet(xl, sheet_name)
-        log.info("stock_data: %d rows", len(stock))
-        return stock
-    return pd.DataFrame()

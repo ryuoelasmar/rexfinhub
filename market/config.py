@@ -47,7 +47,7 @@ TOP_N_ISSUERS = 8
 # ---------------------------------------------------------------------------
 # Input Excel sheet names
 # ---------------------------------------------------------------------------
-# New canonical format (bbg_data.xlsx)
+# bloomberg_daily_file.xlsm sheet names
 SHEET_W1 = "w1"            # base data (22 cols)
 SHEET_W2 = "w2"            # metrics (11 cols, includes Fund Name to drop)
 SHEET_W3 = "w3"            # returns (11 cols, includes Fund Name to drop)
@@ -56,15 +56,6 @@ SHEET_S1 = "s1"            # stock data (29 cols)
 SHEET_MKT_STATUS = "mkt_status"  # reference (16 rows)
 
 BBG_SHEETS = [SHEET_W1, SHEET_W2, SHEET_W3, SHEET_W4, SHEET_S1, SHEET_MKT_STATUS]
-
-# Legacy 5-sheet format
-SHEET_ETP_BASE = "etp_base"
-SHEET_ETP_METRICS = "etp_metrics"
-SHEET_ETP_RETURNS = "etp_returns"
-SHEET_ETP_FLOWS = "etp_flows"
-SHEET_STOCK_DATA = "stock_data"
-
-INPUT_SHEETS = [SHEET_ETP_BASE, SHEET_ETP_METRICS, SHEET_ETP_RETURNS, SHEET_ETP_FLOWS, SHEET_STOCK_DATA]
 
 # ---------------------------------------------------------------------------
 # Column rename maps (BBG abbreviated -> canonical snake_case)
@@ -226,7 +217,7 @@ RULE_FILES = {
 }
 
 # ---------------------------------------------------------------------------
-# Output column prefixes (for q_master_data compatibility)
+# Output column prefixes
 # ---------------------------------------------------------------------------
 W2_PREFIX = "t_w2."
 W3_PREFIX = "t_w3."
