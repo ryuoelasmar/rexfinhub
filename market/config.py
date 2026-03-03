@@ -47,7 +47,11 @@ def _resolve_data_file() -> Path:
 
 DATA_FILE = _resolve_data_file()
 
-RULES_DIR = PROJECT_ROOT / "data" / "rules"
+# Rules: config/rules/ is git-tracked and NOT hidden by the persistent disk.
+# data/rules/ is the legacy location (hidden on Render by the persistent disk mount).
+_RULES_PRIMARY = PROJECT_ROOT / "config" / "rules"
+_RULES_FALLBACK = PROJECT_ROOT / "data" / "rules"
+RULES_DIR = _RULES_PRIMARY if _RULES_PRIMARY.exists() else _RULES_FALLBACK
 EXPORT_DIR = PROJECT_ROOT / "data" / "DASHBOARD" / "exports"
 HISTORY_DIR = PROJECT_ROOT / "data" / "DASHBOARD" / "history"
 LAST_RUN_FILE = PROJECT_ROOT / "data" / "DASHBOARD" / ".last_market_run.json"
