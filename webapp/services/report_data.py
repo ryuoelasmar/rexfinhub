@@ -223,6 +223,7 @@ def _load_all() -> dict[str, Any]:
 
     # Load rules CSVs
     fund_map = _read_csv(RULES_DIR / "fund_mapping.csv")
+    issuer_map = _read_csv(RULES_DIR / "issuer_mapping.csv")
     li_attrs = _read_csv(RULES_DIR / "attributes_LI.csv")
     cc_attrs = _read_csv(RULES_DIR / "attributes_CC.csv")
     rex_funds = _read_csv(RULES_DIR / "rex_funds.csv")
@@ -240,6 +241,19 @@ def _load_all() -> dict[str, Any]:
     else:
         master["etp_category"] = ""
 
+    # Merge issuer_mapping -> issuer_display (friendly name)
+    if not issuer_map.empty and {"etp_category", "issuer", "issuer_nickname"}.issubset(issuer_map.columns):
+        im = issuer_map[["etp_category", "issuer", "issuer_nickname"]].drop_duplicates()
+        issuer_col = "issuer" if "issuer" in master.columns else None
+        if issuer_col:
+            master = master.merge(im, on=["etp_category", "issuer"], how="left")
+            master["issuer_display"] = master["issuer_nickname"].fillna(master["issuer"])
+            master.drop(columns=["issuer_nickname"], inplace=True)
+        else:
+            master["issuer_display"] = master.get("issuer", "")
+    else:
+        master["issuer_display"] = master.get("issuer", "")
+
     # Merge LI attributes
     if "ticker" in li_attrs.columns:
         la = li_attrs.rename(columns={"ticker": "ticker_clean"})
@@ -252,10 +266,12 @@ def _load_all() -> dict[str, Any]:
 
     # Data as-of date
     data_as_of = ""
+    data_as_of_short = ""
     if has_timeseries and len(data_aum) > 0:
         last_date = data_aum.index.max()
         if pd.notna(last_date):
             data_as_of = last_date.strftime("%B %d, %Y")
+            data_as_of_short = last_date.strftime("%m/%d/%Y")
 
     log.info("Report data loaded: %d funds, timeseries=%s", len(master), has_timeseries)
 
@@ -269,7 +285,9 @@ def _load_all() -> dict[str, Any]:
         "rex_tickers": rex_tickers,
         "li_attrs": li_attrs,
         "cc_attrs": cc_attrs,
+        "issuer_map_df": issuer_map,
         "data_as_of": data_as_of,
+        "data_as_of_short": data_as_of_short,
     }
 
 
@@ -475,40 +493,79 @@ def _daily_series(wide_df: pd.DataFrame, tickers: list[str],
 
 
 # ---------------------------------------------------------------------------
+# KPI helper: WoW AUM change from time-series
+# ---------------------------------------------------------------------------
+def _compute_aum_wow(data_aum: pd.DataFrame, tickers: list[str]) -> tuple[str, bool]:
+    """Compute week-over-week AUM change from the last 2 weekly observations.
+
+    Returns (formatted_string, is_positive) e.g. ("+2.3% WoW", True).
+    """
+    if data_aum.empty or not tickers:
+        return ("", True)
+
+    available = [t for t in tickers if t in data_aum.columns]
+    if not available:
+        return ("", True)
+
+    df = data_aum[available].apply(pd.to_numeric, errors="coerce").fillna(0.0)
+    # Resample to weekly (Friday) and take last observation
+    weekly = df.resample("W-FRI").last()
+    if len(weekly) < 2:
+        return ("", True)
+
+    latest_total = float(weekly.iloc[-1].sum())
+    prev_total = float(weekly.iloc[-2].sum())
+    if prev_total <= 0:
+        return ("", True)
+
+    pct_change = (latest_total / prev_total - 1) * 100
+    sign = "+" if pct_change >= 0 else ""
+    return (f"{sign}{pct_change:.1f}% WoW", pct_change >= 0)
+
+
+# ---------------------------------------------------------------------------
 # L&I Report
 # ---------------------------------------------------------------------------
 def get_li_report() -> dict:
     """Data for Leveraged & Inverse report."""
     cache = _get_cache()
     if not cache.get("available"):
-        return {"available": False, "data_as_of": ""}
+        return {"available": False, "data_as_of": "", "data_as_of_short": ""}
 
     master = cache["master"].copy()
     data_aum = cache["data_aum"]
+    data_flow = cache["data_flow"]
     rex_tickers = cache["rex_tickers"]
 
     # Filter to LI tickers
     li = master[master["etp_category"] == "LI"].copy()
     if li.empty:
-        return {"available": True, "data_as_of": cache["data_as_of"],
+        return {"available": True, "data_as_of": cache["data_as_of"], "data_as_of_short": cache.get("data_as_of_short", ""),
                 "kpis": {}, "providers": [], "top10": [], "bottom10": [],
-                "chart": {"labels": [], "datasets": [], "total": []}}
+                "chart": {"labels": [], "datasets": [], "total": []},
+                "flow_chart": {"labels": [], "datasets": []}}
 
     # KPIs
     total_aum = float(li["aum"].sum())
     flow_1w = float(li["fund_flow_1week"].sum())
     flow_ytd = float(li["fund_flow_ytd"].sum())
+
+    # WoW AUM change from time-series
+    aum_change_1w, aum_change_positive = _compute_aum_wow(data_aum, li["ticker_clean"].tolist())
+
     kpis = {
         "count": len(li),
         "total_aum": _fmt_currency(total_aum),
+        "aum_change_1w": aum_change_1w,
+        "aum_change_positive": aum_change_positive,
         "flow_1w": _fmt_flow(flow_1w),
         "flow_1w_positive": flow_1w >= 0,
         "flow_ytd": _fmt_flow(flow_ytd),
         "flow_ytd_positive": flow_ytd >= 0,
     }
 
-    # Provider summary: group by issuer
-    issuer_col = "issuer" if "issuer" in li.columns else "fund_name"
+    # Provider summary: group by issuer display name
+    issuer_col = "issuer_display" if "issuer_display" in li.columns else ("issuer" if "issuer" in li.columns else "fund_name")
     providers = []
     for issuer, grp in li.groupby(issuer_col):
         if not issuer or (isinstance(issuer, float) and math.isnan(issuer)):
@@ -553,18 +610,22 @@ def get_li_report() -> dict:
 
     # Historical AUM chart (monthly, by issuer)
     li_tickers = li["ticker_clean"].tolist()
-    issuer_map = dict(zip(li["ticker_clean"], li[issuer_col].fillna("Unknown").astype(str)))
-    chart = _monthly_aum_last(data_aum, li_tickers, issuer_map, top_n=8)
+    issuer_grp_map = dict(zip(li["ticker_clean"], li[issuer_col].fillna("Unknown").astype(str)))
+    chart = _monthly_aum_last(data_aum, li_tickers, issuer_grp_map, top_n=8)
+
+    # Cumulative flow chart
+    flow_chart = _cumulative_flow(data_flow, li_tickers, issuer_grp_map, top_n=5)
 
     return {
         "available": True,
-        "data_as_of": cache["data_as_of"],
+        "data_as_of": cache["data_as_of"], "data_as_of_short": cache.get("data_as_of_short", ""),
         "kpis": kpis,
         "providers": providers,
         "total_row": total_row,
         "top10": top10,
         "bottom10": bottom10,
         "chart": chart,
+        "flow_chart": flow_chart,
     }
 
 
@@ -573,10 +634,11 @@ def _fund_rows(df: pd.DataFrame, total_aum: float) -> list[dict]:
     for _, r in df.iterrows():
         ticker = str(r.get("ticker_clean", r.get("ticker", "")))
         aum = _safe_float(r.get("aum", 0))
+        issuer_display = str(r.get("issuer_display", r.get("issuer", "")))
         rows.append({
             "ticker": ticker,
             "fund_name": str(r.get("fund_name", "")),
-            "issuer": str(r.get("issuer", "")),
+            "issuer": issuer_display,
             "aum": aum,
             "aum_fmt": _fmt_currency(aum),
             "flow_1d": _safe_float(r.get("fund_flow_1day", 0)),
@@ -596,28 +658,35 @@ def get_cc_report() -> dict:
     """Data for Covered Call report."""
     cache = _get_cache()
     if not cache.get("available"):
-        return {"available": False, "data_as_of": ""}
+        return {"available": False, "data_as_of": "", "data_as_of_short": ""}
 
     master = cache["master"].copy()
     data_aum = cache["data_aum"]
+    data_flow = cache["data_flow"]
     rex_tickers = cache["rex_tickers"]
 
     # Filter to CC tickers
     cc = master[master["etp_category"] == "CC"].copy()
     if cc.empty:
-        return {"available": True, "data_as_of": cache["data_as_of"],
+        return {"available": True, "data_as_of": cache["data_as_of"], "data_as_of_short": cache.get("data_as_of_short", ""),
                 "kpis": {}, "rex_funds": [], "top_flow_segments": {},
                 "top_yield_segments": {}, "aum_by_category": [],
                 "issuers": [], "all_products": [],
-                "issuer_aum_chart": {}, "rex_ts_chart": {}}
+                "issuer_aum_chart": {}, "rex_ts_chart": {},
+                "flow_chart": {"labels": [], "datasets": []}}
 
     total_aum = float(cc["aum"].sum())
     flow_1w = float(cc["fund_flow_1week"].sum())
     avg_yield = float(cc["annualized_yield"].replace(0, float("nan")).mean()) if "annualized_yield" in cc.columns else 0.0
 
+    # WoW AUM change from time-series
+    aum_change_1w, aum_change_positive = _compute_aum_wow(data_aum, cc["ticker_clean"].tolist())
+
     kpis = {
         "count": len(cc),
         "total_aum": _fmt_currency(total_aum),
+        "aum_change_1w": aum_change_1w,
+        "aum_change_positive": aum_change_positive,
         "flow_1w": _fmt_flow(flow_1w),
         "flow_1w_positive": flow_1w >= 0,
         "avg_yield": _fmt_pct(avg_yield),
@@ -695,7 +764,7 @@ def get_cc_report() -> dict:
 
     # Table 5: Issuer ranking
     issuers = []
-    issuer_col = "issuer"
+    issuer_col = "issuer_display" if "issuer_display" in cc.columns else "issuer"
     for issuer, grp in cc.groupby(issuer_col):
         if not issuer or (isinstance(issuer, float) and math.isnan(issuer)):
             continue
@@ -733,9 +802,13 @@ def get_cc_report() -> dict:
     rex_cc_tickers = rex_cc["ticker_clean"].tolist()
     rex_ts_chart = _rex_market_share_ts(data_aum, cc_tickers, rex_cc_tickers)
 
+    # Chart 3: Cumulative flow chart
+    cc_issuer_map = dict(zip(cc["ticker_clean"], cc[issuer_col].fillna("Unknown").astype(str)))
+    flow_chart = _cumulative_flow(data_flow, cc_tickers, cc_issuer_map, top_n=5)
+
     return {
         "available": True,
-        "data_as_of": cache["data_as_of"],
+        "data_as_of": cache["data_as_of"], "data_as_of_short": cache.get("data_as_of_short", ""),
         "kpis": kpis,
         "rex_funds": rex_funds_list,
         "rex_total_aum": _fmt_currency(rex_total_aum),
@@ -746,6 +819,7 @@ def get_cc_report() -> dict:
         "all_products": all_products,
         "issuer_aum_chart": issuer_aum_chart,
         "rex_ts_chart": rex_ts_chart,
+        "flow_chart": flow_chart,
     }
 
 
@@ -753,10 +827,12 @@ def _cc_fund_rows(df: pd.DataFrame) -> list[dict]:
     rows = []
     for _, r in df.iterrows():
         aum = _safe_float(r.get("aum", 0))
+        issuer_display = str(r.get("issuer_display", r.get("issuer", "")))
         rows.append({
             "ticker": str(r.get("ticker_clean", "")),
             "fund_name": str(r.get("fund_name", "")),
-            "issuer": str(r.get("issuer", "")),
+            "issuer": issuer_display,
+            "is_rex": bool(r.get("is_rex", False)),
             "cc_type": str(r.get("cc_type", "")),
             "cc_category": str(r.get("cc_category", "")),
             "aum": aum,
@@ -799,7 +875,7 @@ def get_ss_report() -> dict:
     """Data for Single-Stock Leveraged ETFs report."""
     cache = _get_cache()
     if not cache.get("available"):
-        return {"available": False, "data_as_of": ""}
+        return {"available": False, "data_as_of": "", "data_as_of_short": ""}
 
     master = cache["master"].copy()
     data_aum = cache["data_aum"]
@@ -813,12 +889,12 @@ def get_ss_report() -> dict:
     ].copy() if "map_li_subcategory" in master.columns else pd.DataFrame()
 
     if ss.empty:
-        return {"available": True, "data_as_of": cache["data_as_of"],
+        return {"available": True, "data_as_of": cache["data_as_of"], "data_as_of_short": cache.get("data_as_of_short", ""),
                 "kpis": {}, "aum_pie": {}, "flow_charts": {},
                 "aum_charts": {}, "volume_charts": {}}
 
     total_aum = float(ss["aum"].sum())
-    issuer_col = "issuer"
+    issuer_col = "issuer_display" if "issuer_display" in ss.columns else "issuer"
 
     # Unique issuers and underliers
     issuers_unique = ss[issuer_col].dropna().unique().tolist()
@@ -826,9 +902,14 @@ def get_ss_report() -> dict:
     underliers_unique = ss[underlier_col].dropna().unique().tolist() if underlier_col else []
     top_underlier = underliers_unique[0] if underliers_unique else "N/A"
 
+    # WoW AUM change
+    aum_change_1w, aum_change_positive = _compute_aum_wow(data_aum, ss["ticker_clean"].tolist())
+
     kpis = {
         "count": len(ss),
         "total_aum": _fmt_currency(total_aum),
+        "aum_change_1w": aum_change_1w,
+        "aum_change_positive": aum_change_positive,
         "issuers": len(issuers_unique),
         "top_underlier": str(top_underlier).replace(" US", ""),
     }
@@ -892,7 +973,7 @@ def get_ss_report() -> dict:
 
     return {
         "available": True,
-        "data_as_of": cache["data_as_of"],
+        "data_as_of": cache["data_as_of"], "data_as_of_short": cache.get("data_as_of_short", ""),
         "kpis": kpis,
         "aum_pie": aum_pie,
         "flow_charts": flow_charts,

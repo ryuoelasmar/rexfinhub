@@ -9,7 +9,7 @@
 
 {% block content %}
 <div class="report-header">
-  <h1>Single-Stock Leveraged ETFs</h1>
+  <h1>Single-Stock Leveraged ETFs{% if data_as_of_short %} &ndash; {{ data_as_of_short }}{% endif %}</h1>
   {% if data_as_of %}<div class="report-data-date">Data as of {{ data_as_of }}</div>{% endif %}
 </div>
 
@@ -36,6 +36,7 @@
   <div class="report-kpi">
     <div class="label">Total AUM</div>
     <div class="num">{{ kpis.total_aum }}</div>
+    {% if kpis.aum_change_1w %}<div class="sub {{ 'positive' if kpis.aum_change_positive else 'negative' }}">{{ kpis.aum_change_1w }}</div>{% endif %}
   </div>
   <div class="report-kpi">
     <div class="label">Issuers</div>
@@ -57,8 +58,8 @@
   <div></div>
 </div>
 
-{# Flow Charts (3-column) #}
-<h2 class="report-section-title">Cumulative Flows</h2>
+{# Fund Flows Section #}
+<h3 class="report-group-heading">Fund Flows</h3>
 <div class="report-chart-row">
   <div class="report-chart-box">
     <h3>Total</h3>
@@ -74,8 +75,8 @@
   </div>
 </div>
 
-{# AUM Charts (3-column) #}
-<h2 class="report-section-title">AUM</h2>
+{# Assets Under Management Section #}
+<h3 class="report-group-heading">Assets Under Management</h3>
 <div class="report-chart-row">
   <div class="report-chart-box">
     <h3>Total</h3>
@@ -91,8 +92,8 @@
   </div>
 </div>
 
-{# Volume Charts (3-column) #}
-<h2 class="report-section-title">10-Day Rolling Avg Turnover</h2>
+{# Trading Volume Section #}
+<h3 class="report-group-heading">Trading Volume (10-Day Rolling Avg)</h3>
 <div class="report-chart-row">
   <div class="report-chart-box">
     <h3>Total</h3>

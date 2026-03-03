@@ -9,7 +9,7 @@
 
 {% block content %}
 <div class="report-header">
-  <h1>U.S. Leveraged & Inverse ETP Report</h1>
+  <h1>U.S. Leveraged and Inverse ETP Report{% if data_as_of_short %}: {{ data_as_of_short }}{% endif %}</h1>
   {% if data_as_of %}<div class="report-data-date">Data as of {{ data_as_of }}</div>{% endif %}
 </div>
 
@@ -36,6 +36,7 @@
   <div class="report-kpi">
     <div class="label">Total AUM</div>
     <div class="num">{{ kpis.total_aum }}</div>
+    {% if kpis.aum_change_1w %}<div class="sub {{ 'positive' if kpis.aum_change_positive else 'negative' }}">{{ kpis.aum_change_1w }}</div>{% endif %}
   </div>
   <div class="report-kpi">
     <div class="label">1W Net Flow</div>
@@ -66,7 +67,7 @@
     <tbody>
       {% for p in providers %}
       <tr class="{{ 'row-rex' if p.is_rex else '' }}">
-        <td>{{ p.issuer }}</td>
+        <td>{{ p.issuer }}{% if p.is_rex %}<span class="rex-badge">REX</span>{% endif %}</td>
         <td class="num-col">{{ p.count }}</td>
         <td class="num-col">{{ p.aum_fmt }}</td>
         <td class="num-col {{ 'positive' if p.flow_1w >= 0 else 'negative' }}">{{ p.flow_1w_fmt }}</td>
@@ -110,7 +111,7 @@
       <tr class="{{ 'row-rex' if f.is_rex else '' }}">
         <td><strong>{{ f.ticker }}</strong></td>
         <td>{{ f.fund_name }}</td>
-        <td>{{ f.issuer }}</td>
+        <td>{{ f.issuer }}{% if f.is_rex %}<span class="rex-badge">REX</span>{% endif %}</td>
         <td class="num-col">{{ f.aum_fmt }}</td>
         <td class="num-col {{ 'positive' if f.flow_1d >= 0 else 'negative' }}">{{ f.flow_1d_fmt }}</td>
         <td class="num-col {{ 'positive' if f.flow_1w >= 0 else 'negative' }}">{{ f.flow_1w_fmt }}</td>
@@ -141,7 +142,7 @@
       <tr class="{{ 'row-rex' if f.is_rex else '' }}">
         <td><strong>{{ f.ticker }}</strong></td>
         <td>{{ f.fund_name }}</td>
-        <td>{{ f.issuer }}</td>
+        <td>{{ f.issuer }}{% if f.is_rex %}<span class="rex-badge">REX</span>{% endif %}</td>
         <td class="num-col">{{ f.aum_fmt }}</td>
         <td class="num-col {{ 'positive' if f.flow_1d >= 0 else 'negative' }}">{{ f.flow_1d_fmt }}</td>
         <td class="num-col {{ 'positive' if f.flow_1w >= 0 else 'negative' }}">{{ f.flow_1w_fmt }}</td>
@@ -160,15 +161,20 @@
   </div>
 </div>
 
+{# Chart: Cumulative Net Flows #}
+<h2 class="report-section-title">Cumulative Net Flows</h2>
+<div class="report-chart-row-1">
+  <div class="report-chart-box">
+    <canvas id="chartCumulativeFlow" height="300"></canvas>
+  </div>
+</div>
+
 {% endif %}
 {% endblock %}
 
 {% block scripts %}
 <script>
 (function() {
-  var chartData = {{ chart | tojson }};
-  if (!chartData || !chartData.labels || chartData.labels.length === 0) return;
-
   var isDark = document.documentElement.getAttribute('data-theme') === 'dark';
   var gridColor = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)';
   var textColor = isDark ? '#9CA3AF' : '#6B7280';
@@ -178,90 +184,133 @@
     '#0891B2', '#BE185D', '#4338CA', '#9CA3AF'
   ];
 
-  var datasets = [];
-  chartData.datasets.forEach(function(ds, i) {
-    datasets.push({
-      label: ds.label,
-      data: ds.data,
-      backgroundColor: palette[i % palette.length],
-      borderWidth: 0,
-      stack: 'stack',
-      order: 2,
-    });
-  });
-
-  // Total line overlay
-  if (chartData.total && chartData.total.length > 0) {
-    datasets.push({
-      label: 'Total AUM',
-      data: chartData.total,
-      type: 'line',
-      borderColor: isDark ? '#E5E7EB' : '#111827',
-      backgroundColor: 'transparent',
-      borderWidth: 2,
-      pointRadius: 0,
-      yAxisID: 'y1',
-      order: 1,
-    });
+  function fmtMoney(v) {
+    if (Math.abs(v) >= 1000) return '$' + (v/1000).toFixed(1) + 'B';
+    if (Math.abs(v) >= 1) return '$' + v.toFixed(0) + 'M';
+    return '$' + v.toFixed(2) + 'M';
   }
 
-  new Chart(document.getElementById('chartHistoricalAum'), {
-    type: 'bar',
-    data: { labels: chartData.labels, datasets: datasets },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      interaction: { mode: 'index', intersect: false },
-      plugins: {
-        legend: {
-          position: 'bottom',
-          labels: { color: textColor, boxWidth: 12, padding: 10, font: { size: 11 } }
-        },
-        tooltip: {
-          callbacks: {
-            label: function(ctx) {
-              var val = ctx.parsed.y;
-              if (Math.abs(val) >= 1000) return ctx.dataset.label + ': $' + (val/1000).toFixed(1) + 'B';
-              return ctx.dataset.label + ': $' + val.toFixed(0) + 'M';
+  // Chart 1: Historical AUM (stacked bar + total line)
+  var chartData = {{ chart | tojson }};
+  if (chartData && chartData.labels && chartData.labels.length > 0) {
+    var datasets = [];
+    chartData.datasets.forEach(function(ds, i) {
+      datasets.push({
+        label: ds.label,
+        data: ds.data,
+        backgroundColor: palette[i % palette.length],
+        borderWidth: 0,
+        stack: 'stack',
+        order: 2,
+      });
+    });
+
+    if (chartData.total && chartData.total.length > 0) {
+      datasets.push({
+        label: 'Total AUM',
+        data: chartData.total,
+        type: 'line',
+        borderColor: isDark ? '#E5E7EB' : '#111827',
+        backgroundColor: 'transparent',
+        borderWidth: 2,
+        pointRadius: 0,
+        yAxisID: 'y1',
+        order: 1,
+      });
+    }
+
+    new Chart(document.getElementById('chartHistoricalAum'), {
+      type: 'bar',
+      data: { labels: chartData.labels, datasets: datasets },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: {
+            position: 'bottom',
+            labels: { color: textColor, boxWidth: 12, padding: 10, font: { size: 11 } }
+          },
+          tooltip: {
+            callbacks: {
+              label: function(ctx) { return ctx.dataset.label + ': ' + fmtMoney(ctx.parsed.y); }
             }
-          }
+          },
         },
-      },
-      scales: {
-        x: {
-          stacked: true,
-          grid: { display: false },
-          ticks: { color: textColor, font: { size: 10 }, maxRotation: 45, autoSkip: true, maxTicksLimit: 18 }
-        },
-        y: {
-          stacked: true,
-          position: 'left',
-          grid: { color: gridColor },
-          ticks: {
-            color: textColor,
-            font: { size: 10 },
-            callback: function(v) {
-              if (Math.abs(v) >= 1000) return '$' + (v/1000).toFixed(0) + 'B';
-              return '$' + v.toFixed(0) + 'M';
-            }
-          }
-        },
-        y1: {
-          position: 'right',
-          display: chartData.total && chartData.total.length > 0,
-          grid: { drawOnChartArea: false },
-          ticks: {
-            color: textColor,
-            font: { size: 10 },
-            callback: function(v) {
-              if (Math.abs(v) >= 1000) return '$' + (v/1000).toFixed(0) + 'B';
-              return '$' + v.toFixed(0) + 'M';
-            }
+        scales: {
+          x: {
+            stacked: true,
+            grid: { display: false },
+            ticks: { color: textColor, font: { size: 10 }, maxRotation: 45, autoSkip: true, maxTicksLimit: 18 }
+          },
+          y: {
+            stacked: true,
+            position: 'left',
+            grid: { color: gridColor },
+            ticks: { color: textColor, font: { size: 10 }, callback: function(v) { return fmtMoney(v); } }
+          },
+          y1: {
+            position: 'right',
+            display: chartData.total && chartData.total.length > 0,
+            grid: { drawOnChartArea: false },
+            ticks: { color: textColor, font: { size: 10 }, callback: function(v) { return fmtMoney(v); } }
           }
         }
       }
-    }
-  });
+    });
+  }
+
+  // Chart 2: Cumulative Net Flows
+  var flowData = {{ flow_chart | tojson }};
+  if (flowData && flowData.labels && flowData.labels.length > 0) {
+    var flowDatasets = [];
+    flowData.datasets.forEach(function(ds, i) {
+      flowDatasets.push({
+        label: ds.label,
+        data: ds.data,
+        borderColor: i === 0 ? (isDark ? '#E5E7EB' : '#111827') : palette[(i - 1) % palette.length],
+        backgroundColor: 'transparent',
+        borderWidth: i === 0 ? 2.5 : 1.5,
+        pointRadius: 0,
+        tension: 0.1,
+      });
+    });
+
+    // Thin labels
+    var maxLabels = 12;
+    var step = Math.max(1, Math.ceil(flowData.labels.length / maxLabels));
+
+    new Chart(document.getElementById('chartCumulativeFlow'), {
+      type: 'line',
+      data: { labels: flowData.labels, datasets: flowDatasets },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: {
+            position: 'bottom',
+            labels: { color: textColor, boxWidth: 12, padding: 10, font: { size: 11 } }
+          },
+          tooltip: {
+            callbacks: {
+              label: function(ctx) { return ctx.dataset.label + ': ' + fmtMoney(ctx.parsed.y); }
+            }
+          },
+        },
+        scales: {
+          x: {
+            grid: { display: false },
+            ticks: { color: textColor, font: { size: 10 }, maxRotation: 45, autoSkip: true, maxTicksLimit: 12 }
+          },
+          y: {
+            grid: { color: gridColor },
+            ticks: { color: textColor, font: { size: 10 }, callback: function(v) { return fmtMoney(v); } }
+          }
+        }
+      }
+    });
+  }
 })();
 </script>
 {% endblock %}

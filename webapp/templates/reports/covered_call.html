@@ -9,7 +9,7 @@
 
 {% block content %}
 <div class="report-header">
-  <h1>Covered Call ETFs AUM and Flows</h1>
+  <h1>Covered Call ETFs AUM and Flows{% if data_as_of_short %}- Week Ending {{ data_as_of_short }}{% endif %}</h1>
   {% if data_as_of %}<div class="report-data-date">Data as of {{ data_as_of }}</div>{% endif %}
 </div>
 
@@ -36,6 +36,7 @@
   <div class="report-kpi">
     <div class="label">Total AUM</div>
     <div class="num">{{ kpis.total_aum }}</div>
+    {% if kpis.aum_change_1w %}<div class="sub {{ 'positive' if kpis.aum_change_positive else 'negative' }}">{{ kpis.aum_change_1w }}</div>{% endif %}
   </div>
   <div class="report-kpi">
     <div class="label">1W Net Flow</div>
@@ -115,10 +116,10 @@
       </thead>
       <tbody>
         {% for f in funds %}
-        <tr>
+        <tr class="{{ 'row-rex' if f.is_rex else '' }}">
           <td><strong>{{ f.ticker }}</strong></td>
           <td>{{ f.fund_name }}</td>
-          <td>{{ f.issuer }}</td>
+          <td>{{ f.issuer }}{% if f.is_rex %}<span class="rex-badge">REX</span>{% endif %}</td>
           <td>{{ f.cc_category }}</td>
           <td class="num-col">{{ f.aum_fmt }}</td>
           <td class="num-col {{ 'positive' if f.flow_1m >= 0 else 'negative' }}">{{ f.flow_1m_fmt }}</td>
@@ -156,10 +157,10 @@
       </thead>
       <tbody>
         {% for f in funds %}
-        <tr>
+        <tr class="{{ 'row-rex' if f.is_rex else '' }}">
           <td><strong>{{ f.ticker }}</strong></td>
           <td>{{ f.fund_name }}</td>
-          <td>{{ f.issuer }}</td>
+          <td>{{ f.issuer }}{% if f.is_rex %}<span class="rex-badge">REX</span>{% endif %}</td>
           <td>{{ f.cc_category }}</td>
           <td class="num-col">{{ f.aum_fmt }}</td>
           <td class="num-col">{{ f.yield_fmt }}</td>
@@ -221,7 +222,7 @@
     <tbody>
       {% for iss in issuers %}
       <tr>
-        <td>{{ iss.issuer }}</td>
+        <td>{{ iss.issuer }}{% if 'REX' in iss.issuer %}<span class="rex-badge">REX</span>{% endif %}</td>
         <td class="num-col">{{ iss.count }}</td>
         <td class="num-col">{{ iss.aum_fmt }}</td>
         <td class="num-col {{ 'positive' if iss.flow_1w >= 0 else 'negative' }}">{{ iss.flow_1w_fmt }}</td>
@@ -232,6 +233,14 @@
       {% endfor %}
     </tbody>
   </table>
+</div>
+
+{# Chart: Cumulative Net Flows #}
+<h2 class="report-section-title">Cumulative Net Flows</h2>
+<div class="report-chart-row-1">
+  <div class="report-chart-box">
+    <canvas id="chartCumulativeFlow" height="300"></canvas>
+  </div>
 </div>
 
 {# Charts Row: Issuer Doughnut + REX Time Series #}
@@ -267,10 +276,10 @@
       </thead>
       <tbody>
         {% for f in all_products %}
-        <tr>
+        <tr class="{{ 'row-rex' if f.is_rex else '' }}">
           <td><strong>{{ f.ticker }}</strong></td>
           <td>{{ f.fund_name }}</td>
-          <td>{{ f.issuer }}</td>
+          <td>{{ f.issuer }}{% if f.is_rex %}<span class="rex-badge">REX</span>{% endif %}</td>
           <td>{{ f.cc_type }}</td>
           <td>{{ f.cc_category }}</td>
           <td class="num-col">{{ f.aum_fmt }}</td>
@@ -292,11 +301,9 @@
 document.querySelectorAll('.segment-tabs').forEach(function(tabGroup) {
   tabGroup.querySelectorAll('.segment-tab').forEach(function(btn) {
     btn.addEventListener('click', function() {
-      // Deactivate siblings
       tabGroup.querySelectorAll('.segment-tab').forEach(function(b) { b.classList.remove('active'); });
       btn.classList.add('active');
 
-      // Find all panels that are siblings of this tab group
       var target = btn.getAttribute('data-target');
       var parent = tabGroup.parentElement;
       parent.querySelectorAll('.segment-panel').forEach(function(panel) {
@@ -311,11 +318,66 @@ document.querySelectorAll('.segment-tabs').forEach(function(tabGroup) {
 // Charts
 (function() {
   var isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  var gridColor = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)';
   var textColor = isDark ? '#9CA3AF' : '#6B7280';
   var palette = [
     '#1E40AF', '#059669', '#DC2626', '#7C3AED', '#D97706',
     '#0891B2', '#BE185D', '#4338CA', '#65A30D', '#0D9488', '#9CA3AF'
   ];
+
+  function fmtMoney(v) {
+    if (Math.abs(v) >= 1000) return '$' + (v/1000).toFixed(1) + 'B';
+    if (Math.abs(v) >= 1) return '$' + v.toFixed(0) + 'M';
+    return '$' + v.toFixed(2) + 'M';
+  }
+
+  // Chart: Cumulative Net Flows
+  var flowData = {{ flow_chart | tojson }};
+  if (flowData && flowData.labels && flowData.labels.length > 0) {
+    var flowDatasets = [];
+    flowData.datasets.forEach(function(ds, i) {
+      flowDatasets.push({
+        label: ds.label,
+        data: ds.data,
+        borderColor: i === 0 ? (isDark ? '#E5E7EB' : '#111827') : palette[(i - 1) % palette.length],
+        backgroundColor: 'transparent',
+        borderWidth: i === 0 ? 2.5 : 1.5,
+        pointRadius: 0,
+        tension: 0.1,
+      });
+    });
+
+    new Chart(document.getElementById('chartCumulativeFlow'), {
+      type: 'line',
+      data: { labels: flowData.labels, datasets: flowDatasets },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: {
+            position: 'bottom',
+            labels: { color: textColor, boxWidth: 12, padding: 10, font: { size: 11 } }
+          },
+          tooltip: {
+            callbacks: {
+              label: function(ctx) { return ctx.dataset.label + ': ' + fmtMoney(ctx.parsed.y); }
+            }
+          },
+        },
+        scales: {
+          x: {
+            grid: { display: false },
+            ticks: { color: textColor, font: { size: 10 }, maxRotation: 45, autoSkip: true, maxTicksLimit: 12 }
+          },
+          y: {
+            grid: { color: gridColor },
+            ticks: { color: textColor, font: { size: 10 }, callback: function(v) { return fmtMoney(v); } }
+          }
+        }
+      }
+    });
+  }
 
   // Chart 1: Issuer Doughnut
   var issuerData = {{ issuer_aum_chart | tojson }};
@@ -344,9 +406,7 @@ document.querySelectorAll('.segment-tabs').forEach(function(tabGroup) {
               label: function(ctx) {
                 var total = ctx.dataset.data.reduce(function(a,b){ return a+b; }, 0);
                 var pct = total > 0 ? (ctx.parsed / total * 100).toFixed(1) : '0.0';
-                var val = ctx.parsed;
-                if (Math.abs(val) >= 1000) return ctx.label + ': $' + (val/1000).toFixed(1) + 'B (' + pct + '%)';
-                return ctx.label + ': $' + val.toFixed(0) + 'M (' + pct + '%)';
+                return ctx.label + ': ' + fmtMoney(ctx.parsed) + ' (' + pct + '%)';
               }
             }
           }
@@ -401,13 +461,10 @@ document.querySelectorAll('.segment-tabs').forEach(function(tabGroup) {
           },
           y: {
             position: 'left',
-            grid: { color: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)' },
+            grid: { color: gridColor },
             ticks: {
               color: textColor, font: { size: 10 },
-              callback: function(v) {
-                if (Math.abs(v) >= 1000) return '$' + (v/1000).toFixed(1) + 'B';
-                return '$' + v.toFixed(0) + 'M';
-              }
+              callback: function(v) { return fmtMoney(v); }
             }
           },
           y1: {
