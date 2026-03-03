@@ -574,7 +574,12 @@ def _aggregate_decomp(products: list[dict], group_key: str) -> list[dict]:
 
 
 @router.get("/flow-decomposition")
-def flow_decomposition_view(
+def flow_decomposition_redirect():
+    """Redirect to REX View (page removed)."""
+    return RedirectResponse("/market/rex", status_code=302)
+
+
+def _flow_decomposition_view_REMOVED(
     request: Request,
     period: str = Query(default="1m"),
     view: str = Query(default="category"),
@@ -835,235 +840,17 @@ def _build_white_space(df) -> dict:
 
 
 @router.get("/whitespace")
-def whitespace_view(
-    request: Request,
-    view: str = Query(default="gaps"),
-    fund_structure: str = Query(default="ETF"),
-    min_aum: float = Query(default=0),
-):
-    """White Space Analyzer - find product gaps in the market."""
-    svc = _svc()
-    available = svc.data_available()
-    if not available:
-        return templates.TemplateResponse("market/whitespace.html", {
-            "request": request, "available": False, "active_tab": "whitespace",
-            "data_as_of": svc.get_data_as_of(),
-        })
-    try:
-        df = svc.get_master_data()
-        ft_col = next((c for c in df.columns if c.lower().strip() == "fund_type"), None)
-        if ft_col and fund_structure != "all":
-            df = df[df[ft_col].isin([t.strip() for t in fund_structure.split(",")])]
-        if "ticker_clean" in df.columns:
-            df = df.drop_duplicates(subset=["ticker_clean"], keep="first")
-
-        ws = _build_white_space(df)
-
-        # Apply min AUM filter
-        if min_aum > 0:
-            ws["gaps"] = [g for g in ws["gaps"] if g["market_size"] >= min_aum]
-            ws["cc_gaps"] = [g for g in ws["cc_gaps"] if g["total_aum"] >= min_aum]
-
-        from webapp.services.market_data import _fmt_currency
-
-        return templates.TemplateResponse("market/whitespace.html", {
-            "request": request,
-            "available": True,
-            "active_tab": "whitespace",
-            "view": view,
-            "fund_structure": fund_structure,
-            "min_aum": min_aum,
-            "ws": ws,
-            "data_as_of": svc.get_data_as_of(),
-            "fmt_currency": _fmt_currency,
-        })
-    except Exception as e:
-        log.error("White space error: %s", e, exc_info=True)
-        return templates.TemplateResponse("market/whitespace.html", {
-            "request": request, "available": False, "active_tab": "whitespace",
-            "error": str(e), "data_as_of": svc.get_data_as_of(),
-        })
+def whitespace_redirect():
+    """Redirect to REX View (page removed)."""
+    return RedirectResponse("/market/rex", status_code=302)
 
 
 # ---------- Revenue Model ----------
 
 @router.get("/revenue")
-def revenue_view(
-    request: Request,
-    view: str = Query(default="category"),
-    fund_structure: str = Query(default="ETF"),
-):
-    """Revenue Model - AUM x Expense Ratio = annual revenue."""
-    import math
-    svc = _svc()
-    available = svc.data_available()
-    if not available:
-        return templates.TemplateResponse("market/revenue.html", {
-            "request": request, "available": False, "active_tab": "revenue",
-            "data_as_of": svc.get_data_as_of(),
-        })
-    try:
-        df = svc.get_master_data()
-        ft_col = next((c for c in df.columns if c.lower().strip() == "fund_type"), None)
-        if ft_col and fund_structure != "all":
-            df = df[df[ft_col].isin([t.strip() for t in fund_structure.split(",")])]
-        if "ticker_clean" in df.columns:
-            df = df.drop_duplicates(subset=["ticker_clean"], keep="first")
-
-        from webapp.services.market_data import _fmt_currency
-
-        # Per-product revenue
-        products = []
-        for _, row in df.iterrows():
-            aum = float(row.get("t_w4.aum", 0) or 0)
-            er = float(row.get("t_w2.expense_ratio", 0) or 0)
-            mgmt_fee = float(row.get("t_w2.management_fee", 0) or 0) if "t_w2.management_fee" in df.columns else 0.0
-            if aum <= 0 or er <= 0:
-                continue
-            revenue = aum * er / 100  # AUM in $M, ER in %, result in $M
-            # Flow-adjusted forward projection: annualized 1M flow rate
-            flow_1m = float(row.get("t_w4.fund_flow_1month", 0) or 0)
-            projected_aum_12m = aum + (flow_1m * 12)
-            projected_revenue = max(0, projected_aum_12m) * er / 100
-
-            products.append({
-                "ticker": str(row.get("ticker_clean", row.get("ticker", ""))),
-                "fund_name": str(row.get("fund_name", ""))[:40],
-                "category": str(row.get("category_display", "")),
-                "issuer": str(row.get("issuer_display", "")),
-                "is_rex": bool(row.get("is_rex", False)),
-                "aum": round(aum, 2),
-                "expense_ratio": round(er, 2),
-                "mgmt_fee": round(mgmt_fee, 2),
-                "revenue": round(revenue, 4),
-                "revenue_fmt": _fmt_currency(revenue),
-                "projected_revenue": round(projected_revenue, 4),
-                "projected_fmt": _fmt_currency(projected_revenue),
-                # Sensitivity scenarios
-                "rev_minus20": round(aum * 0.80 * er / 100, 4),
-                "rev_minus10": round(aum * 0.90 * er / 100, 4),
-                "rev_plus10": round(aum * 1.10 * er / 100, 4),
-                "rev_plus20": round(aum * 1.20 * er / 100, 4),
-            })
-
-        # Sort by revenue descending
-        products.sort(key=lambda x: x["revenue"], reverse=True)
-
-        # Aggregate by category
-        from collections import defaultdict
-        cat_agg: dict[str, dict] = {}
-        for p in products:
-            cat = p["category"] or "Unknown"
-            if cat not in cat_agg:
-                cat_agg[cat] = {"name": cat, "aum": 0, "revenue": 0, "projected": 0, "count": 0,
-                                "has_rex": False, "rex_revenue": 0}
-            cat_agg[cat]["aum"] += p["aum"]
-            cat_agg[cat]["revenue"] += p["revenue"]
-            cat_agg[cat]["projected"] += p["projected_revenue"]
-            cat_agg[cat]["count"] += 1
-            if p.get("is_rex"):
-                cat_agg[cat]["has_rex"] = True
-                cat_agg[cat]["rex_revenue"] += p["revenue"]
-
-        by_category = []
-        for c in cat_agg.values():
-            c["revenue"] = round(c["revenue"], 4)
-            c["projected"] = round(c["projected"], 4)
-            c["rex_revenue"] = round(c["rex_revenue"], 4)
-            c["aum"] = round(c["aum"], 2)
-            c["revenue_fmt"] = _fmt_currency(c["revenue"])
-            c["projected_fmt"] = _fmt_currency(c["projected"])
-            c["rex_revenue_fmt"] = _fmt_currency(c["rex_revenue"])
-            c["aum_fmt"] = _fmt_currency(c["aum"])
-            c["avg_er"] = round(c["revenue"] / c["aum"] * 100, 2) if c["aum"] > 0 else 0
-            c["rex_share_pct"] = round(c["rex_revenue"] / c["revenue"] * 100, 1) if c["revenue"] > 0 else 0
-            by_category.append(c)
-        by_category.sort(key=lambda x: x["revenue"], reverse=True)
-
-        # Aggregate by issuer
-        iss_agg: dict[str, dict] = {}
-        for p in products:
-            iss = p["issuer"] or "Unknown"
-            if iss not in iss_agg:
-                iss_agg[iss] = {"name": iss, "aum": 0, "revenue": 0, "projected": 0, "count": 0,
-                                "has_rex": False}
-            iss_agg[iss]["aum"] += p["aum"]
-            iss_agg[iss]["revenue"] += p["revenue"]
-            iss_agg[iss]["projected"] += p["projected_revenue"]
-            iss_agg[iss]["count"] += 1
-            if p.get("is_rex"):
-                iss_agg[iss]["has_rex"] = True
-
-        by_issuer = []
-        for c in iss_agg.values():
-            c["revenue"] = round(c["revenue"], 4)
-            c["projected"] = round(c["projected"], 4)
-            c["aum"] = round(c["aum"], 2)
-            c["revenue_fmt"] = _fmt_currency(c["revenue"])
-            c["projected_fmt"] = _fmt_currency(c["projected"])
-            c["aum_fmt"] = _fmt_currency(c["aum"])
-            c["avg_er"] = round(c["revenue"] / c["aum"] * 100, 2) if c["aum"] > 0 else 0
-            by_issuer.append(c)
-        by_issuer.sort(key=lambda x: x["revenue"], reverse=True)
-
-        # Totals
-        total_revenue = sum(p["revenue"] for p in products)
-        total_projected = sum(p["projected_revenue"] for p in products)
-        total_aum = sum(p["aum"] for p in products)
-        rex_products = [p for p in products if p.get("is_rex")]
-        rex_revenue = sum(p["revenue"] for p in rex_products)
-        rex_projected = sum(p["projected_revenue"] for p in rex_products)
-        rex_aum = sum(p["aum"] for p in rex_products)
-
-        # Chart data: top 10 categories by revenue
-        chart_labels = [c["name"][:25] for c in by_category[:10]]
-        chart_revenue = [c["revenue"] for c in by_category[:10]]
-        chart_rex = [c["rex_revenue"] for c in by_category[:10]]
-
-        return templates.TemplateResponse("market/revenue.html", {
-            "request": request,
-            "available": True,
-            "active_tab": "revenue",
-            "view": view,
-            "fund_structure": fund_structure,
-            "products": products[:100],
-            "by_category": by_category,
-            "by_issuer": by_issuer[:20],
-            "total": {
-                "aum": round(total_aum, 2),
-                "aum_fmt": _fmt_currency(total_aum),
-                "revenue": round(total_revenue, 4),
-                "revenue_fmt": _fmt_currency(total_revenue),
-                "projected": round(total_projected, 4),
-                "projected_fmt": _fmt_currency(total_projected),
-                "avg_er": round(total_revenue / total_aum * 100, 2) if total_aum > 0 else 0,
-                "count": len(products),
-            },
-            "rex": {
-                "aum": round(rex_aum, 2),
-                "aum_fmt": _fmt_currency(rex_aum),
-                "revenue": round(rex_revenue, 4),
-                "revenue_fmt": _fmt_currency(rex_revenue),
-                "projected": round(rex_projected, 4),
-                "projected_fmt": _fmt_currency(rex_projected),
-                "avg_er": round(rex_revenue / rex_aum * 100, 2) if rex_aum > 0 else 0,
-                "count": len(rex_products),
-                "share_pct": round(rex_revenue / total_revenue * 100, 1) if total_revenue > 0 else 0,
-            },
-            "chart": {
-                "labels": chart_labels,
-                "revenue": chart_revenue,
-                "rex": chart_rex,
-            },
-            "data_as_of": svc.get_data_as_of(),
-            "fmt_currency": _fmt_currency,
-        })
-    except Exception as e:
-        log.error("Revenue view error: %s", e, exc_info=True)
-        return templates.TemplateResponse("market/revenue.html", {
-            "request": request, "available": False, "active_tab": "revenue",
-            "error": str(e), "data_as_of": svc.get_data_as_of(),
-        })
+def revenue_redirect():
+    """Redirect to REX View (page removed)."""
+    return RedirectResponse("/market/rex", status_code=302)
 
 
 #  API endpoints (AJAX)
