@@ -1,0 +1,317 @@
+ticker,map_cc_underlier,map_cc_index,cc_type,cc_category
+JEPI US,,SPX,Traditional,Broad Beta
+JEPQ US,,NDX,Traditional,Tech
+QYLD US,,NDX,Traditional,Tech
+XYLD US,,SPX,Traditional,Broad Beta
+RYLD US,,RUT,Traditional,Small Caps
+XYLG US,,SPX,Traditional,Broad Beta
+RYLG US,,RUT,Traditional,Small Caps
+QYLG US,,NDX,Traditional,Tech
+DIVO US,,Basket,Traditional,Broad Beta
+FTHI US,,SPX,Traditional,Broad Beta
+KNG US,,SPATI,Traditional,Broad Beta
+FTQI US,,NDX,Traditional,Tech
+TLTW US,,TLT,Traditional,Fixed Income
+HYGW US,,HYG,Traditional,Fixed Income
+LQDW US,,LQD,Traditional,Fixed Income
+ACIO US,,Basket,Traditional,Broad Beta
+SPYI US,,SPX,Traditional,Broad Beta
+SIXH US,,SIX,Traditional,Broad Beta
+KLIP US,,KWEB,Traditional,Tech
+PBP US,,SPX,Traditional,Broad Beta
+CVRD US,,BXM,Traditional,Broad Beta
+VEGA US,,MXWD,Traditional,Broad Beta
+GPIX US,,SPX,Traditional,Broad Beta
+GPIQ US,,NDX,Traditional,Tech
+FEPI US,,SOLFANGT,Traditional,Tech
+ISPY US,,SPX,Synthetic,Broad Beta
+YBTC US,,BTC,Synthetic,Crypto
+YMAX US,,Basket,Synthetic,Tech
+YMAG US,,Basket,Synthetic,Tech
+ULTY US,,Basket,Synthetic,Tech
+QDTE US,,NDX,Synthetic,Tech
+XDTE US,,SPX,Synthetic,Broad Beta
+IVVW US,,SPX,Traditional,Broad Beta
+IWMW US,,RUT,Traditional,Small Caps
+IQQQ US,,NDX,Traditional,Tech
+QQQI US,,NDX,Traditional,Tech
+MLPD US,,BXPX,Traditional,Energy
+QQQY US,,NDX,Synthetic,Tech
+WDTE US,,SPX,Synthetic,Broad Beta
+IWMY US,,IWM,Synthetic,Small Caps
+SPYT US,,SPX,Synthetic,Broad Beta
+USOY US,,USO,Synthetic,Energy
+AIPI US,,BAILSI,Traditional,Tech
+GDXY US,,GDX,Synthetic,Commodity
+IWMI US,,RUT,Traditional,Small Caps
+KQQQ US,,QQQ,Traditional,Tech
+TSPY US,,SPX,Traditional,Broad Beta
+QDVO US,,Basket,Traditional,Broad Beta
+ITWO US,,RUT,Synthetic,Small Caps
+RDTE US,,RUT,Synthetic,Small Caps
+BTCI US,,BTC,Synthetic,Broad Beta
+TLTP US,,TLT,Traditional,Fixed Income
+BIGY US,,Basket,Synthetic,Broad Beta
+CEPI US,,BCADPS,Traditional,Crypto
+EGGS US,,Basket,Traditional,Broad Beta
+EGGY US,,Basket,Traditional,Broad Beta
+IYRI US,,Basket,Traditional,Real Estate
+BALI US,,SPX,Traditional,Broad Beta
+SDTY US,,SPX,Synthetic,Broad Beta
+PAPI US,,RLV,Traditional,Broad Beta
+QDTY US,,NDX,Synthetic,Broad Beta
+FTKI US,,RTY,Traditional,Small Caps
+RDTY US,,RUT,Synthetic,Small Caps
+TCAL US,,Basket,Traditional,Broad Beta
+BTCC US,,BTC,Synthetic,Crypto
+BPI US,,BTC,Synthetic,Crypto
+MAGY US,,Basket,Traditional,Tech
+BAGY US,,BTC,Synthetic,Crypto
+BITY US,,BTC,Synthetic,Crypto
+SOXY US,,Basket,Traditional,Tech
+FEAT US,,Basket,Synthetic,Tech
+FIVY US,,Basket,Synthetic,Tech
+LFGY US,,Basket,Traditional,Crypto
+GPTY US,,Basket,Traditional,Tech
+CHPY US,,Basket,Traditional,Tech
+RNTY US,,Basket,Traditional,Real Estate
+HCOW US,,Basket,Traditional,Broad Beta
+IDVO US,,Basket,Traditional,Broad Beta
+DYLG US,,DJI,Traditional,Broad Beta
+DJIA US,,DJI,Traditional,Broad Beta
+TYLG US,,BXLKH,Traditional,Tech
+BUYW US,,Basket,Traditional,Broad Beta
+SRHR US,,Basket,Traditional,Real Estate
+BLOX US,,Basket,Synthetic,Crypto
+KGLD US,,GLD,Synthetic,Commodity
+XLBI US,,Basket,Traditional,Broad Beta
+RBLY US,RBLX,,Synthetic,Single Stock
+XLCI US,,Basket,Traditional,Broad Beta
+XLUI US,,Basket,Traditional,Broad Beta
+XLSI US,,Basket,Traditional,Broad Beta
+XLRI US,,Basket,Traditional,Broad Beta
+XLEI US,,Basket,Traditional,Broad Beta
+XLKI US,,Basket,Traditional,Broad Beta
+XLVI US,,Basket,Traditional,Broad Beta
+XLII US,,Basket,Traditional,Broad Beta
+XLFI US,,Basket,Traditional,Broad Beta
+XLYI US,,Basket,Traditional,Broad Beta
+SLTY US,,Basket,Synthetic,Broad Beta
+ETCO US,,ETH,Synthetic,Crypto
+TDAQ US,,Basket,Traditional,Broad Beta
+WPAY US,,FOF,Traditional,Broad Beta
+ACKY US,,Basket,Traditional,Broad Beta
+SEPI US,,Basket,Traditional,Broad Beta
+QLDY US,,Basket,Synthetic,Broad Beta
+NIHI US,,MXEA,Traditional,Broad Beta
+ETHI US,,ETH,Synthetic,Crypto
+RDVI US,,Basket,Traditional,Broad Beta
+CSHI US,,Basket,Traditional,Fixed Income
+SDVD US,,Basket,Traditional,Small Caps
+BUCK US,,Basket,Synthetic,Fixed Income
+IGLD US,,GLD,Traditional,Commodity
+TDVI US,,Basket,Traditional,Tech
+HYBI US,,Basket,Traditional,Fixed Income
+LQTI US,,Basket,Traditional,Fixed Income
+XBTY US,BITX US,,Synthetic,Crypto
+DOGG US,,Basket,Traditional,Broad Beta
+HYTI US,,Basket,Traditional,Fixed Income
+CANQ US,,NDX,Traditional,Tech
+QQQT US,,NDX,Synthetic,Tech
+SPIN US,,Basket,Synthetic,Broad Beta
+GLDY US,,Basket,Synthetic,Commodity
+WEEL US,,Basket,Synthetic,Broad Beta
+DFII US,,BTC,Synthetic,Crypto
+YSPY US,SPXL US,,Synthetic,Broad Beta
+YQQQ US,,QQQ,Synthetic,Tech
+LTTI US,,Basket,Traditional,Fixed Income
+FDND US,,Basket,Traditional,Tech
+SPUT US,,Basket,Synthetic,Broad Beta
+SPYH US,,SPX,Traditional,Broad Beta
+FGSI US,,Basket,Traditional,Broad Beta
+QUP US,,Basket,Synthetic,Tech
+QDWN US,,Basket,Synthetic,Tech
+BNDY US,,Basket,Synthetic,Fixed Income
+PVEX US,,Basket,Traditional,Broad Beta
+HEQT US,,Basket,Traditional,Broad Beta
+GTR US,,Basket,Traditional,Broad Beta
+TYA US,,Basket,Synthetic,Fixed Income
+QCLR US,,NDX,Traditional,Tech
+QRMI US,,NDX,Traditional,Tech
+XCLR US,,SPX,Traditional,Broad Beta
+TESL US,TSLA US,,Synthetic,Single Stock
+WTPI US,,SPX,Synthetic,Broad Beta
+HBTA US,,Basket,Synthetic,Broad Beta
+EDGE US,,Basket,Synthetic,Broad Beta
+YGLD US,,Basket,Traditional,Commodity
+NMB US,,Basket,Traditional,Fixed Income
+QBUL US,,Basket,Traditional,Broad Beta
+SCLZ US,,Basket,Synthetic,Broad Beta
+NBOS US,,Basket,Traditional,Broad Beta
+USG US,,Basket,Synthetic,Commodity
+HEDG US,,Basket,Traditional,Broad Beta
+ETTY US,,ETH,Traditional,Crypto
+EHY US,,ETH,Traditional,Crypto
+IETH US,,ETH,Synthetic,Crypto
+ULTI US,,Basket,Traditional,Broad Beta
+GDXW US,,GLD,Synthetic,Commodity
+GLDW US,,GLD,Synthetic,Commodity
+SOLM US,,SOL,Synthetic,Crypto
+SEMY US,SOXL US,,Synthetic,Broad Beta
+XRPM US,,XRP,Traditional,Crypto
+TSYW US,,TSY,Synthetic,Fixed Income
+NUGY US,NUGT US,,Synthetic,Commodity
+BALQ US,,NDX,Traditional,Tech
+HEMI US,,SPX,Traditional,Broad Beta
+MLPI US,,MQMNLPTU,Traditional,Energy
+SCEP US,,Basket,Traditional,Broad Beta
+YBST US,,FOF,Synthetic,Broad Beta
+YBTY US,,FOF,Synthetic,Broad Beta
+CAIE US,,Autocall,Synthetic,Broad Beta
+CAIQ US,,Autocall,Synthetic,Tech
+ACEI US,,Autocall,Synthetic,Broad Beta
+ACII US,,Autocall,Synthetic,Broad Beta
+PAYH US,,Autocall,Synthetic,Broad Beta
+PAYM US,,Autocall,Synthetic,Broad Beta
+XOMO US,XOM US,,Synthetic,Single Stock
+WMTI US,WMT US,,Synthetic,Single Stock
+UNHW US,UNH US,,Synthetic,Single Stock
+UBEW US,UBER US,,Synthetic,Single Stock
+TSMY US,TSM US,,Synthetic,Single Stock
+TSLY US,TSLA US,,Synthetic,Single Stock
+TSLP US,TSLA US,,Synthetic,Single Stock
+TSII US,TSLA US,,Synthetic,Single Stock
+TSYY US,TSLA US,,Synthetic,Single Stock
+TSLW US,TSLA US,,Synthetic,Single Stock
+CRSH US,TSLA US,,Synthetic,Single Stock
+TLTX US,TLTX UA,,Synthetic,Fixed Income
+XYZY US,SQ US,,Synthetic,Single Stock
+SNOY US,SNOW US,,Synthetic,Single Stock
+SMCY US,SMCI US,,Synthetic,Single Stock
+SMCC US,SMCI US,,Synthetic,Single Stock
+SMYY US,SMCI US,,Synthetic,Single Stock
+SLJY US,SILJ US,,Traditional,Commodity
+RTYY US,RIOT US,,Synthetic,Single Stock
+RGYY US,RGTI US,,Synthetic,Single Stock
+RDYY US,RDDT US,,Synthetic,Single Stock
+TQQY US,QQQ US,,Synthetic,Tech
+QBY US,QBTS US,,Synthetic,Single Stock
+PYPY US,PYPL US,,Synthetic,Single Stock
+PLTY US,PLTR US,,Synthetic,Single Stock
+PLTW US,PLTR US,,Synthetic,Single Stock
+PLT US,PLTR US,,Synthetic,Single Stock
+PLYY US,PLTR US,,Synthetic,Single Stock
+PLTI US,PLTR US,,Synthetic,Single Stock
+NVDY US,NVDA US,,Synthetic,Single Stock
+NVII US,NVDA US,,Synthetic,Single Stock
+NVDW US,NVDA US,,Synthetic,Single Stock
+NVYY US,NVDA US,,Synthetic,Single Stock
+DIPS US,NVDA US,,Synthetic,Single Stock
+NFLY US,NFLX US,,Synthetic,Single Stock
+NFLP US,NFLX US,,Synthetic,Single Stock
+NFLW US,NFLX US,,Synthetic,Single Stock
+MSTY US,MSTR US,,Synthetic,Single Stock
+IMST US,MSTR US,,Synthetic,Single Stock
+MSII US,MSTR US,,Synthetic,Single Stock
+MSTW US,MSTR US,,Synthetic,Single Stock
+WNTR US,MSTR US,,Synthetic,Single Stock
+MTYY US,MSTR US,,Synthetic,Single Stock
+MST US,MSTR US,,Synthetic,Single Stock
+MSTK US,MSTR US,,Synthetic,Single Stock
+MSFO US,MSFT US,,Synthetic,Single Stock
+MSFY US,MSFT US,,Synthetic,Single Stock
+MSFW US,MSFT US,,Synthetic,Single Stock
+MRNY US,MRNA US,,Synthetic,Single Stock
+FBY US,META US,,Synthetic,Single Stock
+METW US,META US,,Synthetic,Single Stock
+FBYY US,META US,,Synthetic,Single Stock
+MARO US,MARA US,,Synthetic,Single Stock
+IMRA US,MARA US,,Synthetic,Single Stock
+MAAY US,MARA US,,Synthetic,Single Stock
+LLII US,LLY US,,Synthetic,Single Stock
+JPMO US,JPM US,,Synthetic,Single Stock
+IOYY US,IONQ US,,Synthetic,Single Stock
+YBIT US,IBIT US,,Synthetic,Crypto
+BITK US,IBIT US,,Synthetic,Crypto
+HOOY US,HOOD US,,Synthetic,Single Stock
+HOOW US,HOOD US,,Synthetic,Single Stock
+HOOI US,HOOD US,,Synthetic,Single Stock
+HOYY US,HOOD US,,Synthetic,Single Stock
+HOII US,HOOD US,,Synthetic,Single Stock
+HIMY US,HIMS US,,Synthetic,Single Stock
+HIYY US,HIMS US,,Synthetic,Single Stock
+HMYY US,HIMS US,,Synthetic,Single Stock
+GOOY US,GOOGL US,,Synthetic,Single Stock
+GOOP US,GOOGL US,,Synthetic,Single Stock
+GOOW US,GOOGL US,,Synthetic,Single Stock
+IGME US,GME US,,Synthetic,Crypto
+GMEY US,GME US,,Synthetic,Single Stock
+YETH US,ETH,,Synthetic,Crypto
+DRAY US,DKNG US,,Synthetic,Single Stock
+DISO US,DIS US,,Synthetic,Single Stock
+CVNY US,CVNA,,Synthetic,Single Stock
+CWII US,CRWV US,,Synthetic,Single Stock
+ICRC US,CRCL US,,Synthetic,Single Stock
+CRCO US,CRCL US,,Synthetic,Single Stock
+COSW US,COST US,,Synthetic,Single Stock
+CONY US,COIN US,,Synthetic,Single Stock
+ICOI US,COIN US,,Synthetic,Single Stock
+COII US,COIN US,,Synthetic,Single Stock
+COIW US,COIN US,,Synthetic,Single Stock
+COYY US,COIN US,,Synthetic,Single Stock
+FIAT US,COIN US,,Synthetic,Single Stock
+BRKC US,BRK/B US,,Synthetic,Single Stock
+BRKW US,BRK/B US,,Synthetic,Single Stock
+YBMN US,BMNR US,,Synthetic,Single Stock
+BCCC US,BCCC US,,Synthetic,Crypto
+BABO US,BABA US,,Synthetic,Single Stock
+BABW US,BABA US,,Synthetic,Single Stock
+BBYY US,BABA US,,Synthetic,Single Stock
+AVGW US,AVGO US,,Synthetic,Single Stock
+ARMW US,ARM US,,Synthetic,Single Stock
+OARK US,ARK US,,Synthetic,Single Stock
+AMZY US,AMZN US,,Synthetic,Single Stock
+AMZP US,AMZN US,,Synthetic,Single Stock
+AMZW US,AMZN US,,Synthetic,Single Stock
+AZYY US,AMZN US,,Synthetic,Single Stock
+AMDY US,AMD US,,Synthetic,Single Stock
+AMDW US,AMD US,,Synthetic,Single Stock
+AMDU US,AMD US,,Synthetic,Single Stock
+AMYY US,AMD US,,Synthetic,Single Stock
+AIYY US,AI US,,Synthetic,Single Stock
+ABNY US,ABNB US,,Synthetic,Single Stock
+APLY US,AAPL US,,Synthetic,Single Stock
+AAPY US,AAPL US,,Synthetic,Single Stock
+AAPW US,AAPL US,,Synthetic,Single Stock
+HAKY US,,HACK US,Traditional,Tech
+NDIV US,,NDIVITR,Traditional,Energy
+ANV US,NVDA US,Autocall,Synthetic,Single Stock
+TLA US,TSLA US,Autocall,Synthetic,Single Stock
+XSPI US,,SPX,Traditional,Broad Beta
+ATCL US,,Autocall,Synthetic,Broad Beta
+FEPI LN,,Basket,Traditional,Tech
+FEGI LN,,Basket,Traditional,Tech
+CEGI LN,,Basket,Traditional,Crypto
+MSST US,MSTR US,,Synthetic,Single Stock
+NVIT US,NVDA US,,Synthetic,Single Stock
+TEST US,TSLA US,,Synthetic,Single Stock
+ISBG US,,Basket,Synthetic,Broad Beta
+ISSB US,,Basket,Synthetic,Broad Beta
+KYLD US,,Basket,Traditional,Broad Beta
+MEMY US,,Basket,Synthetic,Broad Beta
+NLSI US,,Basket,Traditional,Broad Beta
+OEI US,,Basket,Traditional,Broad Beta
+PLGI US,,Basket,Traditional,Broad Beta
+TPAY US,,SPX,Synthetic,Broad Beta
+XQQI US,,NDX,Traditional,Broad Beta
+GLDN US,,GLD,Traditional,Commodity
+KSLV US,,SLV,Traditional,Commodity
+SLVX US,,SLV,Traditional,Commodity
+NEHI US,,ETH,Synthetic,Crypto
+XBCI US,,BTC,Traditional,Crypto
+MAGO US,,Basket,Synthetic,Tech
+USOI US,,QUSOI,Synthetic,Energy
+SLVO US,,SLV,Synthetic,Commodity
+GLDI US,,GLD,Synthetic,Commodity
+BWVTF US,,SPX,Synthetic,Broad Beta
+GIF US,,FOF,Synthetic,Single Stock
