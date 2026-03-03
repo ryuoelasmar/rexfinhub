@@ -1,7 +1,7 @@
 {# Suite card partial. Pass `suite` dict. #}
-<a href="/market/category?cat={{ suite.name|urlencode }}" class="suite-card" data-suite="{{ suite.name }}">
+<a href="/market/rex?category={{ suite.name|urlencode }}" class="suite-card" data-suite="{{ suite.name }}">
   <div class="suite-header">
-    <h3 class="suite-name">{{ suite.name }}</h3>
+    <h3 class="suite-name">{{ suite.rex_name }}</h3>
     <span class="suite-share">{{ suite.market_share }}% share</span>
   </div>
   <div class="suite-metrics">

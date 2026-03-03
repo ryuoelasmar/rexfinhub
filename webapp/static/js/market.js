@@ -286,7 +286,7 @@ var MarketCharts = (function() {
           label: 'AUM by Product',
           tree: products,
           key: 'value',
-          groups: ['group', 'label'],
+          groups: ['group'],
           borderColor: 'rgba(255,255,255,0.7)',
           borderWidth: 1,
           spacing: 0.5,

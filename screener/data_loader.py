@@ -1,10 +1,10 @@
-"""Load and validate Bloomberg data from the daily datatest Excel file.
+"""Load and validate Bloomberg data from bloomberg_daily_file.xlsm.
 
-Data source: datatest.xlsx with 2 sheets:
-  - stock_data: US equity universe (~2,468 rows x 29 cols)
-  - etp_data: Full US ETP universe (~5,073 rows x 102 cols)
+Single data source: bloomberg_daily_file.xlsm
+  - s1 sheet: US equity universe (stock data)
+  - w1-w4 sheets: ETP universe (built via data_engine)
 
-REX funds are derived from etp_data where is_rex == True.
+REX funds are derived from ETP data where is_rex == True.
 Filing status comes from the pipeline database (not a sheet).
 """
 from __future__ import annotations
@@ -28,14 +28,10 @@ def _resolve_path(path: Path | str | None = None) -> Path:
 
 
 def load_stock_data(path: Path | str | None = None) -> pd.DataFrame:
-    """Load stock_data sheet (US equity universe). Falls back to s1 sheet."""
+    """Load s1 sheet (US equity universe) from bloomberg_daily_file."""
     p = _resolve_path(path)
-    try:
-        df = pd.read_excel(p, sheet_name="stock_data", engine="openpyxl")
-    except ValueError:
-        df = pd.read_excel(p, sheet_name="s1", engine="openpyxl")
-        log.info("Fell back to s1 sheet for stock_data")
-    log.info("stock_data loaded: %d rows x %d cols", len(df), len(df.columns))
+    df = pd.read_excel(p, sheet_name="s1", engine="openpyxl")
+    log.info("s1 (stock) loaded: %d rows x %d cols", len(df), len(df.columns))
 
     # Drop rows with missing tickers (trailing empty rows in Excel)
     if "Ticker" in df.columns:
@@ -69,23 +65,12 @@ def load_stock_data(path: Path | str | None = None) -> pd.DataFrame:
 
 
 def load_etp_data(path: Path | str | None = None) -> pd.DataFrame:
-    """Load etp_data sheet (full US ETP universe, all columns).
-    Falls back to q_master_data, then builds from w1-w4 via data_engine."""
+    """Build ETP universe from w1-w4 sheets via data_engine."""
     p = _resolve_path(path)
-    # Try etp_data first, then q_master_data, then build from w1-w4
-    try:
-        df = pd.read_excel(p, sheet_name="etp_data", engine="openpyxl")
-        log.info("etp_data loaded: %d rows x %d cols", len(df), len(df.columns))
-    except ValueError:
-        try:
-            df = pd.read_excel(p, sheet_name="q_master_data", engine="openpyxl")
-            log.info("q_master_data loaded: %d rows x %d cols", len(df), len(df.columns))
-        except ValueError:
-            log.info("No etp_data/q_master_data sheet, building from w1-w4 via data_engine")
-            from webapp.services.data_engine import build_all
-            result = build_all(p)
-            df = result.get("master", pd.DataFrame())
-            log.info("etp_data built from data_engine: %d rows x %d cols", len(df), len(df.columns))
+    from webapp.services.data_engine import build_all
+    result = build_all(p)
+    df = result.get("master", pd.DataFrame())
+    log.info("ETP data built from w1-w4: %d rows x %d cols", len(df), len(df.columns))
 
     # Normalize underlier ticker (column name varies by data source)
     underlier_col = None

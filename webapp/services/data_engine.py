@@ -1,24 +1,26 @@
 """
-data_engine.py -- Python replication of Excel Power Query pipeline.
+data_engine.py -- Build enriched fund universe from bloomberg_daily_file.xlsm.
 
-Replicates the transformation logic that produces q_master_data and
-q_aum_time_series_labeled from the raw input sheets in bloomberg_daily_file.xlsm.
+Single data source: bloomberg_daily_file.xlsm (OneDrive MASTER Data folder).
+Base data from sheets w1, w2, w3, w4. Rules from /data/rules/ CSVs.
 
-Input sheets used:
+Input sheets (bloomberg_daily_file.xlsm):
   - w1                   Base fund info (ticker, issuer, etc.)
   - w2                   Metrics (expense ratio, spread, etc.)
   - w3                   Returns (1D, 1W, 1M, etc.)
   - w4                   Flows + AUM history
-  - fund_mapping         Ticker -> etp_category mapping (creates duplicates for multi-category tickers)
-  - issuer_mapping       (etp_category, issuer) -> issuer_nickname
-  - category_mapping     Per-category attribute mappings (LI/CC/Crypto/Defined/Thematic blocks)
-  - dim_fund_category    Final categorical dimension (category_display, issuer_display, is_rex)
-  - rex_funds            REX fund tickers
-  - rules                t_timeseries_include filter rules
+
+Rules (CSV files in data/rules/):
+  - fund_mapping.csv         Ticker -> etp_category mapping
+  - issuer_mapping.csv       (etp_category, issuer) -> issuer_nickname
+  - attributes_*.csv         Per-category attribute mappings (LI/CC/Crypto/Defined/Thematic)
+  - rex_funds.csv            REX fund tickers
+  - category_mapping sheet   In-file category attributes (LI/CC/Crypto/Defined/Thematic blocks)
+  - rules sheet              t_timeseries_include filter rules
 
 Output tables:
-  - q_master_data                Enriched fund universe with categories + attributes
-  - q_aum_time_series_labeled    Unpivoted AUM time series filtered to tracked universe
+  - master    Enriched fund universe with categories + attributes
+  - ts        Unpivoted AUM time series filtered to tracked universe
 
 Usage:
     from webapp.services.data_engine import build_all
@@ -85,14 +87,8 @@ def _find_col(df: pd.DataFrame, name: str) -> str | None:
 
 
 # ---------------------------------------------------------------------------
-# Column renaming: data_import block structure -> q_master_data flat columns
+# Column definitions: w1 base fields + w2/w3/w4 prefixed metric fields
 # ---------------------------------------------------------------------------
-# data_import has 4 "work table" blocks separated by unnamed columns:
-#   Block 1 (w1): ticker..fund_description  (base fund info, kept as-is)
-#   Block 2 (w2): ticker.1..open_interest   (expense/spread metrics -> t_w2.*)
-#   Block 3 (w3): ticker.2..annualized_yield (returns -> t_w3.*)
-#   Block 4 (w4): ticker.3..aum_36          (flows + AUM -> t_w4.*)
-# After those blocks there are helper columns (CopyPaste, Ticker, etc.) to drop.
 
 _W2_FIELDS = [
     "expense_ratio", "management_fee", "average_bidask_spread",
@@ -126,11 +122,10 @@ _BASE_FIELDS = [
 
 
 def _build_from_split_sheets(xl: pd.ExcelFile) -> pd.DataFrame:
-    """Build the equivalent of cleaned data_import from separate w1-w4 sheets.
+    """Build combined ETP data from w1-w4 sheets in bloomberg_daily_file.xlsm.
 
-    The bloomberg_daily_file.xlsm splits the old data_import into 4 sheets.
-    Read each, rename columns to canonical names, merge on ticker, then
-    apply the same t_w2/t_w3/t_w4 prefixing that _clean_data_import does.
+    Read each sheet, rename columns to canonical names, merge on ticker,
+    then apply t_w2/t_w3/t_w4 prefixing.
     """
     from market.config import W1_COL_MAP, W2_COL_MAP, W3_COL_MAP, W4_FLOW_COL_MAP
 
@@ -174,7 +169,7 @@ def _build_from_split_sheets(xl: pd.ExcelFile) -> pd.DataFrame:
             if merge_cols:
                 df = df.merge(sheet_df[["ticker"] + merge_cols], on="ticker", how="left")
 
-    # Apply t_w2/t_w3/t_w4 prefixes (same as _clean_data_import)
+    # Apply t_w2/t_w3/t_w4 prefixes
     rename_map = {}
     for field in _W2_FIELDS:
         if field in df.columns:
@@ -187,55 +182,6 @@ def _build_from_split_sheets(xl: pd.ExcelFile) -> pd.DataFrame:
             rename_map[field] = f"t_w4.{field}"
     df = df.rename(columns=rename_map)
 
-    return df
-
-
-def _clean_data_import(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Clean data_import: keep only useful columns, rename work-table columns
-    with t_w2/t_w3/t_w4 prefixes, and drop separator/helper columns.
-    """
-    # Build rename map for work-table columns
-    rename_map = {}
-    for field in _W2_FIELDS:
-        rename_map[field] = f"t_w2.{field}"
-    for field in _W3_FIELDS:
-        rename_map[field] = f"t_w3.{field}"
-    for field in _W4_FIELDS:
-        rename_map[field] = f"t_w4.{field}"
-
-    # Identify columns to keep: base fields + work-table fields
-    # Only keep the FIRST occurrence of each field name to avoid duplicates
-    # (data_import has ticker, ticker.1, ticker.2, Ticker, etc.)
-    base_lower = {f.lower() for f in _BASE_FIELDS}
-    w2_lower = {f.lower() for f in _W2_FIELDS}
-    w3_lower = {f.lower() for f in _W3_FIELDS}
-    w4_lower = {f.lower() for f in _W4_FIELDS}
-    seen_lower = set()
-    keep_cols = []
-    for col in df.columns:
-        col_lower = col.lower().strip()
-        if col_lower in seen_lower:
-            continue
-        if col_lower in base_lower or col_lower in w2_lower or \
-           col_lower in w3_lower or col_lower in w4_lower:
-            keep_cols.append(col)
-            seen_lower.add(col_lower)
-
-    df = df[keep_cols].copy()
-
-    # Apply rename: use case-insensitive lookup
-    actual_rename = {}
-    for col in df.columns:
-        col_lower = col.lower().strip()
-        if col_lower in {f.lower(): f"t_w2.{f}" for f in _W2_FIELDS}:
-            actual_rename[col] = f"t_w2.{col_lower}"
-        elif col_lower in {f.lower(): f"t_w3.{f}" for f in _W3_FIELDS}:
-            actual_rename[col] = f"t_w3.{col_lower}"
-        elif col_lower in {f.lower(): f"t_w4.{f}" for f in _W4_FIELDS}:
-            actual_rename[col] = f"t_w4.{col_lower}"
-
-    df = df.rename(columns=actual_rename)
     return df
 
 
@@ -271,7 +217,7 @@ def _build_category_attributes(xl: pd.ExcelFile) -> pd.DataFrame:
         "map_cc_underlier": "map_cc_underlier",
         "map_cc_index": "map_cc_index",
     }
-    # Note: map_cc_category exists in the sheet but is NOT in q_master_data output
+    # Note: map_cc_category exists in the sheet but is NOT in the master output
     cc_available = {k: v for k, v in cc_cols_map.items() if k in cm.columns}
     if "ticker.1" in cc_available:
         cc_df = cm[list(cc_available.keys())].dropna(subset=["ticker.1"]).copy()
@@ -332,33 +278,28 @@ def _build_category_attributes(xl: pd.ExcelFile) -> pd.DataFrame:
 
 
 # ---------------------------------------------------------------------------
-# Build q_master_data
+# Build master data
 # ---------------------------------------------------------------------------
 def build_master_data(xl: pd.ExcelFile = None) -> pd.DataFrame:
     """
-    Build the equivalent of q_master_data.
+    Build enriched fund universe from bloomberg_daily_file sheets + rules.
 
     Process:
-    1. Read data_import (raw Bloomberg fund universe)
-    2. Clean columns and rename with t_w2/t_w3/t_w4 prefixes
+    1. Read w1-w4 sheets from bloomberg_daily_file, merge on ticker
+    2. Apply t_w2/t_w3/t_w4 column prefixes
     3. Left join fund_mapping on ticker -> adds etp_category (may duplicate rows)
     4. Left join issuer_mapping on (etp_category, issuer) -> adds issuer_nickname
     5. Left join category_attributes on ticker -> adds map_* columns
-    6. Left join dim_fund_category on ticker -> adds category_display, issuer_display, is_rex, fund_category_key
+    6. Derive category_display, issuer_display, fund_category_key from rules
     7. Override is_rex from rex_funds
     """
     if xl is None:
         xl = _load_excel()
 
-    # Step 1 & 2: Read and clean data_import (or build from w1-w4)
-    if "data_import" in xl.sheet_names:
-        raw = _read_sheet(xl, "data_import")
-        raw = raw.dropna(subset=["ticker"])
-        df = _clean_data_import(raw)
-    elif "w1" in xl.sheet_names:
-        df = _build_from_split_sheets(xl)
-    else:
-        raise ValueError("Data file has neither data_import nor w1 sheet")
+    # Step 1 & 2: Read w1-w4 sheets from bloomberg_daily_file
+    if "w1" not in xl.sheet_names:
+        raise ValueError("bloomberg_daily_file missing required w1 sheet")
+    df = _build_from_split_sheets(xl)
 
     # Step 3: Join fund_mapping -> adds etp_category
     # Deduplicate on (ticker, etp_category) to avoid row multiplication
@@ -407,102 +348,68 @@ def build_master_data(xl: pd.ExcelFile = None) -> pd.DataFrame:
             df["issuer_nickname"] = pd.NA
 
     # Step 5: Join category_attributes -> adds map_* columns
+    _attrs_loaded = False
     try:
         cat_attrs = _build_category_attributes(xl)
         if not cat_attrs.empty and "ticker" in cat_attrs.columns:
-            # Prefix attribute columns for output format
             attr_cols = [c for c in cat_attrs.columns if c != "ticker"]
             attr_rename = {c: f"q_category_attributes.{c}" for c in attr_cols}
             cat_attrs = cat_attrs.rename(columns=attr_rename)
             df = df.merge(cat_attrs, on="ticker", how="left")
+            _attrs_loaded = True
     except Exception:
         pass
+    # Fallback: load attribute CSVs if Excel category_mapping was missing
+    if not _attrs_loaded:
+        from market.config import RULES_DIR, ATTR_PREFIX
+        _ATTR_FILES = {
+            "attributes_LI.csv": ["map_li_category", "map_li_subcategory",
+                                  "map_li_direction", "map_li_leverage_amount",
+                                  "map_li_underlier"],
+            "attributes_CC.csv": ["map_cc_underlier", "map_cc_index",
+                                  "cc_type", "cc_category"],
+            "attributes_Crypto.csv": ["map_crypto_is_spot", "map_crypto_underlier"],
+            "attributes_Defined.csv": ["map_defined_category"],
+            "attributes_Thematic.csv": ["map_thematic_category"],
+        }
+        for fname, attr_cols in _ATTR_FILES.items():
+            csv_path = RULES_DIR / fname
+            if csv_path.exists():
+                try:
+                    attrs = pd.read_csv(csv_path, engine="python", on_bad_lines="skip")
+                    if "ticker" in attrs.columns:
+                        rename_a = {c: f"{ATTR_PREFIX}{c}" for c in attrs.columns
+                                    if c != "ticker" and c in attr_cols}
+                        attrs = attrs.rename(columns=rename_a)
+                        df = df.merge(attrs, on="ticker", how="left", suffixes=("", "_dup"))
+                        df = df[[c for c in df.columns if not c.endswith("_dup")]]
+                except Exception:
+                    pass
 
-    # Step 6: Join dim_fund_category -> adds category_display, issuer_display, is_rex, fund_category_key
-    # dim_fund_category has multiple rows per ticker (one per category_display).
-    # To avoid many-to-many explosion, build a join key using fund_category_key.
-    # fund_category_key format: "TICKER|category_display"
-    # We map etp_category -> category_display pattern to find the right dim row.
-    try:
-        dim = _read_sheet(xl, "dim_fund_category")
-        dim = dim.dropna(subset=["ticker"])
+    # Step 6: Derive category_display, issuer_display, fund_category_key from rules
+    # (replaces the old dim_fund_category Excel sheet -- all derivation now from rules CSVs)
+    if "category_display" not in df.columns:
+        _derive_category_display(df)
+    if "issuer_display" not in df.columns and "issuer_nickname" in df.columns:
+        df["issuer_display"] = df["issuer_nickname"]
+    if "fund_category_key" not in df.columns:
+        cat = df.get("category_display", pd.Series("", index=df.index)).fillna("")
+        df["fund_category_key"] = df["ticker"].astype(str) + "|" + cat.astype(str)
 
-        # Build a lookup from fund_category_key -> dim row
-        if "fund_category_key" in dim.columns:
-            # For tickers with only one dim row, simple ticker join works
-            # For tickers with multiple dim rows, we need to match via category
-            dim_single = dim.drop_duplicates(subset=["ticker"], keep=False)
-            dim_multi = dim[dim.duplicated(subset=["ticker"], keep=False)]
-
-            # Build _fck on master side for multi-category tickers
-            # etp_category -> possible category_display values
-            _ETP_TO_CATS = {
-                "LI": {"Leverage & Inverse - Single Stock",
-                        "Leverage & Inverse - Index/Basket/ETF Based",
-                        "Leverage & Inverse - Unknown/Miscellaneous"},
-                "CC": {"Income - Single Stock",
-                       "Income - Index/Basket/ETF Based",
-                       "Income - Unknown/Miscellaneous"},
-                "Crypto": {"Crypto"},
-                "Defined": {"Defined Outcome"},
-                "Thematic": {"Thematic"},
-            }
-
-            # For multi-category dim rows, create a lookup: (ticker, etp_category) -> dim row
-            multi_rows = []
-            for _, row in dim_multi.iterrows():
-                cat_display = row.get("category_display", "")
-                # Find which etp_category this category_display belongs to
-                etp_cat = None
-                for etp, cats in _ETP_TO_CATS.items():
-                    if cat_display in cats:
-                        etp_cat = etp
-                        break
-                if etp_cat:
-                    row_dict = row.to_dict()
-                    row_dict["_etp_category"] = etp_cat
-                    multi_rows.append(row_dict)
-
-            # Join single-dim tickers on ticker only
-            dim_single_cols = [c for c in dim_single.columns
-                               if c not in ("market_status", "fund_type")]
-            df = df.merge(
-                dim_single[dim_single_cols],
-                on="ticker", how="left",
-            )
-
-            # Join multi-dim tickers on (ticker, etp_category)
-            if multi_rows:
-                dim_multi_df = pd.DataFrame(multi_rows)
-                dim_multi_cols = [c for c in dim_multi_df.columns
-                                  if c not in ("market_status", "fund_type")]
-                dim_multi_df = dim_multi_df[dim_multi_cols]
-                # Merge on ticker + etp_category match
-                df = df.merge(
-                    dim_multi_df.rename(columns={"_etp_category": "etp_category"}),
-                    on=["ticker", "etp_category"],
-                    how="left",
-                    suffixes=("", "_multi"),
-                )
-                # Fill in from multi where single was NaN
-                for col in ["category_display", "issuer_display", "is_rex",
-                            "fund_category_key"]:
-                    multi_col = f"{col}_multi"
-                    if multi_col in df.columns:
-                        df[col] = df[col].fillna(df[multi_col])
-                        df = df.drop(columns=[multi_col])
-        else:
-            # Fallback: simple ticker join (may create duplicates)
-            dim_cols_use = [c for c in dim.columns
-                           if c not in ("market_status", "fund_type")]
-            df = df.merge(dim[dim_cols_use], on="ticker", how="left")
-    except Exception:
-        pass
-
-    # Step 7: Override is_rex from rex_funds
+    # Step 7: Override is_rex from rex_funds (Excel sheet or CSV rule)
+    rex_tickers = set()
     try:
         rex = _read_sheet(xl, "rex_funds")
         rex_tickers = set(rex["ticker"].dropna().astype(str).str.strip())
+    except Exception:
+        # Fall back to CSV rules
+        from market.config import RULES_DIR
+        csv_path = RULES_DIR / "rex_funds.csv"
+        if csv_path.exists():
+            rex = pd.read_csv(csv_path, engine="python", on_bad_lines="skip")
+            if "ticker" in rex.columns:
+                rex_tickers = set(rex["ticker"].dropna().astype(str).str.strip())
+    if rex_tickers:
         if "is_rex" in df.columns:
             existing = df["is_rex"].map(
                 lambda v: bool(v) if pd.notna(v) else False
@@ -510,10 +417,73 @@ def build_master_data(xl: pd.ExcelFile = None) -> pd.DataFrame:
             df["is_rex"] = df["ticker"].isin(rex_tickers) | existing
         else:
             df["is_rex"] = df["ticker"].isin(rex_tickers)
-    except Exception:
-        pass
+    elif "is_rex" not in df.columns:
+        df["is_rex"] = False
+
+    # Step 8: Derive primary_category (1:1, no duplicates)
+    _derive_primary_category(df)
+
+    # Step 9: Join rex_suite_mapping -> adds rex_suite column
+    _join_rex_suite(df)
 
     return df
+
+
+# ---------------------------------------------------------------------------
+# Primary category + REX suite helpers
+# ---------------------------------------------------------------------------
+_PRIMARY_CATEGORY_PRIORITY = ["LI", "CC", "Crypto", "Defined", "Thematic"]
+
+
+def _derive_primary_category(df: pd.DataFrame) -> None:
+    """Derive primary_category: exactly 1 category per ticker, no double-counting.
+
+    For tickers in only 1 etp_category -> primary_category = etp_category.
+    For tickers in multiple categories -> pick using priority: LI > CC > Crypto > Defined > Thematic.
+    """
+    if "etp_category" not in df.columns:
+        df["primary_category"] = pd.NA
+        return
+
+    cat_col = df["etp_category"].fillna("").astype(str)
+    # Build ticker -> set of categories
+    ticker_cats: dict[str, set[str]] = {}
+    for ticker, cat in zip(df["ticker"], cat_col):
+        if cat and cat != "nan":
+            ticker_cats.setdefault(ticker, set()).add(cat)
+
+    # Build ticker -> primary_category lookup
+    ticker_primary: dict[str, str] = {}
+    for ticker, cats in ticker_cats.items():
+        if len(cats) == 1:
+            ticker_primary[ticker] = next(iter(cats))
+        else:
+            # Pick by priority order
+            for priority_cat in _PRIMARY_CATEGORY_PRIORITY:
+                if priority_cat in cats:
+                    ticker_primary[ticker] = priority_cat
+                    break
+            else:
+                ticker_primary[ticker] = next(iter(cats))
+
+    df["primary_category"] = df["ticker"].map(ticker_primary)
+
+
+def _join_rex_suite(df: pd.DataFrame) -> None:
+    """Join rex_suite_mapping.csv to add rex_suite column. Only REX funds get a value."""
+    from market.config import RULES_DIR
+    csv_path = RULES_DIR / "rex_suite_mapping.csv"
+    if not csv_path.exists():
+        df["rex_suite"] = pd.NA
+        return
+    mapping = pd.read_csv(csv_path, engine="python", on_bad_lines="skip")
+    if "ticker" not in mapping.columns or "rex_suite" not in mapping.columns:
+        df["rex_suite"] = pd.NA
+        return
+    mapping = mapping[["ticker", "rex_suite"]].dropna(subset=["ticker"]).drop_duplicates(subset=["ticker"])
+    df.drop(columns=["rex_suite"], errors="ignore", inplace=True)
+    merged = df.merge(mapping, on="ticker", how="left")
+    df["rex_suite"] = merged["rex_suite"].values
 
 
 # ---------------------------------------------------------------------------
@@ -598,15 +568,13 @@ def _load_issuer_group_rules(xl: pd.ExcelFile) -> set[str]:
 
 def build_time_series(master_df: pd.DataFrame, xl: pd.ExcelFile = None) -> pd.DataFrame:
     """
-    Build the equivalent of q_aum_time_series_labeled.
+    Build AUM time series from master data.
 
     Process:
-    1. Deduplicate master to one row per ticker (take first = base data_import row)
-    2. Filter to tickers present in dim_fund_category
-    3. Unpivot AUM columns into long format (ticker, months_ago, aum_value)
-    4. Join dim_fund_category on ticker (many-to-one: multi-category tickers get
-       one row per fund_category_key per month = 1903 keys * 37 months = 70,411 rows)
-    5. Add issuer_group (known issuers keep name, others become 'Other')
+    1. Deduplicate master to one row per ticker
+    2. Unpivot AUM columns into long format (ticker, months_ago, aum_value)
+    3. Join enrichment columns from master (category_display, issuer_display, etc.)
+    4. Add issuer_group (known issuers keep name, others become 'Other')
     """
     if xl is None:
         xl = _load_excel()
@@ -615,25 +583,18 @@ def build_time_series(master_df: pd.DataFrame, xl: pd.ExcelFile = None) -> pd.Da
     # (multi-category tickers have duplicate AUM values, keep first)
     deduped = master_df.drop_duplicates(subset=["ticker"], keep="first")
 
-    # Step 2: Filter to dim_fund_category tickers
-    try:
-        dim = _read_sheet(xl, "dim_fund_category")
-        dim = dim.dropna(subset=["ticker"])
-        dim_tickers = set(dim["ticker"].astype(str).str.strip())
-        deduped = deduped[deduped["ticker"].isin(dim_tickers)].copy()
-    except Exception:
-        return pd.DataFrame()
-
-    # Step 3: Unpivot AUM columns
+    # Step 2: Unpivot AUM columns
     ts = _unpivot_aum(deduped)
     if ts.empty:
         return ts
 
-    # Step 4: Join dim_fund_category (this expands multi-category tickers)
-    dim_join_cols = ["ticker", "category_display", "issuer_display",
-                     "is_rex", "fund_category_key"]
-    dim_available = [c for c in dim_join_cols if c in dim.columns]
-    ts = ts.merge(dim[dim_available], on="ticker", how="inner")
+    # Step 3: Join enrichment columns from the deduped master
+    enrich_cols = ["ticker", "category_display", "issuer_display",
+                   "is_rex", "fund_category_key"]
+    available = [c for c in enrich_cols if c in master_df.columns]
+    if len(available) > 1:  # need at least ticker + one enrichment col
+        enrich = master_df[available].drop_duplicates(subset=["ticker"], keep="first")
+        ts = ts.merge(enrich, on="ticker", how="left")
 
     # Step 5: Add issuer_group
     # issuer_group = issuer_display ONLY when the specific
@@ -861,6 +822,10 @@ def build_all_from_csvs(csv_dir: Path) -> dict:
     # --- Derive category_display from etp_category + attributes -----------
     _derive_category_display(df)
 
+    # --- Derive primary_category + rex_suite (same as build_master_data) ---
+    _derive_primary_category(df)
+    _join_rex_suite(df)
+
     # --- Optimise dtypes to reduce memory (object -> float32/category) ----
     _optimise_master_dtypes(df)
 
@@ -875,10 +840,7 @@ def build_all_from_csvs(csv_dir: Path) -> dict:
 
 
 def _derive_category_display(df: pd.DataFrame) -> None:
-    """Derive category_display from etp_category + attribute columns.
-
-    Replicates what dim_fund_category provides when loaded from Excel.
-    """
+    """Derive category_display from etp_category + attribute columns."""
     from market.config import (
         CAT_LI_SS, CAT_LI_INDEX, CAT_LI_OTHER,
         CAT_CC_SS, CAT_CC_INDEX, CAT_CC_OTHER,

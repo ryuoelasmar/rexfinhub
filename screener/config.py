@@ -2,7 +2,8 @@
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-_SCREENER_DATA = PROJECT_ROOT / "data" / "SCREENER" / "data.xlsx"
+
+# Single data source: bloomberg_daily_file.xlsm
 _ONEDRIVE_BBG_DAILY = Path(
     r"C:\Users\RyuEl-Asmar\REX Financial LLC"
     r"\REX Financial LLC - Rex Financial LLC"
@@ -11,10 +12,15 @@ _ONEDRIVE_BBG_DAILY = Path(
 _LOCAL_BBG_DAILY = PROJECT_ROOT / "data" / "DASHBOARD" / "bloomberg_daily_file.xlsm"
 
 def _resolve_data_file() -> Path:
-    for p in (_SCREENER_DATA, _ONEDRIVE_BBG_DAILY, _LOCAL_BBG_DAILY):
+    for p in (_ONEDRIVE_BBG_DAILY, _LOCAL_BBG_DAILY):
         if p.exists():
-            return p
-    return _SCREENER_DATA
+            try:
+                with open(p, "rb") as f:
+                    f.read(4)
+                return p
+            except PermissionError:
+                continue
+    return _LOCAL_BBG_DAILY
 
 DATA_FILE = _resolve_data_file()
 REPORTS_DIR = PROJECT_ROOT / "reports"

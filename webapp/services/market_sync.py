@@ -72,7 +72,7 @@ _W4_FLOW_COLS = [
 
 _ENRICHMENT_COLS = [
     "etp_category", "issuer_nickname", "category_display", "issuer_display",
-    "is_rex", "fund_category_key",
+    "is_rex", "fund_category_key", "primary_category", "rex_suite",
 ]
 
 _ATTR_COLS = [
@@ -309,6 +309,8 @@ def _insert_master_data(db: Session, df: pd.DataFrame, run_id: int) -> int:
             issuer_display=_safe_str(row.get("issuer_display")),
             is_rex=bool(row.get("is_rex", False)) if pd.notna(row.get("is_rex")) else False,
             fund_category_key=_safe_str(row.get("fund_category_key")),
+            primary_category=_safe_str(row.get("primary_category")),
+            rex_suite=_safe_str(row.get("rex_suite")),
             # Category attributes
             map_li_category=_safe_str(_get_col(row, "map_li_category")),
             map_li_subcategory=_safe_str(_get_col(row, "map_li_subcategory")),
