@@ -4,13 +4,15 @@ Market Intelligence data service.
 Loads fund universe and time series from SQLite (mkt_master_data, mkt_time_series).
 Data is written to SQLite by market_sync.py during the local daily pipeline.
 All functions accept a SQLAlchemy Session and return dicts/DataFrames.
-No in-memory cache -- data is read from DB per request (transient, freed after).
+Uses a thread-safe in-memory cache (1h TTL) so tab navigation is instant.
 """
 from __future__ import annotations
 
 import json
 import logging
 import math
+import threading
+import time
 from typing import Any
 
 from datetime import datetime as _dt
@@ -22,6 +24,19 @@ from sqlalchemy.orm import Session
 from webapp.models import MktMasterData, MktPipelineRun, MktTimeSeries
 
 log = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# In-memory cache (loaded once, reused across requests)
+# ---------------------------------------------------------------------------
+_master_lock = threading.Lock()
+_master_df: pd.DataFrame | None = None
+_master_time: float = 0.0
+
+_ts_lock = threading.Lock()
+_ts_df: pd.DataFrame | None = None
+_ts_time: float = 0.0
+
+_CACHE_TTL = 3600  # 1 hour
 
 _REX_SUITE_NAMES = {
     "Leverage & Inverse - Single Stock": "T-REX",
@@ -88,25 +103,44 @@ _FLAT_TO_PREFIXED = {
 # ---------------------------------------------------------------------------
 # DB -> DataFrame loaders (transient per-request, freed after)
 # ---------------------------------------------------------------------------
+_EMPTY_MASTER_COLS = [
+    "ticker", "fund_name", "issuer", "etp_category", "category_display",
+    "issuer_display", "is_rex", "ticker_clean", "fund_type",
+    "t_w4.aum", "t_w4.fund_flow_1week", "t_w4.fund_flow_1month",
+    "t_w4.fund_flow_ytd",
+]
+
+
 def _load_master(db: Session) -> pd.DataFrame:
     """Load mkt_master_data into a DataFrame with legacy prefixed column names.
 
+    Uses an in-memory cache (1h TTL) so all callers share one DataFrame.
     Unpacks aum_history_json into individual t_w4.aum_1..t_w4.aum_36 columns.
-    Renames flat DB columns to prefixed names for backward compatibility with
-    all existing business logic, templates, and JavaScript.
+    Renames flat DB columns to prefixed names for backward compatibility.
     """
+    global _master_df, _master_time
+    with _master_lock:
+        if _master_df is not None and (time.time() - _master_time) < _CACHE_TTL:
+            return _master_df
+
+    df = _load_master_from_db(db)
+
+    with _master_lock:
+        _master_df = df
+        _master_time = time.time()
+    log.info("Master data cached: %d rows", len(df))
+    return df
+
+
+def _load_master_from_db(db: Session) -> pd.DataFrame:
+    """Actual DB load (called once, then cached)."""
     try:
         rows = db.execute(select(MktMasterData)).scalars().all()
     except Exception as e:
         log.error("Failed to query mkt_master_data: %s", e)
         rows = []
     if not rows:
-        # Return empty DF with expected columns so downstream code doesn't KeyError
-        _EXPECTED = ["ticker", "fund_name", "issuer", "etp_category", "category_display",
-                      "issuer_display", "is_rex", "ticker_clean", "fund_type",
-                      "t_w4.aum", "t_w4.fund_flow_1week", "t_w4.fund_flow_1month",
-                      "t_w4.fund_flow_ytd"]
-        return pd.DataFrame(columns=_EXPECTED)
+        return pd.DataFrame(columns=_EMPTY_MASTER_COLS)
 
     records = []
     for r in rows:
@@ -159,8 +193,28 @@ def _load_master(db: Session) -> pd.DataFrame:
 
 
 def _load_ts(db: Session) -> pd.DataFrame:
-    """Load mkt_time_series into a DataFrame."""
-    rows = db.execute(select(MktTimeSeries)).scalars().all()
+    """Load mkt_time_series into a DataFrame (cached, 1h TTL)."""
+    global _ts_df, _ts_time
+    with _ts_lock:
+        if _ts_df is not None and (time.time() - _ts_time) < _CACHE_TTL:
+            return _ts_df
+
+    df = _load_ts_from_db(db)
+
+    with _ts_lock:
+        _ts_df = df
+        _ts_time = time.time()
+    log.info("Time series cached: %d rows", len(df))
+    return df
+
+
+def _load_ts_from_db(db: Session) -> pd.DataFrame:
+    """Actual DB load for time series (called once, then cached)."""
+    try:
+        rows = db.execute(select(MktTimeSeries)).scalars().all()
+    except Exception as e:
+        log.error("Failed to query mkt_time_series: %s", e)
+        rows = []
     if not rows:
         return pd.DataFrame()
 
@@ -188,8 +242,14 @@ def _load_ts(db: Session) -> pd.DataFrame:
 # Public helpers
 # ---------------------------------------------------------------------------
 def invalidate_cache() -> None:
-    """No-op: data is always fresh from SQLite."""
-    pass
+    """Clear cached DataFrames so next request reloads from DB."""
+    global _master_df, _master_time, _ts_df, _ts_time
+    with _master_lock:
+        _master_df = None
+        _master_time = 0.0
+    with _ts_lock:
+        _ts_df = None
+        _ts_time = 0.0
 
 
 def data_available(db: Session) -> bool:
@@ -212,12 +272,12 @@ def get_data_as_of(db: Session) -> str:
 
 
 def get_master_data(db: Session) -> pd.DataFrame:
-    """Return full fund universe as DataFrame (transient, freed after request)."""
+    """Return full fund universe as DataFrame (cached, 1h TTL)."""
     return _load_master(db)
 
 
 def get_time_series_df(db: Session) -> pd.DataFrame:
-    """Return full time series as DataFrame (transient, freed after request)."""
+    """Return full time series as DataFrame (cached, 1h TTL)."""
     return _load_ts(db)
 
 
