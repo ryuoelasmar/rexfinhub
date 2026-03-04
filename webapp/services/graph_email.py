@@ -96,9 +96,15 @@ def send_email(
     subject: str,
     html_body: str,
     recipients: list[str],
+    images: list[tuple[str, bytes, str]] | None = None,
 ) -> bool:
     """Send email via Microsoft Graph API.
-    Returns True on success, False on failure."""
+
+    Args:
+        images: Optional list of (content_id, png_bytes, filename) for inline CID images.
+
+    Returns True on success, False on failure.
+    """
     cfg = _load_env()
     if not all([cfg["tenant_id"], cfg["client_id"], cfg["client_secret"], cfg["sender"]]):
         log.warning("Azure Graph API not configured")
@@ -122,6 +128,21 @@ def send_email(
         },
         "saveToSentItems": "true",
     }
+
+    if images:
+        import base64
+        attachments = []
+        for cid, png_bytes, filename in images:
+            attachments.append({
+                "@odata.type": "#microsoft.graph.fileAttachment",
+                "name": filename,
+                "contentType": "image/png",
+                "contentBytes": base64.b64encode(png_bytes).decode(),
+                "contentId": cid,
+                "isInline": True,
+            })
+        payload["message"]["attachments"] = attachments
+
     headers = {
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json",

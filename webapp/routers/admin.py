@@ -380,15 +380,15 @@ def send_test_morning_brief(request: Request, db: Session = Depends(get_db)):
 
 @router.get("/reports/preview-li")
 def preview_li_report(request: Request, db: Session = Depends(get_db)):
-    """Preview L&I report email in browser."""
+    """Preview L&I report email in browser (CID images converted to data URIs)."""
     if not _is_admin(request):
         return RedirectResponse("/admin/", status_code=302)
     from fastapi.responses import HTMLResponse
     try:
-        from webapp.services.report_emails import build_li_email
+        from webapp.services.report_emails import build_li_email, cid_to_data_uri
         dashboard_url = str(request.base_url).rstrip("/")
-        # Use db=None locally to skip stale DB cache and read from CSV sheets
-        html = build_li_email(dashboard_url=dashboard_url)
+        html, images = build_li_email(dashboard_url=dashboard_url)
+        html = cid_to_data_uri(html, images)
         return HTMLResponse(content=html)
     except Exception as e:
         log.error("L&I email preview failed: %s", e, exc_info=True)
@@ -397,14 +397,15 @@ def preview_li_report(request: Request, db: Session = Depends(get_db)):
 
 @router.get("/reports/preview-cc")
 def preview_cc_report(request: Request, db: Session = Depends(get_db)):
-    """Preview CC report email in browser."""
+    """Preview CC report email in browser (CID images converted to data URIs)."""
     if not _is_admin(request):
         return RedirectResponse("/admin/", status_code=302)
     from fastapi.responses import HTMLResponse
     try:
-        from webapp.services.report_emails import build_cc_email
+        from webapp.services.report_emails import build_cc_email, cid_to_data_uri
         dashboard_url = str(request.base_url).rstrip("/")
-        html = build_cc_email(dashboard_url=dashboard_url)
+        html, images = build_cc_email(dashboard_url=dashboard_url)
+        html = cid_to_data_uri(html, images)
         return HTMLResponse(content=html)
     except Exception as e:
         log.error("CC email preview failed: %s", e, exc_info=True)
@@ -413,14 +414,15 @@ def preview_cc_report(request: Request, db: Session = Depends(get_db)):
 
 @router.get("/reports/preview-ss")
 def preview_ss_report(request: Request, db: Session = Depends(get_db)):
-    """Preview SS report email in browser."""
+    """Preview SS report email in browser (CID images converted to data URIs)."""
     if not _is_admin(request):
         return RedirectResponse("/admin/", status_code=302)
     from fastapi.responses import HTMLResponse
     try:
-        from webapp.services.report_emails import build_ss_email
+        from webapp.services.report_emails import build_ss_email, cid_to_data_uri
         dashboard_url = str(request.base_url).rstrip("/")
-        html = build_ss_email(dashboard_url=dashboard_url)
+        html, images = build_ss_email(dashboard_url=dashboard_url)
+        html = cid_to_data_uri(html, images)
         return HTMLResponse(content=html)
     except Exception as e:
         log.error("SS email preview failed: %s", e, exc_info=True)
@@ -436,9 +438,10 @@ def send_test_li_report(request: Request, db: Session = Depends(get_db)):
         from webapp.services.report_emails import build_li_email
         from etp_tracker.email_alerts import _send_html_digest
         dashboard_url = str(request.base_url).rstrip("/")
-        html = build_li_email(dashboard_url=dashboard_url, db=db)
+        html, images = build_li_email(dashboard_url=dashboard_url, db=db)
         ok = _send_html_digest(html, ["relasmar@rexfin.com"], edition="daily",
-                               subject_override="U.S. Leveraged & Inverse ETP Report")
+                               subject_override="U.S. Leveraged & Inverse ETP Report",
+                               images=images)
         if ok:
             return RedirectResponse("/admin/?digest=test_li_sent", status_code=303)
         return RedirectResponse("/admin/?digest=test_fail", status_code=303)
@@ -457,9 +460,10 @@ def send_test_cc_report(request: Request, db: Session = Depends(get_db)):
         from webapp.services.report_emails import build_cc_email
         from etp_tracker.email_alerts import _send_html_digest
         dashboard_url = str(request.base_url).rstrip("/")
-        html = build_cc_email(dashboard_url=dashboard_url, db=db)
+        html, images = build_cc_email(dashboard_url=dashboard_url, db=db)
         ok = _send_html_digest(html, ["relasmar@rexfin.com"], edition="daily",
-                               subject_override="Covered Call ETFs AUM and Flows")
+                               subject_override="Income ETF Report",
+                               images=images)
         if ok:
             return RedirectResponse("/admin/?digest=test_cc_sent", status_code=303)
         return RedirectResponse("/admin/?digest=test_fail", status_code=303)
@@ -478,9 +482,10 @@ def send_test_ss_report(request: Request, db: Session = Depends(get_db)):
         from webapp.services.report_emails import build_ss_email
         from etp_tracker.email_alerts import _send_html_digest
         dashboard_url = str(request.base_url).rstrip("/")
-        html = build_ss_email(dashboard_url=dashboard_url, db=db)
+        html, images = build_ss_email(dashboard_url=dashboard_url, db=db)
         ok = _send_html_digest(html, ["relasmar@rexfin.com"], edition="daily",
-                               subject_override="Single-Stock Leveraged ETFs")
+                               subject_override="Single-Stock ETF Report",
+                               images=images)
         if ok:
             return RedirectResponse("/admin/?digest=test_ss_sent", status_code=303)
         return RedirectResponse("/admin/?digest=test_fail", status_code=303)

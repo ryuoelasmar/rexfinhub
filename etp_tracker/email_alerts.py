@@ -982,8 +982,13 @@ def build_digest_html_from_db(
 
 def _send_html_digest(html_body: str, recipients: list[str],
                       edition: str = "daily",
-                      subject_override: str = "") -> bool:
-    """Send pre-built HTML digest via Azure Graph or SMTP."""
+                      subject_override: str = "",
+                      images: list[tuple[str, bytes, str]] | None = None) -> bool:
+    """Send pre-built HTML digest via Azure Graph or SMTP.
+
+    Args:
+        images: Optional list of (content_id, png_bytes, filename) for inline CID images.
+    """
     if subject_override:
         subject = f"{subject_override} - {datetime.now().strftime('%Y-%m-%d')}"
     else:
@@ -995,7 +1000,8 @@ def _send_html_digest(html_body: str, recipients: list[str],
     try:
         from webapp.services.graph_email import is_configured, send_email
         if is_configured():
-            if send_email(subject=subject, html_body=html_body, recipients=recipients):
+            if send_email(subject=subject, html_body=html_body,
+                          recipients=recipients, images=images):
                 return True
     except ImportError:
         pass
@@ -1005,11 +1011,22 @@ def _send_html_digest(html_body: str, recipients: list[str],
     if not config["user"] or not config["password"] or not config["from_addr"]:
         return False
 
-    msg = MIMEMultipart("alternative")
+    if images:
+        from email.mime.image import MIMEImage
+        msg = MIMEMultipart("related")
+        msg.attach(MIMEText(html_body, "html"))
+        for cid, png_bytes, filename in images:
+            img = MIMEImage(png_bytes, _subtype="png")
+            img.add_header("Content-ID", f"<{cid}>")
+            img.add_header("Content-Disposition", "inline", filename=filename)
+            msg.attach(img)
+    else:
+        msg = MIMEMultipart("alternative")
+        msg.attach(MIMEText(html_body, "html"))
+
     msg["Subject"] = subject
     msg["From"] = config["from_addr"]
     msg["To"] = ", ".join(recipients)
-    msg.attach(MIMEText(html_body, "html"))
 
     try:
         with smtplib.SMTP(config["host"], config["port"]) as server:
