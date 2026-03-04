@@ -504,6 +504,78 @@ def send_cc_report(request: Request, db: Session = Depends(get_db)):
         return RedirectResponse(f"/admin/?digest=error&msg={quote(str(e)[:100])}", status_code=303)
 
 
+# --- Flow Report ---
+
+@router.get("/reports/preview-flow")
+def preview_flow_report(request: Request, db: Session = Depends(get_db)):
+    """Preview Flow Report email in browser. ?refresh=1 clears stale cache."""
+    if not _is_admin(request):
+        return RedirectResponse("/admin/", status_code=302)
+    from fastapi.responses import HTMLResponse
+    try:
+        if request.query_params.get("refresh"):
+            from webapp.models import MktReportCache
+            db.execute(MktReportCache.__table__.delete().where(
+                MktReportCache.report_key == "flow_report"))
+            db.commit()
+            from webapp.services.report_data import invalidate_cache
+            invalidate_cache()
+        from webapp.services.report_emails import build_flow_email
+        dashboard_url = str(request.base_url).rstrip("/")
+        html, _images = build_flow_email(dashboard_url=dashboard_url, db=db)
+        return HTMLResponse(content=html)
+    except Exception as e:
+        log.error("Flow email preview failed: %s", e, exc_info=True)
+        return HTMLResponse(content=f"<h2>Error building Flow email</h2><pre>{e}</pre>", status_code=200)
+
+
+@router.post("/reports/send-test-flow")
+def send_test_flow_report(request: Request, db: Session = Depends(get_db)):
+    """Send Flow Report email to relasmar@rexfin.com only."""
+    if not _is_admin(request):
+        return RedirectResponse("/admin/", status_code=302)
+    try:
+        from webapp.services.report_emails import build_flow_email
+        from etp_tracker.email_alerts import _send_html_digest
+        dashboard_url = str(request.base_url).rstrip("/")
+        html, images = build_flow_email(dashboard_url=dashboard_url, db=db)
+        ok = _send_html_digest(html, ["relasmar@rexfin.com"], edition="daily",
+                               subject_override=f"REX ETF Weekly Flow Report - {datetime.now().strftime('%B %d, %Y')}",
+                               images=images)
+        if ok:
+            return RedirectResponse("/admin/?digest=test_flow_sent", status_code=303)
+        return RedirectResponse("/admin/?digest=test_fail", status_code=303)
+    except Exception as e:
+        from urllib.parse import quote
+        log.error("Test Flow report send failed: %s", e)
+        return RedirectResponse(f"/admin/?digest=error&msg={quote(str(e)[:100])}", status_code=303)
+
+
+@router.post("/reports/send-flow")
+def send_flow_report(request: Request, db: Session = Depends(get_db)):
+    """Send Flow Report email to all recipients."""
+    if not _is_admin(request):
+        return RedirectResponse("/admin/", status_code=302)
+    try:
+        from webapp.services.report_emails import build_flow_email
+        from etp_tracker.email_alerts import _send_html_digest, _load_recipients
+        dashboard_url = str(request.base_url).rstrip("/")
+        html, images = build_flow_email(dashboard_url=dashboard_url, db=db)
+        recipients = _load_recipients()
+        if not recipients:
+            return RedirectResponse("/admin/?digest=no_recipients", status_code=303)
+        ok = _send_html_digest(html, recipients, edition="daily",
+                               subject_override=f"REX ETF Weekly Flow Report - {datetime.now().strftime('%B %d, %Y')}",
+                               images=images)
+        if ok:
+            return RedirectResponse("/admin/?digest=flow_sent", status_code=303)
+        return RedirectResponse("/admin/?digest=flow_fail", status_code=303)
+    except Exception as e:
+        from urllib.parse import quote
+        log.error("Flow report send-all failed: %s", e)
+        return RedirectResponse(f"/admin/?digest=error&msg={quote(str(e)[:100])}", status_code=303)
+
+
 # --- Subscriber Management ---
 
 @router.post("/subscribers/approve")
