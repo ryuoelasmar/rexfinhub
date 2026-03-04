@@ -9,6 +9,7 @@ pdfminer.six>=20221105
 openpyxl>=3.1.0
 scipy>=1.11.0
 reportlab>=4.0.0
+matplotlib>=3.8.0
 
 # Web platform (FastAPI)
 fastapi>=0.115.0
