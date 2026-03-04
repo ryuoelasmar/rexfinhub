@@ -140,9 +140,9 @@ def _wrap_email(title: str, accent: str, body: str,
     if dash_link:
         cta = f"""
 <tr><td style="padding:20px 30px;text-align:center;">
-  <a href="{dash_link}/reports/" style="display:inline-block;padding:12px 28px;
+  <a href="{dash_link}/" style="display:inline-block;padding:12px 28px;
     background:{accent};color:{_WHITE};text-decoration:none;border-radius:6px;
-    font-weight:600;font-size:14px;">View Interactive Report</a>
+    font-weight:600;font-size:14px;">Visit REX FinHub</a>
 </td></tr>"""
 
     return f"""<!DOCTYPE html>
