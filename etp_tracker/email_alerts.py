@@ -798,7 +798,7 @@ def _gather_daily_data(db_session, since_date: str | None = None,
 
     edition: "daily"/"morning" looks back 24h, "evening" looks at today only.
     """
-    from sqlalchemy import func, select
+    from sqlalchemy import distinct, func, select
     from datetime import date as date_type
     from webapp.models import Trust, FundStatus, Filing, FundExtraction
 
@@ -846,7 +846,15 @@ def _gather_daily_data(db_session, since_date: str | None = None,
 
     # Bloomberg-only: no DB fallback (SEC effective dates are not launch dates)
 
+    # --- Subquery: trusts that have at least one ETF fund ---
+    _etf_trust_ids = (
+        select(FundStatus.trust_id)
+        .where(FundStatus.fund_name.ilike("%ETF%"))
+        .group_by(FundStatus.trust_id)
+    ).subquery()
+
     # --- New filings: fund-level detail with relevance classification ---
+    # Scoped to trusts that actually have ETF products
     filing_rows = db_session.execute(
         select(
             Trust.name.label("trust_name"), Trust.is_rex,
@@ -857,6 +865,7 @@ def _gather_daily_data(db_session, since_date: str | None = None,
         .outerjoin(FundExtraction, FundExtraction.filing_id == Filing.id)
         .where(Filing.filing_date >= since_dt)
         .where(Filing.form.ilike("485%"))
+        .where(Trust.id.in_(select(_etf_trust_ids.c.trust_id)))
         .order_by(Trust.is_rex.desc(), Filing.filing_date.desc())
     ).all()
 
@@ -916,6 +925,7 @@ def _gather_daily_data(db_session, since_date: str | None = None,
     filing_groups.sort(key=lambda x: x["_sort"], reverse=True)
 
     # --- Upcoming launches: PENDING with an actual expected date (no TBD) ---
+    # Scoped to trusts that actually have ETF products
     pending_rows = db_session.execute(
         select(
             FundStatus.fund_name, FundStatus.effective_date,
@@ -924,6 +934,7 @@ def _gather_daily_data(db_session, since_date: str | None = None,
         .join(Trust, Trust.id == FundStatus.trust_id)
         .where(FundStatus.status == "PENDING")
         .where(FundStatus.effective_date.isnot(None))
+        .where(Trust.id.in_(select(_etf_trust_ids.c.trust_id)))
         .order_by(Trust.is_rex.desc(), FundStatus.effective_date.asc())
     ).all()
 
@@ -936,21 +947,28 @@ def _gather_daily_data(db_session, since_date: str | None = None,
             "is_rex": r.is_rex,
         })
 
-    # --- KPI counts ---
+    # --- KPI counts (scoped to trusts with ETF products) ---
     trust_count = db_session.execute(
-        select(func.count(Trust.id)).where(Trust.is_active == True)
+        select(func.count(distinct(Trust.id)))
+        .join(FundStatus, FundStatus.trust_id == Trust.id)
+        .where(Trust.is_active == True)
+        .where(FundStatus.fund_name.ilike("%ETF%"))
     ).scalar() or 0
 
     newly_effective_1d = db_session.execute(
         select(func.count(FundStatus.id))
+        .join(Trust, Trust.id == FundStatus.trust_id)
         .where(FundStatus.status == "EFFECTIVE")
         .where(FundStatus.effective_date >= yesterday)
         .where(FundStatus.effective_date <= date_type.today())
+        .where(Trust.id.in_(select(_etf_trust_ids.c.trust_id)))
     ).scalar() or 0
 
     total_pending = db_session.execute(
         select(func.count(FundStatus.id))
+        .join(Trust, Trust.id == FundStatus.trust_id)
         .where(FundStatus.status == "PENDING")
+        .where(Trust.id.in_(select(_etf_trust_ids.c.trust_id)))
     ).scalar() or 0
 
     # Market snapshot (Bloomberg data — None if unavailable)

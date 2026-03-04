@@ -27,7 +27,7 @@ from etp_tracker.email_alerts import send_digest_email
 
 
 OUTPUT_DIR = PROJECT_ROOT / "outputs"
-SINCE_DATE = None  # No date limit - process all filings (incremental manifest handles speed)
+SINCE_DATE = "2023-01-01"  # 3-year window - skip ancient filings
 USER_AGENT = "REX-ETP-Tracker/2.0 (relasmar@rexfin.com)"
 DASHBOARD_URL = "https://rex-etp-tracker.onrender.com"
 RENDER_API_URL = "https://rex-etp-tracker.onrender.com/api/v1"
@@ -113,6 +113,7 @@ def main():
         since=SINCE_DATE,
         refresh_submissions=True,
         user_agent=USER_AGENT,
+        etf_only=True,
     )
     print(f"  Processed {n} trusts")
 
@@ -177,14 +178,20 @@ def main():
     digest_path.write_text(html, encoding="utf-8")
     print(f"  Saved: {digest_path}")
 
-    from etp_tracker.email_alerts import send_digest_from_db
-    _db2 = _SL()
-    try:
-        sent = send_digest_from_db(_db2, DASHBOARD_URL, edition=edition)
-    finally:
-        _db2.close()
-    if not sent:
-        print("  Email skipped (SMTP not configured). Opening digest in browser...")
+    send_email = "--send-email" in sys.argv
+    if send_email:
+        from etp_tracker.email_alerts import send_digest_from_db
+        _db2 = _SL()
+        try:
+            sent = send_digest_from_db(_db2, DASHBOARD_URL, edition=edition)
+        finally:
+            _db2.close()
+        if sent:
+            print("  Email sent.")
+        else:
+            print("  Email send failed (SMTP not configured).")
+    else:
+        print("  Email skipped (use --send-email to send). Opening digest in browser...")
         import webbrowser
         webbrowser.open(str(digest_path.resolve()))
 
