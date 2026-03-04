@@ -878,6 +878,143 @@ def build_cc_email(dashboard_url: str = "", db=None) -> tuple[str, list]:
 # ---------------------------------------------------------------------------
 # Backward compat: cid_to_data_uri (no-op since v3 has no CID images)
 # ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Flow Report Email (REX vs Competitors)
+# ---------------------------------------------------------------------------
+def _competitor_summary_line(summary: dict) -> str:
+    """Render a compact summary line below a group table."""
+    parts = []
+    cnt = summary.get("competitor_count", 0)
+    if cnt:
+        parts.append(f"{cnt} competitor{'s' if cnt != 1 else ''}")
+    net = summary.get("net_peer_flow_fmt", "")
+    if net:
+        parts.append(f"Net peer flow: {net}")
+    top = summary.get("top_gainer", "")
+    if top:
+        parts.append(f"Top: {top}")
+    bottom = summary.get("top_loser", "")
+    if bottom:
+        parts.append(f"Bottom: {bottom}")
+    if not parts:
+        return ""
+    text = " | ".join(parts)
+    return (
+        f'<tr><td style="padding:2px 30px 10px;">'
+        f'<div style="font-size:11px;color:{_GRAY};font-style:italic;">'
+        f'{_esc(text)}</div></td></tr>'
+    )
+
+
+def _flow_fund_table(funds: list[dict], highlight_col: int = 4) -> str:
+    """Render a standard flow table for a list of fund dicts."""
+    headers = ["Ticker", "Fund", "Issuer", "AUM", "Flow 1W", "Flow 1M"]
+    aligns = ["left", "left", "left", "right", "right", "right"]
+    widths = ["55px", "195px", "110px", "75px", "75px", "75px"]
+    rows = []
+    rex_row_indices = set()
+    for i, fund in enumerate(funds):
+        rows.append([
+            fund.get("ticker", ""),
+            fund.get("fund_name", "")[:35],
+            fund.get("issuer", "")[:18],
+            fund.get("aum_fmt", "$0"),
+            fund.get("flow_1w_fmt", "$0"),
+            fund.get("flow_1m_fmt", "$0"),
+        ])
+        if fund.get("is_rex"):
+            rex_row_indices.add(i)
+    return _table(headers, rows, aligns,
+                  highlight_col=highlight_col, rex_rows=rex_row_indices,
+                  col_widths=widths, nowrap=True)
+
+
+def build_flow_email(dashboard_url: str = "", db=None) -> tuple[str, list]:
+    """Build REX Competitive Flow Report email (category-based).
+
+    Returns (html, []) -- no CID images.
+    """
+    from webapp.services.report_data import get_flow_report
+    data = get_flow_report(db)
+
+    date_str = _data_date_str(data)
+    title = f"REX Competitive Flow Report - {date_str}"
+
+    if not data.get("available") or not data.get("categories"):
+        return _wrap_email(title, _NAVY,
+                           '<tr><td style="padding:20px 30px;">Flow report data not available.</td></tr>',
+                           dashboard_url, date_str), []
+
+    kpis = data.get("kpis", {})
+    categories = data.get("categories", [])
+    issuer_analysis = data.get("issuer_analysis", [])
+
+    body = ""
+
+    # --- KPI Banner ---
+    body += _kpi_row([
+        ("REX AUM", kpis.get("rex_aum", "$0"), _NAVY),
+        ("REX Flow 1W", kpis.get("rex_flow_1w", "$0"),
+         _GREEN if kpis.get("rex_flow_1w_positive", True) else _RED),
+        ("REX Flow 1M", kpis.get("rex_flow_1m", "$0"),
+         _GREEN if kpis.get("rex_flow_1m_positive", True) else _RED),
+        ("REX Share", kpis.get("rex_share", "0.0%"), _BLUE),
+    ], label="Summary")
+
+    # --- Issuer Flow Analysis ---
+    if issuer_analysis:
+        body += _section_title("Issuer Flow Analysis", _TEAL)
+        headers = ["Issuer", "# Funds", "AUM", "Flow 1W", "Flow 1M"]
+        aligns = ["left", "right", "right", "right", "right"]
+        widths = ["180px", "60px", "100px", "100px", "100px"]
+        rows = []
+        rex_row_indices = set()
+        for i, entry in enumerate(issuer_analysis):
+            rows.append([
+                entry.get("issuer", "")[:28],
+                str(entry.get("fund_count", 0)),
+                entry.get("aum_fmt", "$0"),
+                entry.get("flow_1w_fmt", "$0"),
+                entry.get("flow_1m_fmt", "$0"),
+            ])
+            if entry.get("is_rex"):
+                rex_row_indices.add(i)
+        body += _table(headers, rows, aligns, highlight_col=3,
+                       rex_rows=rex_row_indices, col_widths=widths, nowrap=True)
+
+    # --- Category sections ---
+    for cat in categories:
+        cat_name = cat.get("name", "")
+        cat_summary = cat.get("summary", {})
+        rex_share = cat_summary.get("rex_share_fmt", "")
+        aum_label = cat_summary.get("total_aum_fmt", "")
+        subtitle = f"{cat_name}  ({aum_label} AUM"
+        if rex_share:
+            subtitle += f", REX {rex_share}"
+        subtitle += ")"
+        body += _section_title(subtitle, _TEAL)
+
+        if cat.get("type") == "underlier":
+            # Per-underlier groups
+            for group in cat.get("groups", []):
+                underlier = group.get("underlier", "")
+                g_aum = group.get("total_aum_fmt", "")
+                g_rex_share = group.get("rex_share_fmt", "")
+                g_label = underlier
+                if g_rex_share and group.get("has_rex"):
+                    g_label += f" - REX Share: {g_rex_share}"
+                body += _sub_heading(f"{g_label}  ({g_aum})")
+                body += _flow_fund_table(group.get("funds", []))
+                body += _competitor_summary_line(group.get("summary", {}))
+
+        elif cat.get("type") == "flat":
+            body += _flow_fund_table(cat.get("funds", []))
+            body += _competitor_summary_line(cat_summary)
+
+    html = _wrap_email(title, _NAVY, body, dashboard_url, date_str)
+    return html, []
+
+
 def cid_to_data_uri(html: str, images: list[tuple[str, bytes, str]]) -> str:
     """Replace cid: references with data: URIs for browser preview.
 
