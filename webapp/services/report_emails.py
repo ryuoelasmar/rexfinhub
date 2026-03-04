@@ -419,7 +419,7 @@ def _aum_timeline_chart(timeline: dict, accent: str = _TEAL) -> str:
     return (
         f'<tr><td style="padding:12px 30px 8px;">'
         f'<div style="font-size:11px;font-weight:600;color:{_GRAY};text-transform:uppercase;'
-        f'letter-spacing:0.5px;margin-bottom:8px;">AUM Timeline (12 Months)</div>'
+        f'letter-spacing:0.5px;margin-bottom:8px;">AUM Timeline (3 Years)</div>'
         f'<img src="{chart_url}" width="600" height="250" alt="AUM Timeline Chart" '
         f'style="display:block;width:100%;max-width:600px;height:auto;border-radius:6px;" />'
         f'</td></tr>'
@@ -770,6 +770,18 @@ def _build_report_email(data: dict, report_type: str, title: str, accent: str,
         ss_items.insert(2, ("SS AUM WoW", wow_ss,
                             _GREEN if ss_kpis.get("aum_change_positive", True) else _RED))
     body += _kpi_row(ss_items, label="Single Stock")
+
+    # --- REX KPI Row ---
+    rex_kpis = data.get("rex_kpis", {})
+    if rex_kpis.get("count", 0) > 0:
+        rex_items = [
+            ("REX ETPs", str(rex_kpis.get("count", 0)), _REX_GREEN),
+            ("REX AUM", rex_kpis.get("total_aum", "$0"), _REX_GREEN),
+            ("REX 1W Flow", rex_kpis.get("flow_1w", "$0"),
+             _GREEN if rex_kpis.get("flow_1w_positive", True) else _RED),
+            ("REX Share", rex_kpis.get("share", "0.0%"), _REX_GREEN),
+        ]
+        body += _kpi_row(rex_items, label="REX Shares")
 
     # --- 2. AUM Timeline Chart ---
     timeline = data.get("aum_timeline", {})

@@ -258,14 +258,19 @@ def _load_all() -> dict[str, Any]:
         data_flow = _read_sheet("data_flow", index_col=0)
         data_notional = _read_sheet("data_notional", index_col=0)
 
-        # Strip " Equity" suffix from column names
+        # Fix index + strip " Equity" suffix from column names
         for df in [data_aum, data_flow, data_notional]:
+            # CSV export may produce an extra unnamed index col (0,1,2...)
+            # with the actual dates in a "Dates" column — use that instead
+            if "Dates" in df.columns:
+                df.index = pd.to_datetime(df["Dates"], errors="coerce")
+                df.drop(columns=["Dates"], inplace=True)
+            else:
+                df.index = pd.to_datetime(df.index, errors="coerce")
             df.columns = [
                 c.replace(" Equity", "").strip() if isinstance(c, str) else c
                 for c in df.columns
             ]
-            # Ensure index is datetime
-            df.index = pd.to_datetime(df.index, errors="coerce")
             df.dropna(how="all", axis=0, inplace=True)
 
         has_timeseries = True
@@ -737,6 +742,12 @@ def _compute_email_segment(df: pd.DataFrame, data_aum: pd.DataFrame,
         data_aum, df["ticker_clean"].tolist()
     )
 
+    # REX KPIs
+    rex_df = df[df["is_rex"] == True] if "is_rex" in df.columns else df.iloc[0:0]
+    rex_aum = float(rex_df["aum"].sum()) if not rex_df.empty else 0.0
+    rex_flow_1w = float(rex_df["fund_flow_1week"].sum()) if not rex_df.empty else 0.0
+    rex_share = (rex_aum / total_aum * 100) if total_aum > 0 else 0.0
+
     kpis = {
         "count": len(df),
         "total_aum": _fmt_currency(total_aum),
@@ -746,6 +757,11 @@ def _compute_email_segment(df: pd.DataFrame, data_aum: pd.DataFrame,
         "flow_1w_positive": flow_1w >= 0,
         "flow_ytd": _fmt_flow(flow_ytd),
         "flow_ytd_positive": flow_ytd >= 0,
+        "rex_count": len(rex_df),
+        "rex_aum": _fmt_currency(rex_aum),
+        "rex_flow_1w": _fmt_flow(rex_flow_1w),
+        "rex_flow_1w_positive": rex_flow_1w >= 0,
+        "rex_share": f"{rex_share:.1f}%",
     }
 
     if include_yield and "annualized_yield" in df.columns:
@@ -970,6 +986,17 @@ def get_li_report(db: Session | None = None) -> dict:
             "yield_fmt": _fmt_pct(_safe_float(r.get("annualized_yield", 0))),
         })
 
+    # REX total KPIs for email banner
+    _rex_aum = float(rex_li["aum"].sum()) if not rex_li.empty else 0
+    _rex_flow = float(rex_li["fund_flow_1week"].sum()) if not rex_li.empty else 0
+    rex_kpis = {
+        "count": len(rex_li),
+        "total_aum": _fmt_currency(_rex_aum),
+        "flow_1w": _fmt_flow(_rex_flow),
+        "flow_1w_positive": _rex_flow >= 0,
+        "share": f"{(_rex_aum / total_aum * 100):.1f}%" if total_aum > 0 else "0.0%",
+    }
+
     # Top 10 / Bottom 10 by 1W flow
     li_sorted = li.sort_values("fund_flow_1week", ascending=False)
     top10 = _fund_rows(li_sorted.head(10), total_aum)
@@ -1012,8 +1039,8 @@ def get_li_report(db: Session | None = None) -> dict:
         include_direction=True, clean_suffix=" US",
     )
 
-    # AUM timeline for email chart (last 12 months)
-    aum_timeline = _compute_aum_timeline(data_aum, li_tickers, rex_tickers, months=12)
+    # AUM timeline for email chart (last 3 years)
+    aum_timeline = _compute_aum_timeline(data_aum, li_tickers, rex_tickers, months=36)
 
     return {
         "available": True,
@@ -1022,6 +1049,7 @@ def get_li_report(db: Session | None = None) -> dict:
         "providers": providers,
         "total_row": total_row,
         "rex_funds": rex_funds_list,
+        "rex_kpis": rex_kpis,
         "top10": top10,
         "bottom10": bottom10,
         "chart": chart,
@@ -1164,6 +1192,16 @@ def get_cc_report(db: Session | None = None) -> dict:
             "yield_fmt": _fmt_pct(_safe_float(r.get("annualized_yield", 0))),
         })
 
+    # REX total KPIs for email banner
+    _rex_cc_flow = float(rex_cc["fund_flow_1week"].sum()) if not rex_cc.empty else 0
+    rex_kpis = {
+        "count": len(rex_cc),
+        "total_aum": _fmt_currency(rex_total_aum),
+        "flow_1w": _fmt_flow(_rex_cc_flow),
+        "flow_1w_positive": _rex_cc_flow >= 0,
+        "share": f"{(rex_total_aum / total_aum * 100):.1f}%" if total_aum > 0 else "0.0%",
+    }
+
     # Segment tabs: All, Traditional, Synthetic, Single Stock
     segments = {
         "All": cc,
@@ -1284,14 +1322,15 @@ def get_cc_report(db: Session | None = None) -> dict:
         include_yield=True, include_type=True, clean_suffix=" US",
     )
 
-    # AUM timeline for email chart (last 12 months)
-    aum_timeline = _compute_aum_timeline(data_aum, cc_tickers, rex_tickers, months=12)
+    # AUM timeline for email chart (last 3 years)
+    aum_timeline = _compute_aum_timeline(data_aum, cc_tickers, rex_tickers, months=36)
 
     return {
         "available": True,
         "data_as_of": cache["data_as_of"], "data_as_of_short": cache.get("data_as_of_short", ""),
         "kpis": kpis,
         "rex_funds": rex_funds_list,
+        "rex_kpis": rex_kpis,
         "rex_total_aum": _fmt_currency(rex_total_aum),
         "top_flow_segments": top_flow_segments,
         "top_yield_segments": top_yield_segments,
