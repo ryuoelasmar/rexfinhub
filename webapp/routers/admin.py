@@ -387,7 +387,7 @@ def preview_li_report(request: Request, db: Session = Depends(get_db)):
     try:
         from webapp.services.report_emails import build_li_email, cid_to_data_uri
         dashboard_url = str(request.base_url).rstrip("/")
-        html, images = build_li_email(dashboard_url=dashboard_url)
+        html, images = build_li_email(dashboard_url=dashboard_url, db=db)
         html = cid_to_data_uri(html, images)
         return HTMLResponse(content=html)
     except Exception as e:
@@ -404,7 +404,7 @@ def preview_cc_report(request: Request, db: Session = Depends(get_db)):
     try:
         from webapp.services.report_emails import build_cc_email, cid_to_data_uri
         dashboard_url = str(request.base_url).rstrip("/")
-        html, images = build_cc_email(dashboard_url=dashboard_url)
+        html, images = build_cc_email(dashboard_url=dashboard_url, db=db)
         html = cid_to_data_uri(html, images)
         return HTMLResponse(content=html)
     except Exception as e:
@@ -421,9 +421,8 @@ def preview_ss_report(request: Request, db: Session = Depends(get_db)):
     try:
         from webapp.services.report_emails import build_ss_email, cid_to_data_uri
         dashboard_url = str(request.base_url).rstrip("/")
-        html, images = build_ss_email(dashboard_url=dashboard_url)
+        html, images = build_ss_email(dashboard_url=dashboard_url, db=db)
         html = cid_to_data_uri(html, images)
-        return HTMLResponse(content=html)
     except Exception as e:
         log.error("SS email preview failed: %s", e, exc_info=True)
         return HTMLResponse(content=f"<h2>Error building SS email</h2><pre>{e}</pre>", status_code=200)
