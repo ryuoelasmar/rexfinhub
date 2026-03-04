@@ -621,6 +621,124 @@ def _compute_aum_wow(data_aum: pd.DataFrame, tickers: list[str]) -> tuple[str, b
 
 
 # ---------------------------------------------------------------------------
+# Email segment helper (shared by L&I + CC for v3 emails)
+# ---------------------------------------------------------------------------
+def _compute_email_segment(df: pd.DataFrame, data_aum: pd.DataFrame,
+                           include_yield: bool = False) -> dict:
+    """Compute KPIs, issuers, top10/bottom10 for one segment of funds.
+
+    Used by both get_li_report() and get_cc_report() to split
+    Index/ETF/Basket vs Single Stock data for v3 report emails.
+    """
+    if df.empty:
+        return {
+            "kpis": {"count": 0, "total_aum": "$0",
+                     "flow_1w": "$0", "flow_1w_positive": True,
+                     "flow_ytd": "$0", "flow_ytd_positive": True},
+            "issuers": [],
+            "top10": [],
+            "bottom10": [],
+        }
+
+    total_aum = float(df["aum"].sum())
+    flow_1w = float(df["fund_flow_1week"].sum())
+    flow_ytd = float(df["fund_flow_ytd"].sum())
+    aum_change_1w, aum_change_positive = _compute_aum_wow(
+        data_aum, df["ticker_clean"].tolist()
+    )
+
+    kpis = {
+        "count": len(df),
+        "total_aum": _fmt_currency(total_aum),
+        "aum_change_1w": aum_change_1w,
+        "aum_change_positive": aum_change_positive,
+        "flow_1w": _fmt_flow(flow_1w),
+        "flow_1w_positive": flow_1w >= 0,
+        "flow_ytd": _fmt_flow(flow_ytd),
+        "flow_ytd_positive": flow_ytd >= 0,
+    }
+
+    if include_yield and "annualized_yield" in df.columns:
+        avg_yield = float(
+            df["annualized_yield"].replace(0, float("nan")).mean()
+        )
+        if math.isnan(avg_yield):
+            avg_yield = 0.0
+        kpis["avg_yield"] = _fmt_pct(avg_yield)
+
+    # Issuer breakdown
+    issuer_col = (
+        "issuer_display" if "issuer_display" in df.columns
+        else ("issuer" if "issuer" in df.columns else "fund_name")
+    )
+    issuers = []
+    for issuer, grp in df.groupby(issuer_col, observed=True):
+        if not issuer or (isinstance(issuer, float) and math.isnan(issuer)):
+            continue
+        aum = float(grp["aum"].sum())
+        iss = {
+            "issuer": str(issuer),
+            "count": len(grp),
+            "aum": aum,
+            "aum_fmt": _fmt_currency(aum),
+            "flow_1w": float(grp["fund_flow_1week"].sum()),
+            "flow_1w_fmt": _fmt_flow(float(grp["fund_flow_1week"].sum())),
+            "flow_1m": float(grp["fund_flow_1month"].sum()),
+            "flow_1m_fmt": _fmt_flow(float(grp["fund_flow_1month"].sum())),
+            "flow_ytd": float(grp["fund_flow_ytd"].sum()),
+            "flow_ytd_fmt": _fmt_flow(float(grp["fund_flow_ytd"].sum())),
+            "market_share": (aum / total_aum * 100) if total_aum > 0 else 0.0,
+        }
+        if include_yield and "annualized_yield" in grp.columns:
+            avg_y = float(grp["annualized_yield"].replace(0, float("nan")).mean())
+            if math.isnan(avg_y):
+                avg_y = 0.0
+            iss["avg_yield"] = avg_y
+            iss["avg_yield_fmt"] = _fmt_pct(avg_y)
+        issuers.append(iss)
+    issuers.sort(key=lambda x: x["aum"], reverse=True)
+
+    # Top 10 / Bottom 10 by 1W flow
+    sorted_df = df.sort_values("fund_flow_1week", ascending=False)
+    top10 = _segment_fund_rows(sorted_df.head(10), total_aum)
+    bottom10 = _segment_fund_rows(
+        sorted_df.tail(10).sort_values("fund_flow_1week", ascending=True),
+        total_aum,
+    )
+
+    return {
+        "kpis": kpis,
+        "issuers": issuers,
+        "top10": top10,
+        "bottom10": bottom10,
+    }
+
+
+def _segment_fund_rows(df: pd.DataFrame, total_aum: float) -> list[dict]:
+    """Build fund row dicts for segment display (email tables)."""
+    rows = []
+    for _, r in df.iterrows():
+        ticker = str(r.get("ticker_clean", r.get("ticker", "")))
+        aum = _safe_float(r.get("aum", 0))
+        issuer = str(r.get("issuer_display", r.get("issuer", "")))
+        rows.append({
+            "ticker": ticker,
+            "fund_name": str(r.get("fund_name", "")),
+            "issuer": issuer,
+            "aum": aum,
+            "aum_fmt": _fmt_currency(aum),
+            "flow_1w": _safe_float(r.get("fund_flow_1week", 0)),
+            "flow_1w_fmt": _fmt_flow(_safe_float(r.get("fund_flow_1week", 0))),
+            "return_1w": _safe_float(r.get("total_return_1week", 0)),
+            "return_1w_fmt": _fmt_pct(_safe_float(r.get("total_return_1week", 0))),
+            "yield_val": _safe_float(r.get("annualized_yield", 0)),
+            "yield_fmt": _fmt_pct(_safe_float(r.get("annualized_yield", 0))),
+            "is_rex": bool(r.get("is_rex", False)),
+        })
+    return rows
+
+
+# ---------------------------------------------------------------------------
 # L&I Report
 # ---------------------------------------------------------------------------
 def get_li_report(db: Session | None = None) -> dict:
@@ -779,6 +897,17 @@ def get_li_report(db: Session | None = None) -> dict:
     daily_flow_chart = _daily_series(data_flow, li_tickers, issuer_grp_map, top_n=5, rolling_window=7)
     daily_volume_chart = _daily_series(data_notional, li_tickers, issuer_grp_map, top_n=5, rolling_window=10)
 
+    # Segment split: Index/ETF/Basket vs Single Stock (for v3 emails)
+    if "map_li_subcategory" in li.columns:
+        ss_mask = li["map_li_subcategory"].str.lower() == "single stock"
+        li_index_df = li[~ss_mask]
+        li_ss_df = li[ss_mask]
+    else:
+        li_index_df = li
+        li_ss_df = pd.DataFrame()
+    index_seg = _compute_email_segment(li_index_df, data_aum)
+    ss_seg = _compute_email_segment(li_ss_df, data_aum)
+
     return {
         "available": True,
         "data_as_of": cache["data_as_of"], "data_as_of_short": cache.get("data_as_of_short", ""),
@@ -792,6 +921,15 @@ def get_li_report(db: Session | None = None) -> dict:
         "flow_chart": flow_chart,
         "daily_flow_chart": daily_flow_chart,
         "daily_volume_chart": daily_volume_chart,
+        # V3 email segments
+        "index_kpis": index_seg["kpis"],
+        "ss_kpis": ss_seg["kpis"],
+        "index_issuers": index_seg["issuers"],
+        "ss_issuers": ss_seg["issuers"],
+        "index_top10": index_seg["top10"],
+        "index_bottom10": index_seg["bottom10"],
+        "ss_top10": ss_seg["top10"],
+        "ss_bottom10": ss_seg["bottom10"],
     }
 
 
@@ -1010,6 +1148,17 @@ def get_cc_report(db: Session | None = None) -> dict:
     daily_flow_chart = _daily_series(data_flow, cc_tickers, cc_issuer_map, top_n=5, rolling_window=7)
     daily_volume_chart = _daily_series(data_notional, cc_tickers, cc_issuer_map, top_n=5, rolling_window=10)
 
+    # Segment split: Index/ETF/Basket vs Single Stock (for v3 emails)
+    if "cc_category" in cc.columns:
+        ss_mask = cc["cc_category"] == "Single Stock"
+        cc_index_df = cc[~ss_mask]
+        cc_ss_df = cc[ss_mask]
+    else:
+        cc_index_df = cc
+        cc_ss_df = pd.DataFrame()
+    cc_index_seg = _compute_email_segment(cc_index_df, data_aum, include_yield=True)
+    cc_ss_seg = _compute_email_segment(cc_ss_df, data_aum, include_yield=True)
+
     return {
         "available": True,
         "data_as_of": cache["data_as_of"], "data_as_of_short": cache.get("data_as_of_short", ""),
@@ -1026,6 +1175,15 @@ def get_cc_report(db: Session | None = None) -> dict:
         "flow_chart": flow_chart,
         "daily_flow_chart": daily_flow_chart,
         "daily_volume_chart": daily_volume_chart,
+        # V3 email segments
+        "index_kpis": cc_index_seg["kpis"],
+        "ss_kpis": cc_ss_seg["kpis"],
+        "index_issuers": cc_index_seg["issuers"],
+        "ss_issuers": cc_ss_seg["issuers"],
+        "index_top10": cc_index_seg["top10"],
+        "index_bottom10": cc_index_seg["bottom10"],
+        "ss_top10": cc_ss_seg["top10"],
+        "ss_bottom10": cc_ss_seg["bottom10"],
     }
 
 
