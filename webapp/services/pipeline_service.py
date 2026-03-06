@@ -69,7 +69,7 @@ def run_pipeline_background(triggered_by: str = "api") -> None:
                 overrides[t.cik] = t.name
                 log.info("Including DB-only trust: %s (CIK %s)", t.name, t.cik)
 
-        n = run_pipeline(
+        n, changed_trusts = run_pipeline(
             ciks=ciks,
             overrides=overrides,
             since=SINCE_DATE,
@@ -80,7 +80,7 @@ def run_pipeline_background(triggered_by: str = "api") -> None:
         # Sync to DB
         from webapp.services.sync_service import seed_trusts, sync_all
         seed_trusts(db)
-        sync_all(db, OUTPUT_DIR)
+        sync_all(db, OUTPUT_DIR, only_trusts=changed_trusts if changed_trusts is not None else None)
 
         run.status = "completed"
         run.trusts_processed = n

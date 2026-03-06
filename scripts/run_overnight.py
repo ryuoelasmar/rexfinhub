@@ -75,7 +75,7 @@ def main():
     # Step 1: Run full pipeline (incremental - manifests skip already-processed filings)
     print(f"\n[1/5] Running pipeline for {len(ciks)} trusts...")
     try:
-        n = run_pipeline(
+        n, _ = run_pipeline(
             ciks=ciks,
             overrides=get_overrides(),
             refresh_submissions=True,

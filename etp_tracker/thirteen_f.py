@@ -371,54 +371,422 @@ def ingest_13f_dataset(
 
 
 # ---------------------------------------------------------------------------
-# 3. ingest_13f_incremental  (stub)
+# 3. ingest_13f_incremental  (full XML parsing)
 # ---------------------------------------------------------------------------
 def ingest_13f_incremental(
     user_agent: str,
     days_back: int = 7,
     cache_dir: str = "http_cache",
-) -> list[str]:
-    """Search EDGAR EFTS for recent 13F-HR filings.
+) -> dict:
+    """Search EDGAR EFTS for recent 13F-HR filings and parse XML infotables.
 
-    This is a stub -- it discovers accession numbers but does not yet
-    parse the individual XML infotables. Full XML parsing is TODO.
+    For each filing found:
+    1. Fetch the filing index page to find the XML infotable URL
+    2. Parse holdings from the XML infotable
+    3. Upsert Institution + insert Holdings (dedup by accession)
 
     Args:
         user_agent: SEC-compliant User-Agent string
         days_back: how many days back to search
-        cache_dir: directory for caching (unused in stub)
+        cache_dir: directory for caching
 
     Returns:
-        List of accession numbers found.
+        Stats dict with counts.
     """
+    import xml.etree.ElementTree as ET
+
+    stats = {
+        "filings_found": 0,
+        "filings_parsed": 0,
+        "filings_skipped": 0,
+        "institutions_upserted": 0,
+        "holdings_inserted": 0,
+        "cusips_matched": 0,
+        "errors": [],
+    }
+
     end = date.today()
     start = end - timedelta(days=days_back)
 
-    url = SEC_EFTS_URL.format(
-        start=start.strftime("%Y-%m-%d"),
-        end=end.strftime("%Y-%m-%d"),
-    )
+    # Search EFTS for recent 13F-HR filings
     log.info("Searching EFTS for 13F-HR filings: %s to %s", start, end)
+    filing_hits = _search_13f_filings(user_agent, start, end)
+    stats["filings_found"] = len(filing_hits)
 
-    accessions: list[str] = []
+    if not filing_hits:
+        log.info("No recent 13F-HR filings found")
+        return stats
+
+    db = SessionLocal()
     try:
-        resp = _fetch(url, user_agent)
-        data = resp.json()
-        hits = data.get("hits", {}).get("hits", [])
-        for hit in hits:
-            source = hit.get("_source", {})
-            acc = source.get("file_num") or source.get("accession_no", "")
-            if acc:
-                accessions.append(acc)
-        log.info("Found %d recent 13F-HR filings (stub -- not parsed)", len(accessions))
+        # Pre-load CUSIP mappings
+        cusip_set = set(
+            row[0] for row in db.execute(select(CusipMapping.cusip)).all()
+        )
+
+        for hit in filing_hits:
+            cik = hit["cik"]
+            accession = hit["accession"]
+            company_name = hit.get("company_name", f"CIK {cik}")
+
+            # Skip if already ingested (dedup by accession)
+            existing = db.execute(
+                select(Holding.id).where(Holding.filing_accession == accession)
+            ).first()
+            if existing:
+                stats["filings_skipped"] += 1
+                continue
+
+            try:
+                # Fetch filing index to find XML infotable
+                xml_url = _find_infotable_xml_url(cik, accession, user_agent)
+                if not xml_url:
+                    stats["errors"].append(f"No XML infotable for {accession}")
+                    continue
+
+                # Parse XML infotable
+                holdings_data = _parse_13f_xml(xml_url, user_agent)
+                if not holdings_data:
+                    continue
+
+                # Upsert institution
+                inst = db.execute(
+                    select(Institution).where(Institution.cik == str(cik))
+                ).scalar_one_or_none()
+
+                if inst:
+                    inst.name = company_name
+                    inst.filing_count = inst.filing_count + 1
+                    inst.last_filed = end
+                    inst.updated_at = datetime.utcnow()
+                else:
+                    inst = Institution(
+                        cik=str(cik),
+                        name=company_name,
+                        filing_count=1,
+                        last_filed=end,
+                    )
+                    db.add(inst)
+                    db.flush()
+
+                stats["institutions_upserted"] += 1
+
+                # Insert holdings
+                report_date = hit.get("report_date", end)
+                for h in holdings_data:
+                    cusip = h.get("cusip", "").strip()
+                    holding = Holding(
+                        institution_id=inst.id,
+                        report_date=report_date,
+                        filing_accession=accession,
+                        issuer_name=h.get("issuer_name"),
+                        cusip=cusip or None,
+                        value_usd=h.get("value"),
+                        shares=h.get("shares"),
+                        share_type=h.get("share_type"),
+                        investment_discretion=h.get("investment_discretion"),
+                        voting_sole=h.get("voting_sole"),
+                        voting_shared=h.get("voting_shared"),
+                        voting_none=h.get("voting_none"),
+                    )
+                    db.add(holding)
+                    stats["holdings_inserted"] += 1
+
+                    if cusip and cusip in cusip_set:
+                        stats["cusips_matched"] += 1
+
+                db.commit()
+                stats["filings_parsed"] += 1
+                log.info("Parsed %s: %d holdings", accession, len(holdings_data))
+
+            except Exception as exc:
+                db.rollback()
+                msg = f"Error parsing {accession}: {exc}"
+                log.warning(msg)
+                stats["errors"].append(msg)
+
+    finally:
+        db.close()
+
+    log.info(
+        "Incremental: %d found, %d parsed, %d skipped, %d holdings, %d CUSIP matches",
+        stats["filings_found"], stats["filings_parsed"], stats["filings_skipped"],
+        stats["holdings_inserted"], stats["cusips_matched"],
+    )
+    return stats
+
+
+def _search_13f_filings(user_agent: str, start: date, end: date) -> list[dict]:
+    """Search EFTS for 13F-HR filings in date range. Returns list of hit dicts."""
+    hits = []
+    offset = 0
+
+    while True:
+        url = (
+            f"https://efts.sec.gov/LATEST/search-index"
+            f"?forms=13F-HR&dateRange=custom"
+            f"&startdt={start.strftime('%Y-%m-%d')}"
+            f"&enddt={end.strftime('%Y-%m-%d')}"
+            f"&from={offset}"
+        )
+        try:
+            resp = _fetch(url, user_agent)
+            data = resp.json()
+        except Exception as exc:
+            log.error("EFTS search failed: %s", exc)
+            break
+
+        page_hits = data.get("hits", {}).get("hits", [])
+        if not page_hits:
+            break
+
+        for h in page_hits:
+            src = h.get("_source", {})
+            ciks = src.get("ciks", [])
+            if not ciks:
+                continue
+            acc = src.get("adsh", "")
+            if not acc:
+                continue
+
+            report_date_str = src.get("period_of_report", "")
+            try:
+                report_dt = datetime.strptime(report_date_str, "%Y-%m-%d").date()
+            except (ValueError, TypeError):
+                report_dt = start
+
+            hits.append({
+                "cik": str(int(ciks[0])),
+                "accession": acc,
+                "company_name": src.get("entity_name", ""),
+                "report_date": report_dt,
+            })
+
+        total = data.get("hits", {}).get("total", {}).get("value", 0)
+        offset += len(page_hits)
+        if offset >= total:
+            break
+
+    return hits
+
+
+def _find_infotable_xml_url(cik: str, accession: str, user_agent: str) -> str | None:
+    """Fetch the filing index and find the XML infotable URL."""
+    acc_no_dash = accession.replace("-", "")
+    index_url = f"https://www.sec.gov/Archives/edgar/data/{cik}/{acc_no_dash}/{accession}-index.htm"
+
+    try:
+        resp = _fetch(index_url, user_agent)
+        html = resp.text
+    except Exception:
+        return None
+
+    # Look for XML infotable link in the index page
+    # The infotable XML typically has "infotable" in the filename
+    import re
+    pattern = re.compile(r'href="([^"]*infotable[^"]*\.xml)"', re.IGNORECASE)
+    match = pattern.search(html)
+    if match:
+        path = match.group(1)
+        if path.startswith("/"):
+            return f"https://www.sec.gov{path}"
+        return f"https://www.sec.gov/Archives/edgar/data/{cik}/{acc_no_dash}/{path}"
+
+    # Fallback: look for any XML file in the index
+    pattern2 = re.compile(
+        rf'href="(/Archives/edgar/data/{cik}/{acc_no_dash}/[^"]*\.xml)"',
+        re.IGNORECASE,
+    )
+    match2 = pattern2.search(html)
+    if match2:
+        return f"https://www.sec.gov{match2.group(1)}"
+
+    return None
+
+
+def _parse_13f_xml(xml_url: str, user_agent: str) -> list[dict]:
+    """Parse a 13F-HR XML infotable into a list of holding dicts."""
+    import xml.etree.ElementTree as ET
+
+    try:
+        resp = _fetch(xml_url, user_agent, timeout=60)
+        content = resp.text
     except Exception as exc:
-        log.error("EFTS search failed: %s", exc)
+        log.warning("Failed to fetch XML: %s", exc)
+        return []
 
-    # TODO: For each accession, fetch the 13F-HR XML infotable and parse
-    #       individual holdings. The bulk ZIP approach handles historical
-    #       data; this path is for near-real-time updates between quarters.
+    try:
+        root = ET.fromstring(content)
+    except ET.ParseError as exc:
+        log.warning("XML parse error for %s: %s", xml_url, exc)
+        return []
 
-    return accessions
+    # Handle namespace: 13F XML uses varying namespaces
+    ns = ""
+    if root.tag.startswith("{"):
+        ns = root.tag.split("}")[0] + "}"
+
+    holdings = []
+    for info in root.iter(f"{ns}infoTable"):
+        def _text(tag):
+            el = info.find(f"{ns}{tag}")
+            return el.text.strip() if el is not None and el.text else ""
+
+        def _int(tag):
+            val = _text(tag)
+            try:
+                return int(float(val))
+            except (ValueError, TypeError):
+                return None
+
+        def _float(tag):
+            val = _text(tag)
+            try:
+                return float(val)
+            except (ValueError, TypeError):
+                return None
+
+        # Parse voting authority (nested element)
+        voting = info.find(f"{ns}votingAuthority")
+        voting_sole = voting_shared = voting_none = None
+        if voting is not None:
+            def _voting_int(tag):
+                el = voting.find(f"{ns}{tag}")
+                if el is not None and el.text:
+                    try:
+                        return int(float(el.text.strip()))
+                    except (ValueError, TypeError):
+                        pass
+                return None
+            voting_sole = _voting_int("Sole")
+            voting_shared = _voting_int("Shared")
+            voting_none = _voting_int("None")
+
+        # Parse shares/principal amount (nested)
+        shares_el = info.find(f"{ns}shrsOrPrnAmt")
+        shares = None
+        share_type = None
+        if shares_el is not None:
+            amt_el = shares_el.find(f"{ns}sshPrnamt")
+            type_el = shares_el.find(f"{ns}sshPrnamtType")
+            if amt_el is not None and amt_el.text:
+                try:
+                    shares = float(amt_el.text.strip())
+                except (ValueError, TypeError):
+                    pass
+            if type_el is not None and type_el.text:
+                share_type = type_el.text.strip()
+
+        holdings.append({
+            "issuer_name": _text("nameOfIssuer"),
+            "cusip": _text("cusip"),
+            "value": _float("value"),
+            "shares": shares,
+            "share_type": share_type,
+            "investment_discretion": _text("investmentDiscretion"),
+            "voting_sole": voting_sole,
+            "voting_shared": voting_shared,
+            "voting_none": voting_none,
+        })
+
+    return holdings
+
+
+# ---------------------------------------------------------------------------
+# 4. get_latest_available_quarter
+# ---------------------------------------------------------------------------
+def get_latest_available_quarter() -> str | None:
+    """Auto-detect the most recent quarterly 13F dataset available on SEC.
+
+    SEC publishes bulk datasets with naming like '2025q4'. Check from the
+    current quarter backwards until we find one that exists.
+
+    Returns:
+        Quarter string like '2025q4', or None if none found.
+    """
+    today = date.today()
+    year = today.year
+    quarter = (today.month - 1) // 3 + 1
+
+    # Check current and previous 4 quarters
+    for _ in range(5):
+        label = f"{year}q{quarter}"
+        url = SEC_BULK_URL.format(quarter=label)
+        try:
+            resp = requests.head(url, headers={"User-Agent": "REX-ETP-FilingTracker/2.0"}, timeout=10)
+            if resp.status_code == 200:
+                return label
+        except Exception:
+            pass
+
+        quarter -= 1
+        if quarter < 1:
+            quarter = 4
+            year -= 1
+
+    return None
+
+
+# ---------------------------------------------------------------------------
+# 5. enrich_cusip_mappings_from_holdings
+# ---------------------------------------------------------------------------
+def enrich_cusip_mappings_from_holdings() -> int:
+    """Match unlinked CUSIPs in holdings to fund tickers via mkt_master_data.
+
+    Finds CUSIPs that appear in holdings but don't have a cusip_mapping entry,
+    and tries to match them using issuer_name similarity to mkt_master_data.
+
+    Returns:
+        Count of new CUSIP mappings created.
+    """
+    db = SessionLocal()
+    try:
+        # Get CUSIPs from holdings that aren't in cusip_mappings yet
+        mapped_cusips = set(
+            row[0] for row in db.execute(select(CusipMapping.cusip)).all()
+        )
+
+        unmapped = db.execute(
+            select(Holding.cusip, Holding.issuer_name)
+            .where(Holding.cusip.isnot(None))
+            .where(Holding.cusip != "")
+            .distinct()
+        ).all()
+
+        # Load master data for matching
+        master_rows = db.execute(
+            select(MktMasterData.cusip, MktMasterData.ticker, MktMasterData.fund_name)
+            .where(MktMasterData.cusip.isnot(None))
+            .where(MktMasterData.cusip != "")
+        ).all()
+        master_by_cusip = {row[0].strip(): (row[1], row[2]) for row in master_rows if row[0]}
+
+        count = 0
+        for cusip, issuer_name in unmapped:
+            cusip = cusip.strip()
+            if not cusip or cusip in mapped_cusips:
+                continue
+
+            # Direct CUSIP match against master data
+            if cusip in master_by_cusip:
+                ticker, fund_name = master_by_cusip[cusip]
+                db.add(CusipMapping(
+                    cusip=cusip,
+                    ticker=ticker,
+                    fund_name=fund_name,
+                    source="holdings_enrichment",
+                ))
+                mapped_cusips.add(cusip)
+                count += 1
+
+                if count % BATCH_SIZE == 0:
+                    db.commit()
+
+        db.commit()
+        log.info("Enriched %d CUSIP mappings from holdings", count)
+        return count
+    finally:
+        db.close()
 
 
 # ---------------------------------------------------------------------------
@@ -462,14 +830,29 @@ if __name__ == "__main__":
                 print(f"    - {e}")
 
     elif cmd == "incremental":
-        accessions = ingest_13f_incremental(user_agent)
-        print(f"Found {len(accessions)} recent 13F-HR filings (stub).")
-        for acc in accessions[:10]:
-            print(f"  {acc}")
-        if len(accessions) > 10:
-            print(f"  ... and {len(accessions) - 10} more")
+        stats = ingest_13f_incremental(user_agent)
+        print(f"Filings found:   {stats['filings_found']}")
+        print(f"Filings parsed:  {stats['filings_parsed']}")
+        print(f"Filings skipped: {stats['filings_skipped']}")
+        print(f"Holdings added:  {stats['holdings_inserted']}")
+        print(f"CUSIPs matched:  {stats['cusips_matched']}")
+        if stats["errors"]:
+            print(f"Errors: {len(stats['errors'])}")
+            for e in stats["errors"][:10]:
+                print(f"  - {e}")
+
+    elif cmd == "latest-quarter":
+        q = get_latest_available_quarter()
+        if q:
+            print(f"Latest available quarter: {q}")
+        else:
+            print("No quarterly dataset found")
+
+    elif cmd == "enrich":
+        n = enrich_cusip_mappings_from_holdings()
+        print(f"Enriched {n} CUSIP mappings from holdings")
 
     else:
         print(f"Unknown command: {cmd}")
-        print("Valid commands: seed, ingest, incremental")
+        print("Valid commands: seed, ingest, incremental, latest-quarter, enrich")
         sys.exit(1)

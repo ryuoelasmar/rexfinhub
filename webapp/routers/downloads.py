@@ -26,6 +26,19 @@ OUTPUTS_DIR = PROJECT_ROOT / "outputs"
 _PRIORITY_TRUSTS = ["REX ETF Trust", "ETF Opportunities Trust"]
 
 
+def _stream_csv(header: list[str], row_generator):
+    """Yield CSV content row-by-row to avoid buffering the entire file in memory."""
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(header)
+    yield buf.getvalue()
+    for row_data in row_generator:
+        buf = io.StringIO()
+        writer = csv.writer(buf)
+        writer.writerow(row_data)
+        yield buf.getvalue()
+
+
 def _safe_path(requested: str) -> Path:
     """Resolve a requested path and ensure it's within OUTPUTS_DIR."""
     resolved = (OUTPUTS_DIR / requested).resolve()
@@ -117,37 +130,29 @@ def download_file(path: str):
 
 @router.get("/export/funds")
 def export_funds_csv(db: Session = Depends(get_db)):
-    """Live CSV export of all fund statuses."""
-    results = db.execute(
-        select(FundStatus, Trust.name.label("trust_name"))
-        .join(Trust, Trust.id == FundStatus.trust_id)
-        .order_by(Trust.name, FundStatus.fund_name)
-    ).all()
-
-    buf = io.StringIO()
-    writer = csv.writer(buf)
-    writer.writerow([
+    """Live CSV export of all fund statuses (streamed)."""
+    header = [
         "Trust", "Fund Name", "Ticker", "Series ID",
         "Status", "Effective Date", "Latest Form",
         "Latest Filing Date", "Status Reason",
-    ])
-    for row in results:
-        f = row.FundStatus
-        writer.writerow([
-            row.trust_name,
-            f.fund_name,
-            f.ticker or "",
-            f.series_id or "",
-            f.status or "",
-            f.effective_date or "",
-            f.latest_form or "",
-            f.latest_filing_date or "",
-            f.status_reason or "",
-        ])
+    ]
 
-    buf.seek(0)
+    def rows():
+        for row in db.execute(
+            select(FundStatus, Trust.name.label("trust_name"))
+            .join(Trust, Trust.id == FundStatus.trust_id)
+            .order_by(Trust.name, FundStatus.fund_name)
+        ).yield_per(500):
+            f = row.FundStatus
+            yield [
+                row.trust_name, f.fund_name, f.ticker or "",
+                f.series_id or "", f.status or "", f.effective_date or "",
+                f.latest_form or "", f.latest_filing_date or "",
+                f.status_reason or "",
+            ]
+
     return StreamingResponse(
-        iter([buf.getvalue()]),
+        _stream_csv(header, rows()),
         media_type="text/csv",
         headers={"Content-Disposition": "attachment; filename=funds_export.csv"},
     )
@@ -155,47 +160,39 @@ def export_funds_csv(db: Session = Depends(get_db)):
 
 @router.get("/export/filings")
 def export_filings_csv(db: Session = Depends(get_db)):
-    """Live CSV export of all filings across all trusts."""
-    results = db.execute(
-        select(
-            Filing,
-            Trust.name.label("trust_name"),
-            FundExtraction.series_name,
-            FundExtraction.class_name,
-            FundExtraction.ticker,
-            FundExtraction.effective_date,
-            FundExtraction.confidence,
-        )
-        .join(Trust, Trust.id == Filing.trust_id)
-        .outerjoin(FundExtraction, FundExtraction.filing_id == Filing.id)
-        .order_by(Trust.name, Filing.filing_date.desc())
-    ).all()
-
-    buf = io.StringIO()
-    writer = csv.writer(buf)
-    writer.writerow([
+    """Live CSV export of all filings across all trusts (streamed)."""
+    header = [
         "Trust", "Filing Date", "Form", "Accession Number",
         "Series Name", "Class Name", "Ticker",
         "Effective Date", "Confidence", "Primary Link",
-    ])
-    for row in results:
-        f = row.Filing
-        writer.writerow([
-            row.trust_name,
-            f.filing_date or "",
-            f.form or "",
-            f.accession_number or "",
-            row.series_name or "",
-            row.class_name or "",
-            row.ticker or "",
-            row.effective_date or "",
-            row.confidence or "",
-            f.primary_link or "",
-        ])
+    ]
 
-    buf.seek(0)
+    def rows():
+        for row in db.execute(
+            select(
+                Filing,
+                Trust.name.label("trust_name"),
+                FundExtraction.series_name,
+                FundExtraction.class_name,
+                FundExtraction.ticker,
+                FundExtraction.effective_date,
+                FundExtraction.confidence,
+            )
+            .join(Trust, Trust.id == Filing.trust_id)
+            .outerjoin(FundExtraction, FundExtraction.filing_id == Filing.id)
+            .order_by(Trust.name, Filing.filing_date.desc())
+        ).yield_per(500):
+            f = row.Filing
+            yield [
+                row.trust_name, f.filing_date or "", f.form or "",
+                f.accession_number or "", row.series_name or "",
+                row.class_name or "", row.ticker or "",
+                row.effective_date or "", row.confidence or "",
+                f.primary_link or "",
+            ]
+
     return StreamingResponse(
-        iter([buf.getvalue()]),
+        _stream_csv(header, rows()),
         media_type="text/csv",
         headers={"Content-Disposition": "attachment; filename=filings_export.csv"},
     )
@@ -210,47 +207,39 @@ def export_trust_filings(trust_id: int, db: Session = Depends(get_db)):
     if not trust:
         raise HTTPException(status_code=404, detail="Trust not found")
 
-    results = db.execute(
-        select(
-            Filing,
-            FundExtraction.series_name,
-            FundExtraction.class_name,
-            FundExtraction.ticker,
-            FundExtraction.effective_date,
-            FundExtraction.confidence,
-        )
-        .outerjoin(FundExtraction, FundExtraction.filing_id == Filing.id)
-        .where(Filing.trust_id == trust_id)
-        .order_by(Filing.filing_date.desc(), FundExtraction.series_name)
-    ).all()
-
     slug = trust.slug or trust.name.lower().replace(" ", "-")
     filename = f"{slug}_filings.csv"
 
-    buf = io.StringIO()
-    writer = csv.writer(buf)
-    writer.writerow([
+    header = [
         "Filing Date", "Form", "Accession Number",
         "Series Name", "Class Name", "Ticker",
         "Effective Date", "Confidence", "Primary Link",
-    ])
-    for row in results:
-        f = row.Filing
-        writer.writerow([
-            f.filing_date or "",
-            f.form or "",
-            f.accession_number or "",
-            row.series_name or "",
-            row.class_name or "",
-            row.ticker or "",
-            row.effective_date or "",
-            row.confidence or "",
-            f.primary_link or "",
-        ])
+    ]
 
-    buf.seek(0)
+    def rows():
+        for row in db.execute(
+            select(
+                Filing,
+                FundExtraction.series_name,
+                FundExtraction.class_name,
+                FundExtraction.ticker,
+                FundExtraction.effective_date,
+                FundExtraction.confidence,
+            )
+            .outerjoin(FundExtraction, FundExtraction.filing_id == Filing.id)
+            .where(Filing.trust_id == trust_id)
+            .order_by(Filing.filing_date.desc(), FundExtraction.series_name)
+        ).yield_per(500):
+            f = row.Filing
+            yield [
+                f.filing_date or "", f.form or "", f.accession_number or "",
+                row.series_name or "", row.class_name or "",
+                row.ticker or "", row.effective_date or "",
+                row.confidence or "", f.primary_link or "",
+            ]
+
     return StreamingResponse(
-        iter([buf.getvalue()]),
+        _stream_csv(header, rows()),
         media_type="text/csv",
         headers={"Content-Disposition": f"attachment; filename={filename}"},
     )
@@ -375,15 +364,21 @@ def _write_market_csv(rows: list, cols: list[tuple[str, str]]) -> str:
     return buf.getvalue()
 
 
+def _stream_market_csv(rows, cols: list[tuple[str, str]]):
+    """Yield market data as CSV row-by-row."""
+    header = [label for _, label in cols]
+    return _stream_csv(header, ([getattr(r, col, "") for col, _ in cols] for r in rows))
+
+
 @router.get("/export/market/master")
 def export_market_master(db: Session = Depends(get_db)):
-    """CSV export of all market master data (deduplicated)."""
+    """CSV export of all market master data (deduplicated, streamed)."""
     rows = _dedup_query(
         select(MktMasterData).order_by(MktMasterData.etp_category, MktMasterData.ticker),
         db,
     )
     return StreamingResponse(
-        iter([_write_market_csv(rows, _MARKET_MASTER_COLS)]),
+        _stream_market_csv(rows, _MARKET_MASTER_COLS),
         media_type="text/csv",
         headers={"Content-Disposition": "attachment; filename=market_master_data.csv"},
     )
@@ -391,7 +386,7 @@ def export_market_master(db: Session = Depends(get_db)):
 
 @router.get("/export/market/rex-only")
 def export_market_rex_only(db: Session = Depends(get_db)):
-    """CSV export of REX products only (deduplicated)."""
+    """CSV export of REX products only (deduplicated, streamed)."""
     rows = _dedup_query(
         select(MktMasterData)
         .where(MktMasterData.is_rex == True)
@@ -399,7 +394,7 @@ def export_market_rex_only(db: Session = Depends(get_db)):
         db,
     )
     return StreamingResponse(
-        iter([_write_market_csv(rows, _MARKET_MASTER_COLS)]),
+        _stream_market_csv(rows, _MARKET_MASTER_COLS),
         media_type="text/csv",
         headers={"Content-Disposition": "attachment; filename=rex_products.csv"},
     )
@@ -407,7 +402,7 @@ def export_market_rex_only(db: Session = Depends(get_db)):
 
 @router.get("/export/market/li")
 def export_market_li(db: Session = Depends(get_db)):
-    """CSV export of Leveraged & Inverse category (deduplicated)."""
+    """CSV export of Leveraged & Inverse category (deduplicated, streamed)."""
     rows = _dedup_query(
         select(MktMasterData)
         .where(MktMasterData.etp_category == "LI")
@@ -415,7 +410,7 @@ def export_market_li(db: Session = Depends(get_db)):
         db,
     )
     return StreamingResponse(
-        iter([_write_market_csv(rows, _MARKET_MASTER_COLS)]),
+        _stream_market_csv(rows, _MARKET_MASTER_COLS),
         media_type="text/csv",
         headers={"Content-Disposition": "attachment; filename=li_funds.csv"},
     )
@@ -423,7 +418,7 @@ def export_market_li(db: Session = Depends(get_db)):
 
 @router.get("/export/market/cc")
 def export_market_cc(db: Session = Depends(get_db)):
-    """CSV export of Income (Covered Call) category (deduplicated)."""
+    """CSV export of Income (Covered Call) category (deduplicated, streamed)."""
     rows = _dedup_query(
         select(MktMasterData)
         .where(MktMasterData.etp_category == "CC")
@@ -431,7 +426,7 @@ def export_market_cc(db: Session = Depends(get_db)):
         db,
     )
     return StreamingResponse(
-        iter([_write_market_csv(rows, _MARKET_MASTER_COLS)]),
+        _stream_market_csv(rows, _MARKET_MASTER_COLS),
         media_type="text/csv",
         headers={"Content-Disposition": "attachment; filename=cc_funds.csv"},
     )
@@ -474,20 +469,19 @@ def export_market_category_summary(db: Session = Depends(get_db)):
         .order_by(func.sum(base.c.aum).desc())
     ).all()
 
-    buf = io.StringIO()
-    writer = csv.writer(buf)
-    writer.writerow(["Category", "Fund Count", "Total AUM ($M)", "Flow 1W ($M)", "Flow 1M ($M)", "Flow YTD ($M)", "Flow 1Y ($M)"])
-    for r in rows:
-        writer.writerow([
-            r.category_display or "", r.count,
-            round(r.total_aum or 0, 2), round(r.flow_1w or 0, 2),
-            round(r.flow_1m or 0, 2), round(r.flow_ytd or 0, 2),
-            round(r.flow_1y or 0, 2),
-        ])
+    header = ["Category", "Fund Count", "Total AUM ($M)", "Flow 1W ($M)", "Flow 1M ($M)", "Flow YTD ($M)", "Flow 1Y ($M)"]
 
-    buf.seek(0)
+    def gen():
+        for r in rows:
+            yield [
+                r.category_display or "", r.count,
+                round(r.total_aum or 0, 2), round(r.flow_1w or 0, 2),
+                round(r.flow_1m or 0, 2), round(r.flow_ytd or 0, 2),
+                round(r.flow_1y or 0, 2),
+            ]
+
     return StreamingResponse(
-        iter([buf.getvalue()]),
+        _stream_csv(header, gen()),
         media_type="text/csv",
         headers={"Content-Disposition": "attachment; filename=market_category_summary.csv"},
     )
@@ -528,19 +522,18 @@ def export_market_issuer_summary(db: Session = Depends(get_db)):
         .order_by(func.sum(base.c.aum).desc())
     ).all()
 
-    buf = io.StringIO()
-    writer = csv.writer(buf)
-    writer.writerow(["Issuer", "Category", "Fund Count", "Total AUM ($M)", "Flow 1W ($M)", "Flow 1M ($M)", "Flow YTD ($M)"])
-    for r in rows:
-        writer.writerow([
-            r.issuer_display or "", r.etp_category or "", r.count,
-            round(r.total_aum or 0, 2), round(r.flow_1w or 0, 2),
-            round(r.flow_1m or 0, 2), round(r.flow_ytd or 0, 2),
-        ])
+    header = ["Issuer", "Category", "Fund Count", "Total AUM ($M)", "Flow 1W ($M)", "Flow 1M ($M)", "Flow YTD ($M)"]
 
-    buf.seek(0)
+    def gen():
+        for r in rows:
+            yield [
+                r.issuer_display or "", r.etp_category or "", r.count,
+                round(r.total_aum or 0, 2), round(r.flow_1w or 0, 2),
+                round(r.flow_1m or 0, 2), round(r.flow_ytd or 0, 2),
+            ]
+
     return StreamingResponse(
-        iter([buf.getvalue()]),
+        _stream_csv(header, gen()),
         media_type="text/csv",
         headers={"Content-Disposition": "attachment; filename=market_issuer_summary.csv"},
     )
@@ -581,19 +574,18 @@ def export_market_underlier_summary(db: Session = Depends(get_db)):
         .order_by(func.sum(base.c.aum).desc())
     ).all()
 
-    buf = io.StringIO()
-    writer = csv.writer(buf)
-    writer.writerow(["Underlier", "Fund Count", "Total AUM ($M)", "Flow 1W ($M)", "Flow 1M ($M)", "Flow YTD ($M)"])
-    for r in rows:
-        writer.writerow([
-            r.map_li_underlier or "", r.count,
-            round(r.total_aum or 0, 2), round(r.flow_1w or 0, 2),
-            round(r.flow_1m or 0, 2), round(r.flow_ytd or 0, 2),
-        ])
+    header = ["Underlier", "Fund Count", "Total AUM ($M)", "Flow 1W ($M)", "Flow 1M ($M)", "Flow YTD ($M)"]
 
-    buf.seek(0)
+    def gen():
+        for r in rows:
+            yield [
+                r.map_li_underlier or "", r.count,
+                round(r.total_aum or 0, 2), round(r.flow_1w or 0, 2),
+                round(r.flow_1m or 0, 2), round(r.flow_ytd or 0, 2),
+            ]
+
     return StreamingResponse(
-        iter([buf.getvalue()]),
+        _stream_csv(header, gen()),
         media_type="text/csv",
         headers={"Content-Disposition": "attachment; filename=underlier_summary.csv"},
     )
@@ -604,25 +596,22 @@ def export_market_timeseries(db: Session = Depends(get_db)):
     """CSV export of AUM time series (monthly snapshots, all tickers)."""
     from webapp.models import MktTimeSeries
 
-    rows = db.execute(
-        select(MktTimeSeries)
-        .order_by(MktTimeSeries.ticker, MktTimeSeries.months_ago)
-    ).scalars().all()
+    header = ["Ticker", "Months Ago", "AUM ($M)", "Category", "Issuer", "REX Fund"]
 
-    buf = io.StringIO()
-    writer = csv.writer(buf)
-    writer.writerow(["Ticker", "Months Ago", "AUM ($M)", "Category", "Issuer", "REX Fund"])
-    for r in rows:
-        writer.writerow([
-            r.ticker or "", r.months_ago,
-            round(r.aum_value or 0, 2),
-            r.category_display or "", r.issuer_display or "",
-            r.is_rex,
-        ])
+    def rows():
+        for r in db.execute(
+            select(MktTimeSeries)
+            .order_by(MktTimeSeries.ticker, MktTimeSeries.months_ago)
+        ).scalars().yield_per(500):
+            yield [
+                r.ticker or "", r.months_ago,
+                round(r.aum_value or 0, 2),
+                r.category_display or "", r.issuer_display or "",
+                r.is_rex,
+            ]
 
-    buf.seek(0)
     return StreamingResponse(
-        iter([buf.getvalue()]),
+        _stream_csv(header, rows()),
         media_type="text/csv",
         headers={"Content-Disposition": "attachment; filename=aum_timeseries.csv"},
     )
@@ -693,15 +682,8 @@ def adhoc_export(
     col_label_map = dict(_MARKET_MASTER_COLS)
     headers = [col_label_map.get(c, c) for c in selected]
 
-    buf = io.StringIO()
-    writer = csv.writer(buf)
-    writer.writerow(headers)
-    for r in rows:
-        writer.writerow([getattr(r, col, "") for col in selected])
-
-    buf.seek(0)
     return StreamingResponse(
-        iter([buf.getvalue()]),
+        _stream_csv(headers, ([getattr(r, col, "") for col in selected] for r in rows)),
         media_type="text/csv",
         headers={"Content-Disposition": "attachment; filename=export.csv"},
     )

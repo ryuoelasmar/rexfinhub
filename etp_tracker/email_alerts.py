@@ -521,9 +521,9 @@ def _render_daily_html(data: dict, dashboard_url: str = "", custom_message: str 
     dash_link = _esc(dashboard_url) if dashboard_url else ""
 
     _is_evening = edition == "evening"
-    _titles = {"daily": "REX Daily Filing Report", "evening": "REX Daily Filing Report",
+    _titles = {"daily": "REX Daily ETP Report", "evening": "REX Daily ETP Report",
                "morning": "REX ETF Morning Brief"}
-    _title = _titles.get(edition, "REX Daily Filing Report")
+    _title = _titles.get(edition, "REX Daily ETP Report")
     _header_bg = "#2d3436" if _is_evening else _TEAL
     _accent = _ORANGE if _is_evening else _TEAL
 
@@ -548,9 +548,17 @@ def _render_daily_html(data: dict, dashboard_url: str = "", custom_message: str 
 </td></tr>"""
 
     # --- KPI Scorecard (top of email) ---
-    trust_count = data.get("trust_count", 0)
+    rex_aum = data.get("rex_aum", 0)
     newly_effective = data.get("newly_effective_1d", 0)
     total_pending = data.get("total_pending", 0)
+
+    # Format REX AUM as currency
+    if rex_aum >= 1_000:
+        _rex_aum_fmt = f"${rex_aum / 1_000:,.1f}B"
+    elif rex_aum >= 1:
+        _rex_aum_fmt = f"${rex_aum:,.0f}M"
+    else:
+        _rex_aum_fmt = f"${rex_aum:,.1f}M"
 
     _kpi_cell = f"padding:12px 8px;background:{_LIGHT};border-radius:8px;text-align:center;"
     _kpi_val = f"font-size:24px;font-weight:700;color:{_NAVY};"
@@ -561,8 +569,8 @@ def _render_daily_html(data: dict, dashboard_url: str = "", custom_message: str 
   <table width="100%" cellpadding="0" cellspacing="0" border="0">
     <tr>
       <td width="31%" style="{_kpi_cell}">
-        <div style="{_kpi_val}">{trust_count}</div>
-        <div style="{_kpi_lbl}">Trusts Monitored</div>
+        <div style="{_kpi_val}">{_rex_aum_fmt}</div>
+        <div style="{_kpi_lbl}">REX AUM</div>
       </td>
       <td width="3%"></td>
       <td width="31%" style="{_kpi_cell}">
@@ -762,46 +770,61 @@ def _render_daily_html(data: dict, dashboard_url: str = "", custom_message: str 
     pending = data.get("pending", [])
     pending_section = ""
     if pending:
-        pending_rows = []
-        for p in pending[:8]:
-            name = _esc(p.get("fund_name", ""))
-            if len(name) > 40:
-                name = name[:37] + "..."
-            trust = _esc(p.get("trust_name", ""))
-            if len(trust) > 25:
-                trust = trust[:22] + "..."
-            eff_date = _esc(p.get("effective_date", ""))
+        # Group by trust, REX first
+        from collections import OrderedDict
+        rex_trusts = OrderedDict()
+        other_trusts = OrderedDict()
+        for p in pending[:15]:
+            trust = p.get("trust_name", "Unknown")
             is_rex = p.get("is_rex", False)
-            trust_html = trust
-            if is_rex:
-                trust_html = (
-                    f'{trust} <span style="background:{_BLUE};color:{_WHITE};'
-                    f'padding:1px 5px;border-radius:3px;font-size:8px;'
-                    f'font-weight:700;vertical-align:middle;">REX</span>'
+            target = rex_trusts if is_rex else other_trusts
+            if trust not in target:
+                target[trust] = {"is_rex": is_rex, "funds": []}
+            target[trust]["funds"].append(p)
+
+        pending_html_parts = []
+        for trust_groups, section_label in [(rex_trusts, "REX"), (other_trusts, None)]:
+            for trust_name, info in trust_groups.items():
+                is_rex = info["is_rex"]
+                funds = info["funds"]
+                trust_disp = _esc(trust_name)
+                if len(trust_disp) > 30:
+                    trust_disp = trust_disp[:27] + "..."
+                badge = ""
+                if is_rex:
+                    badge = (
+                        f' <span style="background:{_BLUE};color:{_WHITE};'
+                        f'padding:1px 5px;border-radius:3px;font-size:8px;'
+                        f'font-weight:700;vertical-align:middle;">REX</span>'
+                    )
+                trust_header = (
+                    f'<tr><td colspan="2" style="padding:6px 8px 2px;font-size:12px;'
+                    f'font-weight:700;color:{_NAVY};">{trust_disp}{badge}</td></tr>'
                 )
-            pending_rows.append(
-                f'<tr>'
-                f'<td style="padding:4px 8px;border-bottom:1px solid {_BORDER};'
-                f'font-size:11px;">{name}</td>'
-                f'<td style="padding:4px 8px;border-bottom:1px solid {_BORDER};'
-                f'font-size:10px;color:{_GRAY};">{trust_html}</td>'
-                f'<td style="padding:4px 8px;border-bottom:1px solid {_BORDER};'
-                f'font-size:10px;text-align:right;color:{_ORANGE};font-weight:600;">{eff_date}</td>'
-                f'</tr>'
-            )
+                pending_html_parts.append(trust_header)
+                for fund in funds:
+                    name = _esc(fund.get("fund_name", ""))
+                    if len(name) > 45:
+                        name = name[:42] + "..."
+                    eff_date = _esc(fund.get("effective_date", ""))
+                    pending_html_parts.append(
+                        f'<tr>'
+                        f'<td style="padding:2px 8px 2px 20px;border-bottom:1px solid {_BORDER};'
+                        f'font-size:11px;">{name}</td>'
+                        f'<td style="padding:2px 8px;border-bottom:1px solid {_BORDER};'
+                        f'font-size:10px;text-align:right;color:{_ORANGE};font-weight:600;">{eff_date}</td>'
+                        f'</tr>'
+                    )
+
         more_html = ""
         total_p = data.get("total_pending", len(pending))
-        if total_p > 8:
+        if total_p > 15:
             more_html = (
                 f'<div style="font-size:10px;color:{_GRAY};margin-top:4px;">'
-                f'+ {total_p - 8} more on '
+                f'+ {total_p - 15} more on '
                 f'{"<a href=\"" + dash_link + "/dashboard?status=PENDING\" style=\"color:" + _BLUE + ";\">dashboard</a>" if dash_link else "dashboard"}'
                 f'</div>'
             )
-        _col = (
-            f"padding:4px 8px;font-size:9px;color:{_GRAY};text-transform:uppercase;"
-            f"border-bottom:1px solid {_BORDER};"
-        )
         pending_section = f"""
 <tr><td style="padding:15px 30px 10px;">
   <div style="font-size:16px;font-weight:700;color:{_NAVY};margin:0 0 8px 0;
@@ -809,12 +832,7 @@ def _render_daily_html(data: dict, dashboard_url: str = "", custom_message: str 
     Upcoming Effectiveness
   </div>
   <table width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;">
-    <tr>
-      <td style="{_col}">Fund Name</td>
-      <td style="{_col}">Trust</td>
-      <td style="{_col}text-align:right;">Expected Effectiveness</td>
-    </tr>
-    {''.join(pending_rows)}
+    {''.join(pending_html_parts)}
   </table>
   {more_html}
 </td></tr>"""
@@ -848,7 +866,7 @@ def _render_daily_html(data: dict, dashboard_url: str = "", custom_message: str 
 </td></tr>"""
 
     # --- Assemble (KPIs at top) ---
-    body = header + msg_html + scorecard + launches_section + filings_section + pending_section + market_section + cta_section + footer
+    body = header + msg_html + scorecard + market_section + launches_section + filings_section + pending_section + cta_section + footer
 
     return f"""<!DOCTYPE html>
 <html lang="en"><head><meta charset="UTF-8">
@@ -897,11 +915,14 @@ def _gather_daily_data(db_session, since_date: str | None = None,
             ft_col = next((c for c in master.columns if c.lower().strip() == "fund_type"), None)
             if ft_col:
                 master = master[master[ft_col] == "ETF"]
+            if "market_status" in master.columns:
+                master = master[master["market_status"].isin(["ACTV", "Active"])]
             if "inception_date" in master.columns and "ticker_clean" in master.columns:
                 master = master.drop_duplicates(subset=["ticker_clean"], keep="first")
                 inception = pd.to_datetime(master["inception_date"], errors="coerce")
-                cutoff = pd.Timestamp.today().normalize() - pd.Timedelta(days=1)
-                recent = master[inception >= cutoff].copy()
+                today_ts = pd.Timestamp.today().normalize()
+                cutoff = today_ts - pd.Timedelta(days=1)
+                recent = master[(inception >= cutoff) & (inception <= today_ts)].copy()
                 recent["_inception"] = inception[recent.index]
                 recent = recent.sort_values("_inception", ascending=False)
                 is_rex_col = "is_rex" if "is_rex" in recent.columns else None
@@ -1001,7 +1022,7 @@ def _gather_daily_data(db_session, since_date: str | None = None,
 
     filing_groups.sort(key=lambda x: x["_sort"], reverse=True)
 
-    # --- Upcoming launches: PENDING with an actual expected date (no TBD) ---
+    # --- Upcoming launches: PENDING with future expected date ---
     # Scoped to trusts that actually have ETF products
     pending_rows = db_session.execute(
         select(
@@ -1011,8 +1032,10 @@ def _gather_daily_data(db_session, since_date: str | None = None,
         .join(Trust, Trust.id == FundStatus.trust_id)
         .where(FundStatus.status == "PENDING")
         .where(FundStatus.effective_date.isnot(None))
+        .where(FundStatus.effective_date >= date_type.today())
         .where(Trust.id.in_(select(_etf_trust_ids.c.trust_id)))
         .order_by(Trust.is_rex.desc(), FundStatus.effective_date.asc())
+        .limit(15)
     ).all()
 
     pending = []
@@ -1025,12 +1048,20 @@ def _gather_daily_data(db_session, since_date: str | None = None,
         })
 
     # --- KPI counts (scoped to trusts with ETF products) ---
-    trust_count = db_session.execute(
-        select(func.count(distinct(Trust.id)))
-        .join(FundStatus, FundStatus.trust_id == Trust.id)
-        .where(Trust.is_active == True)
-        .where(FundStatus.fund_name.ilike("%ETF%"))
-    ).scalar() or 0
+    rex_aum = 0
+    try:
+        from webapp.services.market_data import data_available, get_master_data
+        if data_available(db_session):
+            _master_kpi = get_master_data(db_session)
+            _aum_col = "t_w4.aum" if "t_w4.aum" in _master_kpi.columns else "aum"
+            if "is_rex" in _master_kpi.columns and _aum_col in _master_kpi.columns:
+                _rex = _master_kpi[_master_kpi["is_rex"] == True]
+                _mkt = next((c for c in _rex.columns if c.lower() == "market_status"), None)
+                if _mkt:
+                    _rex = _rex[_rex[_mkt] == "ACTV"]
+                rex_aum = _rex[_aum_col].sum()
+    except Exception:
+        pass
 
     newly_effective_1d = db_session.execute(
         select(func.count(FundStatus.id))
@@ -1055,7 +1086,7 @@ def _gather_daily_data(db_session, since_date: str | None = None,
         "launches": launches,
         "filing_groups": filing_groups,
         "pending": pending,
-        "trust_count": trust_count,
+        "rex_aum": rex_aum,
         "newly_effective_1d": newly_effective_1d,
         "total_pending": total_pending,
         "market_snapshot": market_snapshot,
@@ -1087,9 +1118,9 @@ def _send_html_digest(html_body: str, recipients: list[str],
     if subject_override:
         subject = f"{subject_override} - {datetime.now().strftime('%Y-%m-%d')}"
     else:
-        _labels = {"daily": "Daily Filing Report", "morning": "Morning Brief", "evening": "Daily Filing Report"}
-        _label = _labels.get(edition, "Daily Filing Report")
-        subject = f"REX {_label} - {datetime.now().strftime('%Y-%m-%d')}"
+        _labels = {"daily": "Daily ETP Report", "morning": "Morning Brief", "evening": "Daily ETP Report"}
+        _label = _labels.get(edition, "Daily ETP Report")
+        subject = f"REX {_label}: {datetime.now().strftime('%m/%d/%Y')}"
 
     # Try Azure Graph API first
     try:

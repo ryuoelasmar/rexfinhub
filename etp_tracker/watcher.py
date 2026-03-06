@@ -16,9 +16,11 @@ from webapp.models import Trust, FilingAlert, TrustCandidate
 log = logging.getLogger(__name__)
 
 EFTS_URL = "https://efts.sec.gov/LATEST/search-index"
-FORM_TYPES = "485BPOS,485APOS,485BXT"
+FORM_TYPES_40ACT = "485BPOS,485APOS,485BXT"
+FORM_TYPES_33ACT = "S-1,S-1/A,S-3,S-3/A"
 PAUSE = 0.35
 USER_AGENT = "REX-ETP-Tracker/2.0 (relasmar@rexfin.com)"
+AUTO_APPROVE_THRESHOLD = 0.70
 
 
 @dataclass
@@ -47,14 +49,24 @@ def _get_session() -> requests.Session:
     return s
 
 
-def poll_recent_filings(db, lookback_days: int = 1, form_types: str | None = None) -> WatcherResult:
+def poll_recent_filings(db, lookback_days: int = 1, form_types: str | None = None,
+                        poll_33act: bool = False) -> WatcherResult:
     known_rows = db.execute(select(Trust.cik, Trust.id)).fetchall()
     cik_to_trust = {str(int(row[0])): row[1] for row in known_rows}
     known_ciks = set(cik_to_trust.keys())
 
     today = date.today()
     start = today - timedelta(days=lookback_days)
-    hits = _query_edgar(form_types or FORM_TYPES, start.isoformat(), today.isoformat())
+
+    # Poll 40-Act forms (485 series)
+    ft = form_types or FORM_TYPES_40ACT
+    hits = _query_edgar(ft, start.isoformat(), today.isoformat())
+
+    # Optionally also poll 33-Act forms (S-1/S-3 for crypto/ETN filers)
+    if poll_33act:
+        hits_33 = _query_edgar(FORM_TYPES_33ACT, start.isoformat(), today.isoformat())
+        hits.extend(hits_33)
+        log.info("33-Act poll: found %d additional hits", len(hits_33))
 
     result = WatcherResult()
     for hit in hits:
@@ -166,3 +178,60 @@ def _upsert_trust_candidate(db, hit: EdgarHit) -> bool:
     )
     db.add(candidate)
     return True
+
+
+def auto_approve_candidates(db, threshold: float = AUTO_APPROVE_THRESHOLD) -> int:
+    """Enrich new candidates via discovery and auto-approve high-scoring ones.
+
+    Auto-approved trusts get a Trust record with source='watcher' and
+    is_active=True so the next daily pipeline run picks them up.
+
+    Returns:
+        Number of candidates auto-approved.
+    """
+    from etp_tracker.discovery import enrich_candidate
+    from etp_tracker.sec_client import SECClient
+
+    client = SECClient(user_agent=USER_AGENT, pause=PAUSE)
+    candidates = db.query(TrustCandidate).filter_by(status="new").all()
+    approved = 0
+
+    for c in candidates:
+        result = enrich_candidate(client, c)
+        if not result:
+            continue
+
+        score = result.get("etf_trust_score", 0)
+        c.etf_trust_score = score
+
+        if score >= threshold:
+            # Check not already tracked
+            existing_trust = db.query(Trust).filter_by(cik=c.cik).first()
+            if existing_trust:
+                c.status = "duplicate"
+                log.info("Candidate CIK %s already tracked as '%s'", c.cik, existing_trust.name)
+                continue
+
+            # Create new Trust record
+            trust = Trust(
+                cik=c.cik,
+                name=c.company_name,
+                slug=c.company_name.lower().replace(" ", "-").replace("/", "-")[:200],
+                is_active=True,
+                source="watcher",
+                entity_type=result.get("entity_type", "unknown"),
+                sic_code=result.get("sic_code"),
+            )
+            db.add(trust)
+            c.status = "auto_approved"
+            c.reviewed_at = datetime.utcnow()
+            c.reviewed_by = "watcher_auto"
+            approved += 1
+            log.info("Auto-approved CIK %s '%s' (score=%.2f)", c.cik, c.company_name, score)
+        else:
+            c.status = "low_score"
+            log.debug("CIK %s scored %.2f (below threshold %.2f)", c.cik, score, threshold)
+
+    db.commit()
+    log.info("Auto-approve: %d/%d candidates approved", approved, len(candidates))
+    return approved

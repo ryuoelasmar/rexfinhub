@@ -127,6 +127,20 @@ def _data_date_short(data: dict) -> str:
     return _yesterday().strftime("%m/%d/%Y")
 
 
+def _date_mm_dd(data: dict) -> str:
+    """Return MM/DD/YYYY date string for report titles."""
+    short = data.get("data_as_of_short", "")
+    if _is_valid_date(short):
+        return short
+    full = data.get("data_as_of", "")
+    if _is_valid_date(full):
+        try:
+            return datetime.strptime(full, "%B %d, %Y").strftime("%m/%d/%Y")
+        except ValueError:
+            pass
+    return _yesterday().strftime("%m/%d/%Y")
+
+
 # ---------------------------------------------------------------------------
 # Email envelope
 # ---------------------------------------------------------------------------
@@ -845,7 +859,8 @@ def build_li_email(dashboard_url: str = "", db=None) -> tuple[str, list]:
     data = get_li_report(db)
 
     date_str = _data_date_str(data)
-    title = f"REX ETF Leveraged & Inverse Report - {date_str}"
+    date_mm_dd = _date_mm_dd(data)
+    title = f"REX ETP Leverage & Inverse Report: {date_mm_dd}"
 
     html = _build_report_email(
         data, "li", title, _NAVY,
@@ -866,7 +881,8 @@ def build_cc_email(dashboard_url: str = "", db=None) -> tuple[str, list]:
     data = get_cc_report(db)
 
     date_str = _data_date_str(data)
-    title = f"REX ETF Income Report - {date_str}"
+    date_mm_dd = _date_mm_dd(data)
+    title = f"REX ETP Income Report: {date_mm_dd}"
 
     html = _build_report_email(
         data, "cc", title, _NAVY,
@@ -938,7 +954,8 @@ def build_flow_email(dashboard_url: str = "", db=None) -> tuple[str, list]:
     data = get_flow_report(db)
 
     date_str = _data_date_str(data)
-    title = f"REX Competitive Flow Report - {date_str}"
+    date_mm_dd = _date_mm_dd(data)
+    title = f"REX ETP Flow Report: {date_mm_dd}"
 
     if not data.get("available") or not data.get("categories"):
         return _wrap_email(title, _NAVY,
@@ -953,6 +970,7 @@ def build_flow_email(dashboard_url: str = "", db=None) -> tuple[str, list]:
 
     # --- KPI Banner ---
     body += _kpi_row([
+        ("Products", kpis.get("products", "0"), _NAVY),
         ("REX AUM", kpis.get("rex_aum", "$0"), _NAVY),
         ("REX Flow 1W", kpis.get("rex_flow_1w", "$0"),
          _GREEN if kpis.get("rex_flow_1w_positive", True) else _RED),

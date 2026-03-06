@@ -178,6 +178,7 @@ def run_pipeline(ciks: list[str], overrides: dict | None = None, since: str | No
         lock = threading.Lock()
         pbar = tqdm(total=len(trusts), desc=f"Extract (Step 3, {workers}w)", leave=False)
 
+        changed_trusts = set()
         with ThreadPoolExecutor(max_workers=workers) as pool:
             futures = {
                 pool.submit(_step3_worker, t, output_root, user_agent,
@@ -186,10 +187,11 @@ def run_pipeline(ciks: list[str], overrides: dict | None = None, since: str | No
                 for t in trusts
             }
             for future in as_completed(futures):
+                trust_name = futures[future]
                 try:
                     result = future.result()
                 except Exception as e:
-                    log.error("Step 3 error for %s: %s", futures[future], e)
+                    log.error("Step 3 error for %s: %s", trust_name, e)
                     result = {"new": 0, "skipped": 0, "errors": 1, "strategies": {}}
                 with lock:
                     metrics.new_filings += result.get("new", 0)
@@ -197,10 +199,13 @@ def run_pipeline(ciks: list[str], overrides: dict | None = None, since: str | No
                     metrics.errors += result.get("errors", 0)
                     for strat, count in result.get("strategies", {}).items():
                         metrics.add_strategy(strat, count)
+                    if result.get("new", 0) > 0:
+                        changed_trusts.add(trust_name)
                     pbar.update(1)
         pbar.close()
     else:
         # Single-worker fallback
+        changed_trusts = set()
         for t in tqdm(trusts, desc="Extract (Step 3)", leave=False):
             result = step3_extract_for_trust(client, output_root, t,
                                             since=since, until=until,
@@ -210,12 +215,23 @@ def run_pipeline(ciks: list[str], overrides: dict | None = None, since: str | No
             metrics.errors += result.get("errors", 0)
             for strat, count in result.get("strategies", {}).items():
                 metrics.add_strategy(strat, count)
+            if result.get("new", 0) > 0:
+                changed_trusts.add(t)
 
-    # Steps 4 & 5: Local CSV processing (sequential - fast, no network)
-    for t in tqdm(trusts, desc="Roll-up (Step 4)", leave=False):
+    # Steps 4 & 5: only re-process trusts with new filings (or all if force_reprocess)
+    if force_reprocess:
+        trusts_to_rollup = trusts
+    elif changed_trusts:
+        trusts_to_rollup = [t for t in trusts if t in changed_trusts]
+    else:
+        trusts_to_rollup = []
+    if len(trusts_to_rollup) < len(trusts):
+        log.info("Steps 4-5: processing %d changed trusts (skipping %d unchanged)",
+                 len(trusts_to_rollup), len(trusts) - len(trusts_to_rollup))
+    for t in tqdm(trusts_to_rollup, desc="Roll-up (Step 4)", leave=False):
         step4_rollup_for_trust(output_root, t)
 
-    for t in tqdm(trusts, desc="Name History (Step 5)", leave=False):
+    for t in tqdm(trusts_to_rollup, desc="Name History (Step 5)", leave=False):
         step5_name_history_for_trust(output_root, t)
 
     metrics.trusts_processed = len(trusts)
@@ -227,4 +243,4 @@ def run_pipeline(ciks: list[str], overrides: dict | None = None, since: str | No
     log.info(metrics.summary_line())
     print(metrics.summary_line())
 
-    return len(trusts)
+    return len(trusts), changed_trusts

@@ -204,27 +204,33 @@ async def upload_db(
     """Replace the database file with an uploaded copy.
 
     Used by the local pipeline to push its DB to Render after sync.
-    The uploaded file replaces data/etp_tracker.db atomically.
+    Streams to disk in 64KB chunks to stay under Render's 512MB RAM.
     """
     from webapp.database import DB_PATH, engine
 
-    # Write upload to temp file first
-    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".db", dir=str(DB_PATH.parent))
+    tmp_path = str(DB_PATH) + ".uploading"
     try:
-        shutil.copyfileobj(file.file, tmp)
-        tmp.close()
+        # Stream directly to disk in small chunks — never buffer full file
+        total = 0
+        with open(tmp_path, "wb") as f:
+            while True:
+                chunk = await file.read(65536)  # 64KB chunks
+                if not chunk:
+                    break
+                f.write(chunk)
+                total += len(chunk)
 
         # Dispose existing connections so the file isn't locked
         engine.dispose()
 
         # Atomic replace
-        shutil.move(tmp.name, str(DB_PATH))
+        shutil.move(tmp_path, str(DB_PATH))
 
-        return {"status": "ok", "message": f"Database replaced ({DB_PATH.stat().st_size} bytes)"}
+        size_mb = total / 1_000_000
+        return {"status": "ok", "message": f"Database replaced ({size_mb:.1f} MB)"}
     except Exception as e:
-        # Clean up temp file on failure
         try:
-            os.unlink(tmp.name)
+            os.unlink(tmp_path)
         except OSError:
             pass
         import logging

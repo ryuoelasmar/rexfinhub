@@ -70,8 +70,8 @@ _INCOME_CATEGORIES = {"Income - Single Stock", "Income - Index/Basket/ETF Based"
 # Category landscape: (internal_name, display_name, border_color)
 _LANDSCAPE_CATS = [
     ("Leverage & Inverse - Single Stock", "Leveraged Single Stock", "#e74c3c"),
-    ("Income - Single Stock", "Covered Call (Single Stock)", "#f39c12"),
-    ("Income - Index/Basket/ETF Based", "Covered Call (Index/ETF)", "#0984e3"),
+    ("Income - Single Stock", "Income (Single Stock)", "#f39c12"),
+    ("Income - Index/Basket/ETF Based", "Income (Index/ETF)", "#0984e3"),
     ("Crypto", "Crypto", "#8e44ad"),
     ("Thematic", "Thematic", "#27ae60"),
 ]
@@ -246,7 +246,7 @@ def _render_header(week_ending: str, data_as_of: str = "") -> str:
     return f"""
 <tr><td style="background:{_NAVY};padding:28px 30px;">
   <div style="color:{_WHITE};font-size:24px;font-weight:700;margin-bottom:4px;">
-    REX ETF Weekly Report
+    REX Weekly ETP Report
   </div>
   <div style="color:rgba(255,255,255,0.7);font-size:13px;">{subtitle}</div>
 </td></tr>"""
@@ -891,18 +891,22 @@ def _render_etf_universe(master: pd.DataFrame) -> str:
     if master is None or master.empty:
         return ""
 
-    # Deduplicate by ticker
-    if "ticker_clean" in master.columns:
-        deduped = master.drop_duplicates(subset=["ticker_clean"], keep="first").copy()
-    elif "ticker" in master.columns:
-        deduped = master.drop_duplicates(subset=["ticker"], keep="first").copy()
-    else:
-        deduped = master.copy()
-
-    # Filter to ETFs only
-    fund_type_col = next((c for c in deduped.columns if c.lower().strip() == "fund_type"), None)
+    # Filter to all active ETPs (ETF + ETN -- not just categorized, new categories coming)
+    filtered = master.copy()
+    mkt_col = next((c for c in filtered.columns if c.lower().strip() == "market_status"), None)
+    if mkt_col:
+        filtered = filtered[filtered[mkt_col] == "ACTV"]
+    fund_type_col = next((c for c in filtered.columns if c.lower().strip() == "fund_type"), None)
     if fund_type_col:
-        deduped = deduped[deduped[fund_type_col] == "ETF"].copy()
+        filtered = filtered[filtered[fund_type_col].isin(["ETF", "ETN"])]
+
+    # Deduplicate by ticker
+    if "ticker_clean" in filtered.columns:
+        deduped = filtered.drop_duplicates(subset=["ticker_clean"], keep="first").copy()
+    elif "ticker" in filtered.columns:
+        deduped = filtered.drop_duplicates(subset=["ticker"], keep="first").copy()
+    else:
+        deduped = filtered.copy()
 
     if deduped.empty:
         return ""
@@ -991,7 +995,7 @@ def _render_footer(week_ending: str) -> str:
     return f"""
 <tr><td style="padding:16px 30px;border-top:1px solid {_BORDER};">
   <div style="font-size:11px;color:{_GRAY};text-align:center;">
-    REX ETF Weekly Report | Week of {_esc(week_ending)}
+    REX Weekly ETP Report | Week of {_esc(week_ending)}
   </div>
   <div style="font-size:10px;color:{_GRAY};text-align:center;margin-top:4px;">
     Data sourced from Bloomberg and SEC EDGAR
@@ -1100,7 +1104,7 @@ def build_weekly_digest_html(
     return f"""<!DOCTYPE html>
 <html lang="en"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>REX ETF Weekly Report - {_esc(week_ending)}</title>
+<title>REX Weekly ETP Report: {_esc(week_ending)}</title>
 </head>
 <body style="margin:0;padding:0;background:{_LIGHT};
   font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
@@ -1174,7 +1178,7 @@ def send_weekly_digest(
                                           custom_message=custom_message)
     today = datetime.now()
     week_ending = today.strftime("%B %d, %Y")
-    subject = f"REX ETF Weekly Report - Week of {week_ending}"
+    subject = f"REX Weekly ETP Report: {today.strftime('%m/%d/%Y')}"
 
     ok = True
     if recipients:
