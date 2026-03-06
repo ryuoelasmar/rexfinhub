@@ -296,6 +296,8 @@ class MktCategoryAttributes(Base):
     map_li_underlier: Mapped[str | None] = mapped_column(String(200))
     map_cc_underlier: Mapped[str | None] = mapped_column(String(200))
     map_cc_index: Mapped[str | None] = mapped_column(String(200))
+    cc_type: Mapped[str | None] = mapped_column(String(50))
+    cc_category: Mapped[str | None] = mapped_column(String(100))
     map_crypto_is_spot: Mapped[str | None] = mapped_column(String(20))
     map_crypto_underlier: Mapped[str | None] = mapped_column(String(200))
     map_defined_category: Mapped[str | None] = mapped_column(String(100))

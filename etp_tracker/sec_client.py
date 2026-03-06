@@ -111,6 +111,29 @@ class SECClient:
             except Exception: pass
             return data
 
+    def fetch_json(self, url: str, use_cache: bool = True) -> dict:
+        """Fetch a JSON resource from SEC with caching.
+
+        Used for paginated filings files (filings.files[] in submissions JSON).
+        """
+        if not url:
+            return {}
+        cache_path = self.cache_dir / "submissions" / (self._hash_url(url) + ".json")
+        if use_cache and cache_path.exists():
+            try:
+                return json.loads(cache_path.read_text(encoding="utf-8"))
+            except Exception:
+                pass
+        time.sleep(self.pause)
+        r = self.session.get(url, timeout=self.timeout)
+        r.raise_for_status()
+        data = r.json()
+        try:
+            cache_path.write_text(json.dumps(data), encoding="utf-8")
+        except Exception:
+            pass
+        return data
+
     def get_entity_tickers(self, cik: str) -> list[str]:
         """Read tickers from cached submissions JSON (no network call).
 

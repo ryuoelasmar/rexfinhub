@@ -5,18 +5,47 @@ from .utils import is_prospectus_form, safe_str
 from .paths import output_paths_for_trust, build_primary_link, build_submission_txt_link
 from .csvio import write_csv
 
+def _extract_filings_from_recent(rec: dict) -> tuple[list, list, list, list, list]:
+    """Extract parallel arrays from a 'recent' filings block."""
+    return (
+        rec.get("form", []) or [],
+        rec.get("accessionNumber", []) or [],
+        rec.get("primaryDocument", []) or [],
+        rec.get("filingDate", []) or [],
+        rec.get("isInlineXBRL", []) or [],
+    )
+
+
 def load_all_submissions_for_cik(client: SECClient, cik: str, overrides: dict | None = None,
                                  since: str | None = None, until: str | None = None,
                                  refresh_submissions: bool = True, refresh_max_age_hours: int = 6,
                                  refresh_force_now: bool = False) -> tuple[str, pd.DataFrame]:
     data = client.load_submissions_json(cik, refresh_submissions, refresh_max_age_hours, refresh_force_now)
     trust_name = (overrides or {}).get(str(cik)) or data.get("name") or f"CIK {int(str(cik))}"
+
+    # Collect filings from the "recent" block (up to ~1,000 filings)
     rec = data.get("filings", {}).get("recent", {})
-    forms = rec.get("form", []) or []
-    accession = rec.get("accessionNumber", []) or []
-    files = rec.get("primaryDocument", []) or []
-    dates = rec.get("filingDate", []) or []
-    is_ixbrl_list = rec.get("isInlineXBRL", []) or []
+    forms, accession, files, dates, is_ixbrl_list = _extract_filings_from_recent(rec)
+
+    # Paginated older filings: SEC puts overflow in filings.files[] as separate JSON files
+    filings_files = data.get("filings", {}).get("files", []) or []
+    if filings_files:
+        cik_padded = f"{int(str(cik)):010d}"
+        for file_entry in filings_files:
+            fname = file_entry.get("name", "")
+            if not fname:
+                continue
+            url = f"https://data.sec.gov/submissions/{fname}"
+            try:
+                extra = client.fetch_json(url)
+            except Exception:
+                continue
+            ef, ea, epd, ed, ei = _extract_filings_from_recent(extra)
+            forms.extend(ef)
+            accession.extend(ea)
+            files.extend(epd)
+            dates.extend(ed)
+            is_ixbrl_list.extend(ei)
 
     rows = []
     for i in range(len(forms)):

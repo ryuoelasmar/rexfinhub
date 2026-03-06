@@ -58,6 +58,9 @@ def run_transform(
     # Step 9: Override is_rex from rex_funds
     df = step9_override_is_rex(df, rules["rex_funds"])
 
+    # Step 9b: Derive primary_category + rex_suite + ticker_clean
+    df = step9b_derive_extra_columns(df, rules)
+
     # Step 10: Output q_master_data
     master = step10_output_master(df)
 
@@ -215,6 +218,63 @@ def step9_override_is_rex(df: pd.DataFrame, rex_funds: pd.DataFrame) -> pd.DataF
 
     rex_count = df["is_rex"].sum()
     log.info("[9/12] is_rex override: %d REX funds", rex_count)
+    return df
+
+
+def step9b_derive_extra_columns(df: pd.DataFrame, rules: dict) -> pd.DataFrame:
+    """Step 9b: Derive primary_category, rex_suite, and ticker_clean.
+
+    These three columns exist in the old pipeline (data_engine.py) and are
+    consumed by emails, weekly digest, downloads, and market_data service.
+    """
+    # --- primary_category: exactly 1 category per ticker, no double-counting ---
+    _PRIMARY_CATEGORY_PRIORITY = ["LI", "CC", "Crypto", "Defined", "Thematic"]
+
+    if "etp_category" in df.columns:
+        cat_col = df["etp_category"].fillna("").astype(str)
+        ticker_cats: dict[str, set[str]] = {}
+        for ticker, cat in zip(df["ticker"], cat_col):
+            if cat and cat != "nan":
+                ticker_cats.setdefault(ticker, set()).add(cat)
+
+        ticker_primary: dict[str, str] = {}
+        for ticker, cats in ticker_cats.items():
+            if len(cats) == 1:
+                ticker_primary[ticker] = next(iter(cats))
+            else:
+                for priority_cat in _PRIMARY_CATEGORY_PRIORITY:
+                    if priority_cat in cats:
+                        ticker_primary[ticker] = priority_cat
+                        break
+                else:
+                    ticker_primary[ticker] = next(iter(cats))
+
+        df["primary_category"] = df["ticker"].map(ticker_primary)
+    else:
+        df["primary_category"] = pd.NA
+
+    # --- rex_suite: join from rex_suite_mapping.csv ---
+    from market.config import RULES_DIR
+    csv_path = RULES_DIR / "rex_suite_mapping.csv"
+    if csv_path.exists():
+        mapping = pd.read_csv(csv_path, engine="python", on_bad_lines="skip")
+        if "ticker" in mapping.columns and "rex_suite" in mapping.columns:
+            mapping = mapping[["ticker", "rex_suite"]].dropna(subset=["ticker"]).drop_duplicates(subset=["ticker"])
+            df.drop(columns=["rex_suite"], errors="ignore", inplace=True)
+            merged = df.merge(mapping, on="ticker", how="left")
+            df["rex_suite"] = merged["rex_suite"].values
+        else:
+            df["rex_suite"] = pd.NA
+    else:
+        df["rex_suite"] = pd.NA
+
+    # --- ticker_clean: strip Bloomberg " US" suffix ---
+    df["ticker_clean"] = df["ticker"].str.replace(r"\s+US$", "", regex=True)
+
+    rex_suite_count = df["rex_suite"].notna().sum()
+    primary_count = df["primary_category"].notna().sum()
+    log.info("[9b/12] Extra columns: primary_category=%d, rex_suite=%d, ticker_clean=%d",
+             primary_count, rex_suite_count, len(df))
     return df
 
 

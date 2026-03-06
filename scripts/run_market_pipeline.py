@@ -105,6 +105,7 @@ def main():
     parser.add_argument("--rules", type=str, help="Path to rules directory")
     parser.add_argument("--no-db", action="store_true", help="Skip database write")
     parser.add_argument("--no-export", action="store_true", help="Skip Excel export")
+    parser.add_argument("--no-upload", action="store_true", help="Skip Render DB upload")
     parser.add_argument("--force", action="store_true", help="Force run even if data unchanged")
     parser.add_argument("--verbose", "-v", action="store_true", help="Verbose logging")
     args = parser.parse_args()
@@ -121,7 +122,7 @@ def main():
     data_file = Path(args.data) if args.data else DATA_FILE
     rules_dir = Path(args.rules) if args.rules else RULES_DIR
 
-    print(f"[1/9] Data file: {data_file}")
+    print(f"[1/11] Data file: {data_file}")
     print(f"       Rules dir: {rules_dir}")
 
     if not data_file.exists():
@@ -138,7 +139,7 @@ def main():
     print(f"  File modified: {_get_file_mtime(data_file)}")
 
     # --- Step 2: Load rules ---
-    print("[2/9] Loading rules...")
+    print("[2/11] Loading rules...")
     from market.rules import load_all_rules, validate_rules
 
     rules = load_all_rules(rules_dir)
@@ -158,7 +159,7 @@ def main():
     print(f"  category_attributes: {len(rules['category_attributes'])} rows")
 
     # --- Step 3: Read input ---
-    print("[3/9] Reading input Excel...")
+    print("[3/11] Reading input Excel...")
     from market.ingest import read_input
 
     data = read_input(data_file)
@@ -173,7 +174,7 @@ def main():
         print(f"  Snapshot saved: {snapshot.name}")
 
     # --- Step 4: Derive dim_fund_category ---
-    print("[4/9] Deriving dim_fund_category...")
+    print("[4/11] Deriving dim_fund_category...")
     from market.derive import derive_dim_fund_category
 
     dim = derive_dim_fund_category(
@@ -189,7 +190,7 @@ def main():
             print(f"    {cat}: {cnt}")
 
     # --- Step 5: Run transform ---
-    print("[5/9] Running 12-step transform...")
+    print("[5/11] Running 12-step transform...")
     from market.transform import run_transform
 
     result = run_transform(etp, rules, dim)
@@ -199,7 +200,7 @@ def main():
     print(f"  q_aum_time_series_labeled: {ts.shape[0]} rows")
 
     # --- Step 6: Auto-classify ---
-    print("[6/9] Auto-classifying funds...")
+    print("[6/11] Auto-classifying funds...")
     from market.auto_classify import classify_all, classify_to_dataframe
 
     classifications = classify_all(etp)
@@ -222,7 +223,7 @@ def main():
     print(f"  Classified: {len(classifications)} funds")
 
     # --- Step 7: Queues report ---
-    print("[7/9] Building queues report...")
+    print("[7/11] Building queues report...")
     from market.queues import build_queues_report
 
     queues = build_queues_report(etp, fm, im)
@@ -244,9 +245,9 @@ def main():
     # --- Step 8: Write to DB ---
     run_id = None
     if args.no_db:
-        print("[8/9] Database write skipped (--no-db)")
+        print("[8/11] Database write skipped (--no-db)")
     else:
-        print("[8/9] Writing to database...")
+        print("[8/11] Writing to database...")
         from webapp.database import SessionLocal, init_db
         from market.db_writer import (
             create_pipeline_run, finish_pipeline_run,
@@ -306,13 +307,54 @@ def main():
 
     # --- Step 9: Export ---
     if args.no_export:
-        print("[9/9] Excel export skipped (--no-export)")
+        print("[9/11] Excel export skipped (--no-export)")
     else:
-        print("[9/9] Exporting to Excel...")
+        print("[9/11] Exporting to Excel...")
         from market.export import export_to_excel
 
         out_path = export_to_excel(master, ts, stock)
         print(f"  Exported: {out_path}")
+
+    # --- Step 10: Compute and cache reports (li, cc, flow) ---
+    if args.no_db:
+        print("[10/11] Report cache skipped (--no-db)")
+    else:
+        print("[10/11] Computing report cache...")
+        from webapp.database import SessionLocal as _SL2
+        _sess2 = _SL2()
+        try:
+            from webapp.services.market_sync import _compute_and_cache_reports, _json_default
+            from webapp.models import MktReportCache
+            from sqlalchemy import delete
+            # Clear existing report cache
+            _sess2.execute(delete(MktReportCache))
+            _sess2.flush()
+            cached_keys = _compute_and_cache_reports(_sess2, master, run_id or 0)
+            _sess2.commit()
+            print(f"  Cached: {', '.join(cached_keys) if cached_keys else '(none)'}")
+        except Exception as e:
+            _sess2.rollback()
+            print(f"  Report cache failed (non-fatal): {e}")
+        finally:
+            _sess2.close()
+
+    # --- Step 11: Upload DB to Render ---
+    if args.no_upload or args.no_db:
+        print("[11/11] Render upload skipped")
+    else:
+        print("[11/11] Uploading database to Render...")
+        try:
+            import sqlite3
+            # WAL checkpoint first
+            _db_path = str(PROJECT_ROOT / "data" / "etp_tracker.db")
+            _conn = sqlite3.connect(_db_path)
+            _conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+            _conn.close()
+
+            from scripts.run_daily import upload_db_to_render
+            upload_db_to_render()
+        except Exception as e:
+            print(f"  Upload failed (non-fatal): {e}")
 
     # Save run metadata for change detection
     _save_last_run(data_file, run_id, len(etp))

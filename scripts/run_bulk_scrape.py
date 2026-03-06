@@ -151,7 +151,7 @@ def main():
     log.info("Starting bulk scrape: %d trusts, since=%s, workers=%d, etf_only=%s",
              len(ciks), args.since, args.workers, args.etf_only)
 
-    processed = run_pipeline(
+    processed, _ = run_pipeline(
         ciks=ciks,
         overrides=overrides,
         since=args.since,

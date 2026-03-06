@@ -45,6 +45,10 @@ def score_etf_trust_likelihood(
     prospectus_forms = {"485BPOS", "485APOS", "485BXT", "N-1A"}
     if any(f in prospectus_forms for f in recent_forms):
         score += 0.20
+    # 33-Act forms (S-1/S-3) indicate potential crypto ETF or ETN filer
+    sec_act_33_forms = {"S-1", "S-1/A", "S-3", "S-3/A"}
+    if any(f in sec_act_33_forms for f in recent_forms):
+        score += 0.15
     name_lower = company_name.lower()
     if "trust" in name_lower:
         score += 0.10

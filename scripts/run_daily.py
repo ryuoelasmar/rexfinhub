@@ -1,13 +1,11 @@
 """
-Daily Pipeline Runner
+Daily SEC Pipeline Runner
 
-Run this script daily at 8am via Windows Task Scheduler.
-It refreshes all trust data, generates Excel files, and sends email digest.
+Scrapes SEC filings, syncs to DB, refreshes market data, uploads to Render.
+Emails are sent separately via `send daily` / `send weekly`.
 
-Setup Task Scheduler (run PowerShell as Admin):
-    schtasks /create /tn "ETP_Filing_Tracker" /tr "python C:\\Projects\\rexfinhub\\scripts\\run_daily.py" /sc daily /st 08:00 /f
-
-To run manually:
+Usage:
+    run sec              # bash alias
     python scripts/run_daily.py
 """
 from __future__ import annotations
@@ -23,11 +21,10 @@ sys.path.insert(0, str(PROJECT_ROOT))
 os.chdir(PROJECT_ROOT)
 
 from etp_tracker.run_pipeline import run_pipeline, load_ciks_from_db
-from etp_tracker.email_alerts import send_digest_email
 
 
 OUTPUT_DIR = PROJECT_ROOT / "outputs"
-SINCE_DATE = "2023-01-01"  # 3-year window - skip ancient filings
+SINCE_DATE = "2024-01-01"  # 2-year window for daily runs (keeps it fast)
 USER_AGENT = "REX-ETP-Tracker/2.0 (relasmar@rexfin.com)"
 DASHBOARD_URL = "https://rex-etp-tracker.onrender.com"
 RENDER_API_URL = "https://rex-etp-tracker.onrender.com/api/v1"
@@ -107,7 +104,7 @@ def main():
     # Step 1: Run pipeline
     print("\n[1/5] Running pipeline...")
     ciks, overrides = load_ciks_from_db()
-    n = run_pipeline(
+    n, changed_trusts = run_pipeline(
         ciks=ciks,
         overrides=overrides,
         since=SINCE_DATE,
@@ -115,7 +112,7 @@ def main():
         user_agent=USER_AGENT,
         etf_only=True,
     )
-    print(f"  Processed {n} trusts")
+    print(f"  Processed {n} trusts ({len(changed_trusts)} with new filings)")
 
     # Step 2: Export Excel
     print("\n[2/5] Exporting Excel...")
@@ -130,7 +127,7 @@ def main():
         db = SessionLocal()
         try:
             seed_trusts(db)
-            sync_all(db, OUTPUT_DIR)
+            sync_all(db, OUTPUT_DIR, only_trusts=changed_trusts if changed_trusts is not None else None)
         finally:
             db.close()
         print("  Database synced.")
@@ -172,38 +169,6 @@ def main():
     # Step 4: Upload DB to Render
     print("\n[4/5] Uploading database to Render...")
     upload_db_to_render()
-
-    # Step 5: Save digest + send email if configured
-    edition = "evening" if datetime.now().hour >= 14 else "morning"
-    _label = "Evening Update" if edition == "evening" else "Morning Brief"
-    print(f"\n[5/5] Building digest ({_label})...")
-    from etp_tracker.email_alerts import build_digest_html_from_db
-    from webapp.database import SessionLocal as _SL
-    _db = _SL()
-    try:
-        html = build_digest_html_from_db(_db, DASHBOARD_URL, edition=edition)
-    finally:
-        _db.close()
-    digest_path = OUTPUT_DIR / "daily_digest.html"
-    digest_path.write_text(html, encoding="utf-8")
-    print(f"  Saved: {digest_path}")
-
-    send_email = "--send-email" in sys.argv
-    if send_email:
-        from etp_tracker.email_alerts import send_digest_from_db
-        _db2 = _SL()
-        try:
-            sent = send_digest_from_db(_db2, DASHBOARD_URL, edition=edition)
-        finally:
-            _db2.close()
-        if sent:
-            print("  Email sent.")
-        else:
-            print("  Email send failed (SMTP not configured).")
-    else:
-        print("  Email skipped (use --send-email to send). Opening digest in browser...")
-        import webbrowser
-        webbrowser.open(str(digest_path.resolve()))
 
     elapsed = time.time() - start
     print(f"\n=== Done in {elapsed:.0f}s ({elapsed/60:.1f}m) ===")

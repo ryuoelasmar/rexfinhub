@@ -312,6 +312,8 @@ def _extract_header_only(client: SECClient, txt_url: str, form: str,
 # ---------------------------------------------------------------------------
 # Strategy: full  (485BPOS, 485APOS, 497, 497K - SGML + body + iXBRL)
 # ---------------------------------------------------------------------------
+_MAX_FULL_PARSE_BYTES = 20_000_000  # 20MB — skip body parsing for mega-filings
+
 def _extract_full(client: SECClient, txt_url: str, form: str,
                   filing_dt: str, cik: str, registrant: str,
                   accession: str, prim_url: str, is_ixbrl: bool) -> list[dict]:
@@ -322,6 +324,13 @@ def _extract_full(client: SECClient, txt_url: str, form: str,
             txt_text = client.fetch_text(txt_url)
     except Exception:
         txt_text = ""
+
+    # Guard: mega-filings (>20MB) hang on regex — fall back to header-only
+    if len(txt_text) > _MAX_FULL_PARSE_BYTES:
+        log.info("Skipping body parse for %s (%d MB) — using header only",
+                 accession, len(txt_text) // 1_000_000)
+        return _extract_header_only(client, txt_url, form, filing_dt,
+                                     cik, registrant, accession, prim_url)
 
     sgml_rows = parse_sgml_series_classes(txt_text) if txt_text else []
 

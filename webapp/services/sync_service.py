@@ -343,19 +343,30 @@ def sync_trust(db: Session, trust: Trust, output_root: Path) -> dict:
     }
 
 
-def sync_all(db: Session, output_root: Path | None = None) -> list[dict]:
-    """Sync all trusts from CSV outputs into the database.
+def sync_all(db: Session, output_root: Path | None = None,
+             only_trusts: set[str] | None = None) -> list[dict]:
+    """Sync trusts from CSV outputs into the database.
+
+    Args:
+        only_trusts: If provided (even if empty set), only sync trusts whose names
+                     are in this set. Pass None to sync all trusts.
     Returns list of per-trust result dicts."""
     if output_root is None:
         output_root = Path(__file__).resolve().parent.parent.parent / "outputs"
 
     trust_map = _get_trust_map(db)
     results = []
+    skipped = 0
     for trust in trust_map.values():
+        if only_trusts is not None and trust.name not in only_trusts:
+            skipped += 1
+            continue
         r = sync_trust(db, trust, output_root)
         results.append(r)
         print(f"  {r['trust']}: {r['filings']} filings, {r['extractions']} extractions, "
               f"{r['funds']} funds, {r['names']} names")
+    if skipped:
+        print(f"  ({skipped} unchanged trusts skipped)")
     return results
 
 

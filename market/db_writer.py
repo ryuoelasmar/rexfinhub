@@ -353,6 +353,12 @@ def _master_row_to_kwargs(row: pd.Series, run_id: int) -> dict:
     for col in ALL_ATTR_COLS:
         kwargs[col] = _safe_str(row.get(f"q_category_attributes.{col}"))
 
+    # Extra derived columns (primary_category, rex_suite, ticker_clean)
+    kwargs["primary_category"] = _safe_str(row.get("primary_category"))
+    kwargs["rex_suite"] = _safe_str(row.get("rex_suite"))
+    ticker = kwargs.get("ticker", "")
+    kwargs["ticker_clean"] = ticker.replace(" US", "").strip() if ticker else None
+
     # Multi-dimensional classification columns (merged from auto-classify)
     kwargs["strategy"] = _safe_str(row.get("strategy"))
     kwargs["strategy_confidence"] = _safe_str(row.get("strategy_confidence"))

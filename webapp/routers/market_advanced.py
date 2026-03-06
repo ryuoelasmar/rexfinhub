@@ -193,12 +193,13 @@ def calendar_view(
 def compare_view(
     request: Request,
     tickers: str = Query(default=""),
+    db: Session = Depends(get_db),
 ):
     """Fund Comparison - side-by-side comparison of up to 4 tickers."""
     import pandas as pd
     from webapp.services.market_data import get_master_data, data_available, _fmt_currency, _fmt_flow
 
-    available = data_available()
+    available = data_available(db)
     # Strip " US" from user-submitted tickers
     ticker_list = [t.upper().replace(" US", "").strip() for t in tickers.split(",") if t.strip()][:4]
 
@@ -206,7 +207,7 @@ def compare_view(
     totalrealreturns_url = ""
     if available and ticker_list:
         try:
-            master = get_master_data()
+            master = get_master_data(db)
             # Use ticker_clean column for matching
             match_col = "ticker_clean" if "ticker_clean" in master.columns else None
             if not match_col:
