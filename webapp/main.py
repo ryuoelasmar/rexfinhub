@@ -249,16 +249,26 @@ def create_app() -> FastAPI:
     # --- Maintenance banner (in-memory, resets on deploy) ---
     @app.get("/api/v1/maintenance")
     def get_maintenance():
-        return {"active": _maintenance_msg is not None,
-                "message": _maintenance_msg["message"] if _maintenance_msg else ""}
+        if _maintenance_msg is None:
+            return {"active": False}
+        return {
+            "active": True,
+            "message": _maintenance_msg.get("message", ""),
+            "shutdown_at": _maintenance_msg.get("shutdown_at"),
+        }
 
     @app.post("/api/v1/maintenance")
-    def set_maintenance(request: Request, message: str = Form(...)):
+    def set_maintenance(request: Request, minutes: int = Form(5)):
         if not request.session.get("is_admin"):
             return JSONResponse({"error": "Unauthorized"}, status_code=403)
+        from datetime import datetime, timezone, timedelta
         global _maintenance_msg
-        _maintenance_msg = {"message": message}
-        return {"ok": True}
+        shutdown_at = datetime.now(timezone.utc) + timedelta(minutes=minutes)
+        _maintenance_msg = {
+            "message": f"Scheduled maintenance in {minutes} minutes.",
+            "shutdown_at": shutdown_at.isoformat(),
+        }
+        return {"ok": True, "shutdown_at": shutdown_at.isoformat()}
 
     @app.delete("/api/v1/maintenance")
     def clear_maintenance(request: Request):

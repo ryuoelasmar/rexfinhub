@@ -364,4 +364,49 @@
   </div>
 </div>
 
+<!-- Maintenance Banner -->
+<div style="border:1px solid var(--border); border-radius:8px; padding:20px; margin-bottom:24px; background:var(--light);">
+  <h3 style="margin:0 0 4px; font-size:16px;">Maintenance Notice</h3>
+  <p style="font-size:13px; color:var(--muted); margin-bottom:12px;">
+    Warn all users with a countdown banner before deploying or taking the site down.
+  </p>
+  <div id="maintStatus" style="font-size:13px; margin-bottom:12px; display:none;">
+    <span style="color:var(--orange); font-weight:600;" id="maintStatusText"></span>
+    <button onclick="clearMaint()" class="btn btn-sm" style="margin-left:12px; font-size:12px; padding:4px 10px;">Cancel</button>
+  </div>
+  <div style="display:flex; gap:8px; align-items:center;">
+    <button onclick="setMaint(5)" class="btn btn-primary btn-sm">5 min warning</button>
+    <button onclick="setMaint(10)" class="btn btn-primary btn-sm" style="background:var(--orange); border-color:var(--orange);">10 min warning</button>
+    <button onclick="setMaint(15)" class="btn btn-primary btn-sm" style="background:#6366F1; border-color:#6366F1;">15 min warning</button>
+  </div>
+</div>
+<script>
+function setMaint(mins) {
+  fetch('/api/v1/maintenance', {method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:'minutes='+mins})
+    .then(function(r){return r.json()}).then(function(d){
+      if(d.ok) { checkMaintStatus(); alert('Maintenance banner activated for '+mins+' minutes.'); }
+    });
+}
+function clearMaint() {
+  fetch('/api/v1/maintenance', {method:'DELETE'})
+    .then(function(r){return r.json()}).then(function(d){
+      if(d.ok) { checkMaintStatus(); }
+    });
+}
+function checkMaintStatus() {
+  fetch('/api/v1/maintenance').then(function(r){return r.json()}).then(function(d){
+    var el = document.getElementById('maintStatus');
+    var txt = document.getElementById('maintStatusText');
+    if(d.active) {
+      var remaining = Math.max(0, Math.round((new Date(d.shutdown_at).getTime() - Date.now()) / 60000));
+      txt.textContent = 'Active -- ' + remaining + ' min remaining';
+      el.style.display = '';
+    } else {
+      el.style.display = 'none';
+    }
+  });
+}
+checkMaintStatus();
+</script>
+
 {% endblock %}
