@@ -12,7 +12,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from urllib.parse import quote
 
-from fastapi import FastAPI, Form, Request
+from fastapi import FastAPI, Form, Query, Request
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -257,9 +257,15 @@ def create_app() -> FastAPI:
             "shutdown_at": _maintenance_msg.get("shutdown_at"),
         }
 
+    def _maint_authorized(request: Request, token: str | None = None) -> bool:
+        """Check admin session or token param (admin password)."""
+        if request.session.get("is_admin"):
+            return True
+        return token is not None and _ADMIN_PASSWORD and token == _ADMIN_PASSWORD
+
     @app.post("/api/v1/maintenance")
-    def set_maintenance(request: Request, minutes: int = Form(5)):
-        if not request.session.get("is_admin"):
+    def set_maintenance(request: Request, minutes: int = Form(5), token: str = Form(None)):
+        if not _maint_authorized(request, token):
             return JSONResponse({"error": "Unauthorized"}, status_code=403)
         from datetime import datetime, timezone, timedelta
         global _maintenance_msg
@@ -271,8 +277,8 @@ def create_app() -> FastAPI:
         return {"ok": True, "shutdown_at": shutdown_at.isoformat()}
 
     @app.delete("/api/v1/maintenance")
-    def clear_maintenance(request: Request):
-        if not request.session.get("is_admin"):
+    def clear_maintenance(request: Request, token: str = Query(None)):
+        if not _maint_authorized(request, token):
             return JSONResponse({"error": "Unauthorized"}, status_code=403)
         global _maintenance_msg
         _maintenance_msg = None
