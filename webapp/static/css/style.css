@@ -1446,11 +1446,47 @@ body, .sticky-nav, table, th, td, .kpi, .trust-card, .trust-block,
   border-radius: var(--radius-pill);
   white-space: nowrap;
 }
-.search-empty {
+.search-empty, .search-hint, .search-loading {
   text-align: center;
   padding: 24px;
   color: var(--text-muted);
   font-size: var(--text-sm);
+}
+.search-loading { opacity: 0.6; }
+.search-hint { font-size: var(--text-xs); opacity: 0.5; }
+.sri-ticker {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: var(--teal);
+  margin-right: 4px;
+}
+.sri-arrow {
+  color: var(--text-muted);
+  font-size: 14px;
+  flex-shrink: 0;
+}
+.sri-aum {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  background: var(--surface-2);
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+}
+.sri-rex {
+  font-size: 10px;
+  font-weight: 700;
+  background: var(--teal);
+  color: #fff;
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  margin-left: 4px;
+}
+.sri-active {
+  background: var(--surface-2) !important;
+}
+[data-theme="dark"] .sri-active {
+  background: var(--navy-muted) !important;
 }
 
 /* ========================================================
