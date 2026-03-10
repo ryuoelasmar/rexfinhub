@@ -233,7 +233,7 @@ document.addEventListener('DOMContentLoaded', function() {
 // F2: Global Search Palette (Ctrl+K)
 // ---------------------------------------------------------------------------
 (function() {
-  var overlay, input, resultsDiv, debounceTimer;
+  var overlay, input, resultsDiv, debounceTimer, activeIdx = -1;
 
   function openSearch() {
     overlay = overlay || document.getElementById('searchPalette');
@@ -241,8 +241,9 @@ document.addEventListener('DOMContentLoaded', function() {
     resultsDiv = resultsDiv || document.getElementById('searchPaletteResults');
     if (!overlay) return;
     overlay.style.display = '';
+    activeIdx = -1;
     if (input) { input.value = ''; input.focus(); }
-    if (resultsDiv) resultsDiv.innerHTML = '';
+    if (resultsDiv) resultsDiv.innerHTML = '<div class="search-hint">Type to search pages, products, trusts, and funds</div>';
     document.body.style.overflow = 'hidden';
   }
 
@@ -251,6 +252,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (!overlay) return;
     overlay.style.display = 'none';
     document.body.style.overflow = '';
+    activeIdx = -1;
   }
 
   function escapeHtml(str) {
@@ -259,20 +261,76 @@ document.addEventListener('DOMContentLoaded', function() {
     return div.innerHTML;
   }
 
+  function setActive(idx) {
+    if (!resultsDiv) return;
+    var items = resultsDiv.querySelectorAll('.search-result-item');
+    items.forEach(function(el) { el.classList.remove('sri-active'); });
+    if (idx >= 0 && idx < items.length) {
+      items[idx].classList.add('sri-active');
+      items[idx].scrollIntoView({ block: 'nearest' });
+    }
+    activeIdx = idx;
+  }
+
   function renderResults(data) {
     resultsDiv = resultsDiv || document.getElementById('searchPaletteResults');
     if (!resultsDiv) return;
+    activeIdx = -1;
 
-    var html = '';
+    var hasResults = (data.pages && data.pages.length)
+      || (data.products && data.products.length)
+      || (data.trusts && data.trusts.length)
+      || (data.funds && data.funds.length)
+      || (data.filings && data.filings.length);
 
-    if (!data.trusts.length && !data.funds.length && !data.filings.length) {
-      html = '<div class="search-empty">No results found</div>';
-      resultsDiv.innerHTML = html;
+    if (!hasResults) {
+      resultsDiv.innerHTML = '<div class="search-empty">No results found</div>';
       return;
     }
 
-    if (data.trusts.length) {
-      html += '<div class="search-group"><div class="search-group-title">Trusts</div>';
+    var html = '';
+
+    // Pages (quick nav)
+    if (data.pages && data.pages.length) {
+      html += '<div class="search-group"><div class="search-group-title">'
+        + '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px;margin-right:4px;opacity:0.5"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>'
+        + 'Pages</div>';
+      data.pages.forEach(function(p) {
+        html += '<a href="' + escapeHtml(p.url) + '" class="search-result-item">'
+          + '<div class="sri-main"><div class="sri-title">' + escapeHtml(p.name) + '</div></div>'
+          + '<span class="sri-arrow">&#8594;</span></a>';
+      });
+      html += '</div>';
+    }
+
+    // Market products
+    if (data.products && data.products.length) {
+      html += '<div class="search-group"><div class="search-group-title">'
+        + '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px;margin-right:4px;opacity:0.5"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>'
+        + 'Products</div>';
+      data.products.forEach(function(p) {
+        var url = '/holdings/fund/' + encodeURIComponent(p.ticker);
+        html += '<a href="' + url + '" class="search-result-item">'
+          + '<div class="sri-main">'
+          + '<div class="sri-title"><span class="sri-ticker">' + escapeHtml(p.ticker) + '</span> ' + escapeHtml(p.fund_name) + '</div>'
+          + '<div class="sri-sub">' + escapeHtml(p.issuer) + (p.category ? ' &middot; ' + escapeHtml(p.category) : '') + '</div>'
+          + '</div>';
+        if (p.aum_fmt) {
+          html += '<span class="sri-badge sri-aum">' + escapeHtml(p.aum_fmt) + '</span>';
+        }
+        if (p.is_rex) {
+          html += '<span class="sri-badge sri-rex">REX</span>';
+        }
+        html += '</a>';
+      });
+      html += '</div>';
+    }
+
+    // SEC Trusts
+    if (data.trusts && data.trusts.length) {
+      html += '<div class="search-group"><div class="search-group-title">'
+        + '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px;margin-right:4px;opacity:0.5"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>'
+        + 'SEC Trusts</div>';
       data.trusts.forEach(function(t) {
         html += '<a href="/trusts/' + escapeHtml(t.slug) + '" class="search-result-item">'
           + '<div class="sri-main">'
@@ -287,23 +345,29 @@ document.addEventListener('DOMContentLoaded', function() {
       html += '</div>';
     }
 
-    if (data.funds.length) {
-      html += '<div class="search-group"><div class="search-group-title">Funds</div>';
+    // SEC Funds
+    if (data.funds && data.funds.length) {
+      html += '<div class="search-group"><div class="search-group-title">'
+        + '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px;margin-right:4px;opacity:0.5"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>'
+        + 'SEC Funds</div>';
       data.funds.forEach(function(f) {
-        var statusClass = f.status === 'EFFECTIVE' ? 'color:var(--green)' : f.status === 'PENDING' ? 'color:var(--orange)' : f.status === 'DELAYED' ? 'color:var(--red)' : '';
+        var statusStyle = f.status === 'EFFECTIVE' ? 'color:var(--green)' : f.status === 'PENDING' ? 'color:var(--orange)' : f.status === 'DELAYED' ? 'color:var(--red)' : '';
         html += '<a href="/trusts/' + escapeHtml(f.trust_slug) + '" class="search-result-item">'
           + '<div class="sri-main">'
           + '<div class="sri-title">' + escapeHtml(f.fund_name) + '</div>'
           + '<div class="sri-sub">' + escapeHtml(f.trust_name) + (f.ticker ? ' &middot; ' + escapeHtml(f.ticker) : '') + '</div>'
           + '</div>'
-          + '<span class="sri-badge" style="' + statusClass + '">' + escapeHtml(f.status) + '</span>'
+          + '<span class="sri-badge" style="' + statusStyle + '">' + escapeHtml(f.status) + '</span>'
           + '</a>';
       });
       html += '</div>';
     }
 
-    if (data.filings.length) {
-      html += '<div class="search-group"><div class="search-group-title">Filings</div>';
+    // Filings
+    if (data.filings && data.filings.length) {
+      html += '<div class="search-group"><div class="search-group-title">'
+        + '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px;margin-right:4px;opacity:0.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>'
+        + 'Filings</div>';
       data.filings.forEach(function(fl) {
         html += '<a href="/analysis/filing/' + fl.id + '" class="search-result-item">'
           + '<div class="sri-main">'
@@ -318,15 +382,21 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   function doSearch(q) {
+    resultsDiv = resultsDiv || document.getElementById('searchPaletteResults');
     if (!q || q.length < 2) {
-      resultsDiv = resultsDiv || document.getElementById('searchPaletteResults');
-      if (resultsDiv) resultsDiv.innerHTML = '';
+      if (resultsDiv) resultsDiv.innerHTML = '<div class="search-hint">Type to search pages, products, trusts, and funds</div>';
       return;
     }
+    if (resultsDiv) resultsDiv.innerHTML = '<div class="search-loading">Searching...</div>';
     fetch('/api/v1/search?q=' + encodeURIComponent(q) + '&limit=10')
-      .then(function(r) { return r.json(); })
+      .then(function(r) {
+        if (!r.ok) throw new Error('Search failed');
+        return r.json();
+      })
       .then(renderResults)
-      .catch(function() {});
+      .catch(function() {
+        if (resultsDiv) resultsDiv.innerHTML = '<div class="search-empty">Search unavailable</div>';
+      });
   }
 
   // Expose globally
@@ -344,7 +414,7 @@ document.addEventListener('DOMContentLoaded', function() {
       palInput.addEventListener('input', function() {
         clearTimeout(debounceTimer);
         var val = palInput.value.trim();
-        debounceTimer = setTimeout(function() { doSearch(val); }, 250);
+        debounceTimer = setTimeout(function() { doSearch(val); }, 200);
       });
     }
 
@@ -354,13 +424,31 @@ document.addEventListener('DOMContentLoaded', function() {
       if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
         e.preventDefault();
         openSearch();
+        return;
       }
+
+      var ov = document.getElementById('searchPalette');
+      if (!ov || ov.style.display === 'none') return;
+
       // ESC to close
       if (e.key === 'Escape') {
-        var ov = document.getElementById('searchPalette');
-        if (ov && ov.style.display !== 'none') {
-          closeSearch();
-        }
+        closeSearch();
+        return;
+      }
+
+      // Arrow key navigation
+      var items = resultsDiv ? resultsDiv.querySelectorAll('.search-result-item') : [];
+      if (!items.length) return;
+
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setActive(activeIdx < items.length - 1 ? activeIdx + 1 : 0);
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setActive(activeIdx > 0 ? activeIdx - 1 : items.length - 1);
+      } else if (e.key === 'Enter' && activeIdx >= 0 && activeIdx < items.length) {
+        e.preventDefault();
+        items[activeIdx].click();
       }
     });
   });

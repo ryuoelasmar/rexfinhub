@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#0f1923">
   <script>
     // Anti-flash: apply theme before paint
-    (function(){var t=localStorage.getItem('rex-theme');if(!t){t=window.matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light'}document.documentElement.setAttribute('data-theme',t)})();
+    (function(){var t=localStorage.getItem('rex-theme');if(!t){t='light'}document.documentElement.setAttribute('data-theme',t)})();
   </script>
   <title>{% block title %}REX Financial Intelligence Hub{% endblock %}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -120,18 +120,18 @@
   <div class="footer-grid">
     <div>
       <div class="footer-brand-title">REX Financial Intelligence Hub</div>
-      <div class="footer-brand-desc">Central intelligence platform for REX Financial leveraged ETP products.</div>
+      <div class="footer-brand-desc">Central intelligence platform for REX Financial.</div>
     </div>
     <div>
-      <div class="footer-heading">Quick Links</div>
+      <div class="footer-heading">Navigation</div>
       <ul class="footer-links">
-        <li><a href="/dashboard">Dashboard</a></li>
-        <li><a href="/market/rex">Market Intel</a></li>
+        <li><a href="/market/rex">Market Intelligence</a></li>
+        <li><a href="/dashboard">Trust Dashboard</a></li>
         <li><a href="/funds/">Fund Lookup</a></li>
-        <li><a href="/screener/">Screener</a></li>
-        <li><a href="/holdings/">Holdings</a></li>
-        <li><a href="/universe/">Universe</a></li>
-        <li><a href="/downloads/">Downloads</a></li>
+        <li><a href="/screener/">Filing Screener</a></li>
+        <li><a href="/holdings/">13F Holders</a></li>
+        <li><a href="/universe/">Trust Universe</a></li>
+        <li><a href="/downloads/">Exports</a></li>
       </ul>
     </div>
     <div>
