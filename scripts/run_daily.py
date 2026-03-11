@@ -43,8 +43,14 @@ def _load_api_key() -> str:
 
 
 def upload_db_to_render() -> None:
-    """Upload the local SQLite DB to Render's /api/v1/db/upload endpoint."""
+    """Upload the local SQLite DB to Render (gzipped to avoid OOM).
+
+    Raw DB is ~450MB but compresses to ~63MB with gzip.
+    Render decompresses in streaming chunks on arrival.
+    """
+    import gzip
     import requests
+    import tempfile
 
     db_path = PROJECT_ROOT / "data" / "etp_tracker.db"
     if not db_path.exists():
@@ -54,21 +60,39 @@ def upload_db_to_render() -> None:
     api_key = _load_api_key()
     headers = {"X-API-Key": api_key} if api_key else {}
 
+    # Compress to temp file (450MB -> ~63MB)
+    gz_path = str(db_path) + ".upload.gz"
     try:
-        with open(db_path, "rb") as f:
+        raw_mb = db_path.stat().st_size / 1e6
+        print(f"  Compressing {raw_mb:.0f} MB...", end=" ", flush=True)
+        with open(db_path, "rb") as f_in:
+            with gzip.open(gz_path, "wb", compresslevel=6) as f_out:
+                while True:
+                    chunk = f_in.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    f_out.write(chunk)
+        gz_mb = Path(gz_path).stat().st_size / 1e6
+        print(f"{gz_mb:.0f} MB")
+
+        with open(gz_path, "rb") as f:
             resp = requests.post(
                 f"{RENDER_API_URL}/db/upload",
-                files={"file": ("etp_tracker.db", f, "application/octet-stream")},
+                files={"file": ("etp_tracker.db.gz", f, "application/gzip")},
                 headers=headers,
                 timeout=600,
             )
         if resp.status_code == 200:
-            size_mb = db_path.stat().st_size / 1_000_000
-            print(f"  Uploaded to Render ({size_mb:.1f} MB)")
+            print(f"  Uploaded to Render ({gz_mb:.0f} MB compressed, {raw_mb:.0f} MB raw)")
         else:
             print(f"  Upload failed: {resp.status_code} {resp.text}")
     except Exception as e:
         print(f"  Upload failed (non-fatal): {e}")
+    finally:
+        try:
+            Path(gz_path).unlink(missing_ok=True)
+        except Exception:
+            pass
 
 
 def main():

@@ -203,22 +203,51 @@ async def upload_db(
 ):
     """Replace the database file with an uploaded copy.
 
-    Used by the local pipeline to push its DB to Render after sync.
+    Accepts raw or gzipped (.gz) SQLite DB files.
     Streams to disk in 64KB chunks to stay under Render's 512MB RAM.
+    Gzipped uploads decompress in streaming chunks (never buffers full file).
     """
+    import gzip as _gzip
     from webapp.database import DB_PATH, engine
 
+    is_gzipped = (file.filename or "").endswith(".gz") or file.content_type == "application/gzip"
     tmp_path = str(DB_PATH) + ".uploading"
     try:
-        # Stream directly to disk in small chunks — never buffer full file
-        total = 0
-        with open(tmp_path, "wb") as f:
-            while True:
-                chunk = await file.read(65536)  # 64KB chunks
-                if not chunk:
-                    break
-                f.write(chunk)
-                total += len(chunk)
+        total_in = 0
+        total_out = 0
+        if is_gzipped:
+            # Stream: read gzip chunks, decompress, write to disk
+            gz_tmp = tmp_path + ".gz"
+            # First stream compressed data to disk
+            with open(gz_tmp, "wb") as f:
+                while True:
+                    chunk = await file.read(65536)
+                    if not chunk:
+                        break
+                    f.write(chunk)
+                    total_in += len(chunk)
+            # Then decompress file-to-file (low memory)
+            with _gzip.open(gz_tmp, "rb") as gz_in:
+                with open(tmp_path, "wb") as f_out:
+                    while True:
+                        chunk = gz_in.read(65536)
+                        if not chunk:
+                            break
+                        f_out.write(chunk)
+                        total_out += len(chunk)
+            try:
+                os.unlink(gz_tmp)
+            except OSError:
+                pass
+        else:
+            with open(tmp_path, "wb") as f:
+                while True:
+                    chunk = await file.read(65536)
+                    if not chunk:
+                        break
+                    f.write(chunk)
+                    total_out += len(chunk)
+            total_in = total_out
 
         # Dispose existing connections so the file isn't locked
         engine.dispose()
@@ -226,13 +255,18 @@ async def upload_db(
         # Atomic replace
         shutil.move(tmp_path, str(DB_PATH))
 
-        size_mb = total / 1_000_000
-        return {"status": "ok", "message": f"Database replaced ({size_mb:.1f} MB)"}
+        in_mb = total_in / 1_000_000
+        out_mb = total_out / 1_000_000
+        msg = f"Database replaced ({out_mb:.1f} MB)"
+        if is_gzipped:
+            msg = f"Database replaced ({in_mb:.1f} MB gzipped -> {out_mb:.1f} MB)"
+        return {"status": "ok", "message": msg}
     except Exception as e:
-        try:
-            os.unlink(tmp_path)
-        except OSError:
-            pass
+        for p in [tmp_path, tmp_path + ".gz"]:
+            try:
+                os.unlink(p)
+            except OSError:
+                pass
         import logging
         logging.getLogger(__name__).error("DB upload failed: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")
