@@ -593,23 +593,40 @@ def export_market_underlier_summary(db: Session = Depends(get_db)):
 
 @router.get("/export/market/timeseries")
 def export_market_timeseries(db: Session = Depends(get_db)):
-    """CSV export of AUM time series (monthly snapshots, all tickers)."""
-    from webapp.models import MktTimeSeries
+    """CSV export of AUM time series (monthly snapshots, all tickers).
 
+    Uses the filtered time series (pre-inception AUM zeroed out).
+    """
+    from webapp.services.market_data import get_time_series_df
+
+    ts_df = get_time_series_df(db)
+    if ts_df.empty:
+        # Fallback to raw DB if service unavailable
+        from webapp.models import MktTimeSeries
+        header = ["Ticker", "Months Ago", "AUM ($M)", "Category", "Issuer", "REX Fund"]
+        def rows():
+            for r in db.execute(
+                select(MktTimeSeries)
+                .order_by(MktTimeSeries.ticker, MktTimeSeries.months_ago)
+            ).scalars().yield_per(500):
+                yield [r.ticker or "", r.months_ago, round(r.aum_value or 0, 2),
+                       r.category_display or "", r.issuer_display or "", r.is_rex]
+        return StreamingResponse(
+            _stream_csv(header, rows()),
+            media_type="text/csv",
+            headers={"Content-Disposition": "attachment; filename=aum_timeseries.csv"},
+        )
+
+    ts_df = ts_df.sort_values(["ticker", "months_ago"])
     header = ["Ticker", "Months Ago", "AUM ($M)", "Category", "Issuer", "REX Fund"]
-
     def rows():
-        for r in db.execute(
-            select(MktTimeSeries)
-            .order_by(MktTimeSeries.ticker, MktTimeSeries.months_ago)
-        ).scalars().yield_per(500):
+        for _, r in ts_df.iterrows():
             yield [
-                r.ticker or "", r.months_ago,
-                round(r.aum_value or 0, 2),
-                r.category_display or "", r.issuer_display or "",
-                r.is_rex,
+                r.get("ticker", ""), r.get("months_ago", 0),
+                round(r.get("aum_value", 0), 2),
+                r.get("category_display", ""), r.get("issuer_display", ""),
+                r.get("is_rex", False),
             ]
-
     return StreamingResponse(
         _stream_csv(header, rows()),
         media_type="text/csv",
