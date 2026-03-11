@@ -49,7 +49,6 @@ TIME US,Innovation
 CSNR US,Natural Resources
 INCO US,Consumer
 ECON US,Consumer
-SPC US,IPO & SPAC
 SIXG US,5G
 QTUM US,Quantum Computing
 DMCY US,Corporate Culture
@@ -104,7 +103,6 @@ BUYZ US,E-Commerce
 XDAT US,Tech & Communications
 HELX US,Healthcare
 IQM US,Artificial Intelligence
-GAST US,Artificial Intelligence
 GCAD US,Space
 GGRW US,Innovation
 LOPP US,Environment
@@ -278,7 +276,6 @@ BOTT US,Robotics & Automation
 LIMI US,Electric Car & Battery
 NATO US,Defense
 HWAY US,Infrastructure
-HEAT US,Environment
 COPY US,Cannabis and Psychedelics
 JETS US,"Travel, Vacation & Leisure"
 WAR US,Defense
@@ -289,7 +286,6 @@ DGIN US,EM Tech
 DAPP US,Blockchain & Crypto
 EVX US,Environment
 BJK US,Sports & Esports
-GMET US,Transition Metals
 HAP US,Natural Resources
 NODE US,Blockchain & Crypto
 IBOT US,Robotics & Automation

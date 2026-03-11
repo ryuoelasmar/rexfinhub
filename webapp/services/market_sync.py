@@ -80,7 +80,7 @@ _ATTR_COLS = [
     "map_li_category", "map_li_subcategory", "map_li_direction",
     "map_li_leverage_amount", "map_li_underlier",
     "map_cc_underlier", "map_cc_index",
-    "map_crypto_is_spot", "map_crypto_underlier",
+    "map_crypto_type", "map_crypto_underlier",
     "map_defined_category", "map_thematic_category",
     "cc_type", "cc_category",
 ]
@@ -333,7 +333,7 @@ def _insert_master_data(db: Session, df: pd.DataFrame, run_id: int) -> int:
             map_li_underlier=_safe_str(_get_col(row, "map_li_underlier")),
             map_cc_underlier=_safe_str(_get_col(row, "map_cc_underlier")),
             map_cc_index=_safe_str(_get_col(row, "map_cc_index")),
-            map_crypto_is_spot=_safe_str(_get_col(row, "map_crypto_is_spot")),
+            map_crypto_type=_safe_str(_get_col(row, "map_crypto_type")),
             map_crypto_underlier=_safe_str(_get_col(row, "map_crypto_underlier")),
             map_defined_category=_safe_str(_get_col(row, "map_defined_category")),
             map_thematic_category=_safe_str(_get_col(row, "map_thematic_category")),

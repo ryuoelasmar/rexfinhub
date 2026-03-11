@@ -79,10 +79,7 @@ def run_transform(
 # ---------------------------------------------------------------------------
 
 def step3_apply_fund_mapping(df: pd.DataFrame, fund_mapping: pd.DataFrame) -> pd.DataFrame:
-    """Step 3: Join fund_mapping on ticker to add etp_category.
-
-    Multi-category tickers get duplicated rows (one per etp_category).
-    """
+    """Step 3: Join fund_mapping on ticker to add etp_category."""
     if fund_mapping.empty:
         df["etp_category"] = pd.NA
         log.info("[3/12] fund_mapping empty, skipped")
@@ -367,6 +364,9 @@ def _unpivot_aum(master_df: pd.DataFrame) -> pd.DataFrame:
         return int(m.group(1)) if m else 0
 
     ts["months_ago"] = ts["aum_col"].apply(_months_ago)
+
+    # Ensure aum_value is numeric (AUM columns may contain strings from Excel)
+    ts["aum_value"] = pd.to_numeric(ts["aum_value"], errors="coerce").fillna(0.0)
 
     as_of = pd.Timestamp(datetime.now().date())
     ts["as_of_date"] = as_of

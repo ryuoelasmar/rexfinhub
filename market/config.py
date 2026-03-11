@@ -183,7 +183,7 @@ LI_ATTR_COLS = [
 
 CC_ATTR_COLS = ["map_cc_underlier", "map_cc_index", "cc_type", "cc_category"]
 
-CRYPTO_ATTR_COLS = ["map_crypto_is_spot", "map_crypto_underlier"]
+CRYPTO_ATTR_COLS = ["map_crypto_type", "map_crypto_underlier"]
 
 DEFINED_ATTR_COLS = ["map_defined_category"]
 

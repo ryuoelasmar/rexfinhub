@@ -175,3 +175,13 @@ def client(seeded_db):
         from webapp.main import SITE_PASSWORD
         c.post("/login", data={"password": SITE_PASSWORD, "next": "/"})
         yield c
+
+    # Clean up: dispose real engine connections opened by _prewarm_caches()
+    # and invalidate module-level caches to prevent pool exhaustion across tests
+    from webapp.database import engine as real_engine
+    real_engine.dispose()
+    try:
+        from webapp.services.market_data import invalidate_cache
+        invalidate_cache()
+    except Exception:
+        pass

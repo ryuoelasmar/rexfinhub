@@ -20,7 +20,6 @@ AMZD US,Equity,Single Stock,Short,1.0,AMZN US
 AMZU US,Equity,Single Stock,Long,2.0,AMZN US
 AMZZ US,Equity,Single Stock,Long,2.0,AMZN US
 ANEL US,Equity,Single Stock,Long,2.0,ANET US
-APED US,Stacked Returns,Miscellaneous,Long,,Basket
 APLX US,Equity,Single Stock,Long,2.0,APLD US
 APPX US,Equity,Single Stock,Long,2.0,APP US
 ARCX US,Equity,Single Stock,Long,2.0,ACHR US
@@ -66,7 +65,6 @@ BRZU US,Equity,Index/Basket/ETF Based,Long,2.0,
 BTCL US,Crypto,Single Stock,Long,2.0,XBTUSD Curncy
 BTCZ US,Crypto,Single Stock,Short,2.0,XBTUSD Curncy
 BTFL US,Equity,Single Stock,Long,2.0,BITF US
-BTFX US,Crypto,Single Stock,Long,2.0,XBTUSD Curncy
 BTGD US,Stacked Returns,Miscellaneous,Long,,Basket
 BU US,Equity,Single Stock,Long,2.0,B US
 BULG US,Equity,Single Stock,Long,2.0,BULL US
@@ -89,7 +87,6 @@ CONI US,Equity,Single Stock,Short,1.0,COIN US
 CONL US,Equity,Single Stock,Long,2.0,COIN US
 CONX US,Equity,Single Stock,Long,2.0,BULL US
 CORD US,Equity,Single Stock,Long,2.0,CRWV US
-CORX US,Commodity,Index/Basket/ETF Based,Long,2.0,
 COTG US,Equity,Single Stock,Long,2.0,COST
 COZX US,Equity,Single Stock,Long,2.0,CORZ US
 CPXR US,Commodity,Index/Basket/ETF Based,Long,2.0,
@@ -154,7 +151,6 @@ EPV US,Equity,Index/Basket/ETF Based,Short,2.0,
 ERX US,Equity,Index/Basket/ETF Based,Long,2.0,
 ERY US,Equity,Index/Basket/ETF Based,Short,2.0,
 ETHD US,Crypto,Single Stock,Short,2.0,XETUSD Curncy
-ETHI US,Crypto,Single Stock,Long,2.0,
 ETHT US,Crypto,Single Stock,Long,2.0,XETUSD Curncy
 ETHU US,Crypto,Single Stock,Long,2.0,XETUSD Curncy
 ETQ US,Crypto,Single Stock,Short,2.0,XETUSD Curncy
@@ -211,7 +207,6 @@ ISUL US,Equity,Single Stock,Long,2.0,ISRG
 JDST US,Equity,Index/Basket/ETF Based,Short,2.0,
 JNUG US,Equity,Index/Basket/ETF Based,Long,2.0,
 JOBX US,Equity,Single Stock,Long,2.0,JOBY US
-JPX US,Equity,Single Stock,Long,2.0,JPM US
 KBAB US,Equity,Single Stock,Long,2.0,BABA US
 KBDU US,Equity,Single Stock,Long,2.0,BIDU US
 KJD US,Equity,Single Stock,Long,2.0,JD US
@@ -423,7 +418,6 @@ SOLX US,Crypto,Single Stock,Long,2.0,XSOUSD Curncy
 SOUX US,Equity,Single Stock,Long,2.0,SOUN US
 SOXL US,Equity,Index/Basket/ETF Based,Long,3.0,
 SOXS US,Equity,Index/Basket/ETF Based,Short,3.0,
-SPCY US,Stacked Returns,Miscellaneous,Long,,Basket
 SPDN US,Equity,Index/Basket/ETF Based,Short,1.0,
 SPOG US,Equity,Single Stock,Long,2.0,SPOT US
 SPUU US,Equity,Index/Basket/ETF Based,Long,2.0,
@@ -523,14 +517,12 @@ UXRP US,Crypto,Single Stock,Long,2.0,XRPUSD Curncy
 UYG US,Equity,Index/Basket/ETF Based,Long,2.0,
 UYM US,Equity,Index/Basket/ETF Based,Long,2.0,
 VALG US,Equity,Single Stock,Long,2.0,VALE US
-VIXI US,Volatility,Index/Basket/ETF Based,Tactical,,
 VOYX US,Equity,Single Stock,Long,2.0,VOYG US
 VRTL US,Equity,Single Stock,Long,2.0,VRT US
 VSTL US,Equity,Single Stock,Long,2.0,VST US
 WANT US,Equity,Index/Basket/ETF Based,Long,3.0,
 WEBL US,Equity,Index/Basket/ETF Based,Long,3.0,
 WEBS US,Equity,Index/Basket/ETF Based,Short,3.0,
-WHTX US,Commodity,Index/Basket/ETF Based,Long,2.0,
 WILD US,Equity,Index/Basket/ETF Based,Long,2.0,
 WTIB US,Equity,Index/Basket/ETF Based,Tactical,,
 WULX US,Equity,Single Stock,Long,2.0,WULF US
@@ -538,7 +530,6 @@ WXET US,Commodity,Index/Basket/ETF Based,Long,2.0,
 XOMX US,Equity,Single Stock,Long,2.0,XOM US
 XOMZ US,Equity,Single Stock,Short,1.0,XOM US
 XPEG US,Equity,Single Stock,Long,2.0,XPEV
-XPM US,Equity,Single Stock,Long,2.0,PM US
 XPP US,Equity,Index/Basket/ETF Based,Long,2.0,
 XRPK US,Crypto,Single Stock,Long,2.0,XRPUSD Curncy
 XRPT US,Crypto,Single Stock,Long,2.0,XRPUSD Curncy
@@ -550,7 +541,6 @@ YCL US,Currency,Index/Basket/ETF Based,Long,2.0,JPYUSD Curncy
 YCS US,Currency,Single Stock,Short,2.0,USDJPY Curncy
 YINN US,Equity,Index/Basket/ETF Based,Long,3.0,
 YXI US,Equity,Index/Basket/ETF Based,Short,1.0,
-ZIPP US,Stacked Returns,Miscellaneous,Long,,Basket
 ZSL US,Commodity,Index/Basket/ETF Based,Short,2.0,SIA Comdty
 ZVOL US,Volatility,Index/Basket/ETF Based,Short,1.0,
 APLZ US,Equity,Single Stock,Short,2.0,APLD

@@ -78,7 +78,7 @@ _FLAT_TO_PREFIXED = {
     "map_li_underlier": "q_category_attributes.map_li_underlier",
     "map_cc_underlier": "q_category_attributes.map_cc_underlier",
     "map_cc_index": "q_category_attributes.map_cc_index",
-    "map_crypto_is_spot": "q_category_attributes.map_crypto_is_spot",
+    "map_crypto_type": "q_category_attributes.map_crypto_type",
     "map_crypto_underlier": "q_category_attributes.map_crypto_underlier",
     "map_defined_category": "q_category_attributes.map_defined_category",
     "map_thematic_category": "q_category_attributes.map_thematic_category",
@@ -96,6 +96,27 @@ _EMPTY_MASTER_COLS = [
     "t_w4.aum", "t_w4.fund_flow_1week", "t_w4.fund_flow_1month",
     "t_w4.fund_flow_ytd", "primary_category", "rex_suite",
 ]
+
+
+def _apply_etn_overrides(df: pd.DataFrame) -> pd.DataFrame:
+    """Apply MicroSectors ETN proprietary overrides (for internal reports only).
+
+    Bloomberg reports total issuance (not true AUM) and zero flows for ETNs.
+    This reads the 'microsector' + 'data_msector' sheets to compute true values.
+    Returns the same DataFrame (modified in-place).
+    """
+    try:
+        from market.microsectors import read_overrides, apply_overrides
+        from market.config import DATA_FILE
+        if DATA_FILE.exists():
+            xl = pd.ExcelFile(DATA_FILE, engine="openpyxl")
+            if "microsector" in xl.sheet_names:
+                ov = read_overrides(xl)
+                if ov:
+                    apply_overrides(df, ov)
+    except Exception as e:
+        log.warning("ETN override failed (non-fatal): %s", e)
+    return df
 
 
 def _load_master(db: Session) -> pd.DataFrame:
@@ -261,9 +282,18 @@ def get_data_as_of(db: Session) -> str:
     return ""
 
 
-def get_master_data(db: Session) -> pd.DataFrame:
-    """Return full fund universe as DataFrame (cached, 1h TTL)."""
-    return _load_master(db)
+def get_master_data(db: Session, etn_overrides: bool = False) -> pd.DataFrame:
+    """Return full fund universe as DataFrame (cached).
+
+    Args:
+        etn_overrides: If True, return a copy with MicroSectors ETN proprietary
+            data (true AUM + flows).  Only for internal reports/emails.
+    """
+    df = _load_master(db)
+    if etn_overrides:
+        df = df.copy()
+        _apply_etn_overrides(df)
+    return df
 
 
 def get_time_series_df(db: Session) -> pd.DataFrame:
@@ -288,13 +318,24 @@ def _fmt_flow(val: float) -> str:
     return f"{sign}{_fmt_currency(val)}"
 
 
+def _is_actv(df: pd.DataFrame) -> pd.Series:
+    """Return boolean mask: True for rows where market_status is 'ACTV' or missing."""
+    if "market_status" not in df.columns:
+        return pd.Series(True, index=df.index)
+    return df["market_status"].fillna("ACTV").str.strip().str.upper() == "ACTV"
+
+
 def get_kpis(df: pd.DataFrame) -> dict:
-    """Calculate standard KPIs from a filtered dataframe (values in $M)."""
+    """Calculate standard KPIs from a filtered dataframe (values in $M).
+
+    Product count uses ACTV filter (excludes liquidated/delisted).
+    AUM/flow totals include all funds (liquidated = $0 anyway).
+    """
     total_aum = float(df["t_w4.aum"].sum()) if "t_w4.aum" in df.columns else 0.0
     flow_1w = float(df["t_w4.fund_flow_1week"].sum()) if "t_w4.fund_flow_1week" in df.columns else 0.0
     flow_1m = float(df["t_w4.fund_flow_1month"].sum()) if "t_w4.fund_flow_1month" in df.columns else 0.0
     flow_3m = float(df["t_w4.fund_flow_3month"].sum()) if "t_w4.fund_flow_3month" in df.columns else 0.0
-    count = int(len(df))
+    actv_count = int(_is_actv(df).sum())
     aum_fmt = _fmt_currency(total_aum)
     return {
         "total_aum": total_aum,
@@ -306,8 +347,8 @@ def get_kpis(df: pd.DataFrame) -> dict:
         "flow_1m_fmt": _fmt_flow(flow_1m),
         "flow_3m": flow_3m,
         "flow_3m_fmt": _fmt_flow(flow_3m),
-        "count": count,
-        "num_products": count,       # alias for templates/JS
+        "count": actv_count,
+        "num_products": actv_count,  # alias for templates/JS
         "flow_1w_positive": flow_1w >= 0,
         "flow_1m_positive": flow_1m >= 0,
         "flow_3m_positive": flow_3m >= 0,
@@ -331,15 +372,19 @@ _SUITE_ORDER = [
 ]
 
 
-def get_rex_summary(db: Session, fund_structure: str | None = None, category: str | None = None) -> dict:
+def get_rex_summary(db: Session, fund_structure: str | None = None, category: str | None = None, etn_overrides: bool = False) -> dict:
     """Return REX overall KPIs + per-suite breakdown.
 
     Args:
         db: SQLAlchemy session.
         fund_structure: "ETF", "ETN", "ETF,ETN", or "all" to filter by fund type.
         category: If set (and not "All"), filter to only REX products in that category.
+        etn_overrides: If True, use MicroSectors ETN proprietary data (internal reports only).
     """
     df = _load_master(db)
+    if etn_overrides:
+        df = df.copy()
+        _apply_etn_overrides(df)
 
     # ETF/ETN filter (supports comma-separated multi-select)
     if fund_structure and fund_structure != "all":
@@ -803,7 +848,7 @@ def _apply_slicer_filter(df: pd.DataFrame, field: str, value) -> pd.DataFrame:
 
 _CATEGORY_SLICERS: dict[str, list[dict]] = {
     "Crypto": [
-        {"field": "q_category_attributes.map_crypto_is_spot", "label": "Type"},
+        {"field": "q_category_attributes.map_crypto_type", "label": "Type"},
         {"field": "q_category_attributes.map_crypto_underlier", "label": "Underlier"},
     ],
     "Income - Single Stock": [
@@ -864,9 +909,12 @@ def get_slicer_options(db: Session, category: str) -> list[dict]:
     return result
 
 
-def get_category_summary(db: Session, category: str | None, filters: dict | None = None, fund_structure: str | None = None, page: int = 1, per_page: int = 50) -> dict:
+def get_category_summary(db: Session, category: str | None, filters: dict | None = None, fund_structure: str | None = None, page: int = 1, per_page: int = 50, etn_overrides: bool = False) -> dict:
     """Return category totals, REX share, top products, issuer breakdown."""
     df = _load_master(db)
+    if etn_overrides:
+        df = df.copy()
+        _apply_etn_overrides(df)
 
     # ETF/ETN filter (supports comma-separated multi-select)
     if fund_structure and fund_structure != "all":
@@ -1196,7 +1244,7 @@ def get_issuer_summary(db: Session, category: str | None = None, fund_structure:
             flow_1w = float(grp["t_w4.fund_flow_1week"].sum()) if "t_w4.fund_flow_1week" in grp.columns else 0.0
             flow_1m = float(grp["t_w4.fund_flow_1month"].sum()) if "t_w4.fund_flow_1month" in grp.columns else 0.0
             share = (aum / total_aum * 100) if total_aum > 0 else 0.0
-            num_products = int(len(grp))
+            num_products = int(_is_actv(grp).sum())
             if num_products == 0:
                 continue
             issuers.append({

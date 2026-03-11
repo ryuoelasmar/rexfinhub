@@ -127,7 +127,7 @@ def main():
                 cc_df.to_csv(rules_dir / "attributes_CC.csv", index=False)
 
         # Crypto block
-        crypto_map = {"ticker.2": "ticker", "map_crypto_is_spot": "map_crypto_is_spot",
+        crypto_map = {"ticker.2": "ticker", "map_crypto_type": "map_crypto_type",
                        "map_crypto_underlier": "map_crypto_underlier"}
         crypto_available = {k: v for k, v in crypto_map.items() if k in cm.columns}
         if "ticker.2" in crypto_available:

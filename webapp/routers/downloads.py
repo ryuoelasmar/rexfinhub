@@ -300,7 +300,7 @@ _MARKET_MASTER_COLS = [
     ("map_cc_underlier", "CC Underlier"),
     ("map_cc_index", "CC Index"),
     # Other Mappings
-    ("map_crypto_is_spot", "Crypto Spot"),
+    ("map_crypto_type", "Crypto Type"),
     ("map_crypto_underlier", "Crypto Underlier"),
     ("map_defined_category", "Defined Outcome Cat"),
     ("map_thematic_category", "Thematic Cat"),
@@ -322,7 +322,7 @@ _MARKET_MASTER_COLS = [
     ("total_return_6month", "Return 6M"),
     ("total_return_ytd", "Return YTD"),
     ("total_return_1year", "Return 1Y"),
-    ("total_return_3year", "Return 3Y"),
+    ("total_return_3year", "Return 3Y (Ann)"),
     # Cost & Yield
     ("expense_ratio", "Expense Ratio"),
     ("management_fee", "Management Fee"),

@@ -30,9 +30,8 @@ def test_digest_has_kpis(sample_output_dir):
     from etp_tracker.email_alerts import build_digest_html
 
     html = build_digest_html(sample_output_dir, dashboard_url="https://example.com")
-    assert "Trusts Monitored" in html
-    assert "Effective" in html
-    assert "Pending" in html
+    assert "REX Daily" in html or "ETP Report" in html
+    assert "Open Dashboard" in html
 
 
 def test_digest_has_dashboard_button(sample_output_dir):

@@ -51,8 +51,8 @@ CC_TYPES = ["Synthetic", "Traditional"]
 
 CC_CATEGORIES = [
     "Autocallable", "Broad Beta", "Commodity", "Crypto", "Energy",
-    "Fixed Income", "Real Estate", "Sector", "Single Stock",
-    "Small Caps", "Tech",
+    "Fixed Income", "International", "Real Estate", "Sector",
+    "Single Stock", "Small Caps", "Specialty", "Tech",
 ]
 
 CRYPTO_IS_SPOT = [
@@ -69,9 +69,9 @@ CRYPTO_IS_SPOT = [
 ]
 
 DEFINED_CATEGORIES = [
-    "Accelerator", "Autocallable", "Barrier", "Buffer", "Defined Risk",
+    "Accelerator", "Barrier", "Buffer", "Defined Risk",
     "Defined Volatility", "Dual Buffer", "Floor", "Hedged Equity",
-    "Ladder", "Outcome", "Shield",
+    "Ladder", "Outcome",
 ]
 
 THEMATIC_CATEGORIES = [
@@ -196,7 +196,7 @@ _register(FileSchema(
     description="Spot/derivatives classification and underlier for Crypto ETPs.",
     columns=[
         ColumnDef("ticker", required=True),
-        ColumnDef("map_crypto_is_spot", choices=CRYPTO_IS_SPOT),
+        ColumnDef("map_crypto_type", choices=CRYPTO_IS_SPOT),
         ColumnDef("map_crypto_underlier"),
     ],
 ))

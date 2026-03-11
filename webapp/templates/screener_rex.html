@@ -155,21 +155,21 @@
           </td>
           <td style="font-size:12px; max-width:250px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ f.fund_name }}</td>
           <td style="font-size:12px; font-family:monospace;">{{ f.underlier or '-' }}</td>
-          <td style="text-align:right; font-weight:600;">{{ "{:,.1f}".format(f.aum) }}</td>
-          <td style="text-align:right; {% if f.flow_1m > 0 %}color:var(--green);{% elif f.flow_1m < 0 %}color:var(--red);{% endif %}">
-            {{ "{:,.1f}".format(f.flow_1m) }}
+          <td style="text-align:right; font-weight:600;">{{ "{:,.1f}".format(f.aum|float) }}</td>
+          <td style="text-align:right; {% if f.flow_1m is number and f.flow_1m > 0 %}color:var(--green);{% elif f.flow_1m is number and f.flow_1m < 0 %}color:var(--red);{% endif %}">
+            {% if f.flow_1m is number %}{{ "{:,.1f}".format(f.flow_1m) }}{% else %}-{% endif %}
           </td>
-          <td style="text-align:right; {% if f.flow_3m > 0 %}color:var(--green);{% elif f.flow_3m < 0 %}color:var(--red);{% endif %}">
-            {{ "{:,.1f}".format(f.flow_3m) }}
+          <td style="text-align:right; {% if f.flow_3m is number and f.flow_3m > 0 %}color:var(--green);{% elif f.flow_3m is number and f.flow_3m < 0 %}color:var(--red);{% endif %}">
+            {% if f.flow_3m is number %}{{ "{:,.1f}".format(f.flow_3m) }}{% else %}-{% endif %}
           </td>
-          <td style="text-align:right; {% if f.flow_ytd > 0 %}color:var(--green);{% elif f.flow_ytd < 0 %}color:var(--red);{% endif %}">
-            {{ "{:,.1f}".format(f.flow_ytd) }}
+          <td style="text-align:right; {% if f.flow_ytd is number and f.flow_ytd > 0 %}color:var(--green);{% elif f.flow_ytd is number and f.flow_ytd < 0 %}color:var(--red);{% endif %}">
+            {% if f.flow_ytd is number %}{{ "{:,.1f}".format(f.flow_ytd) }}{% else %}-{% endif %}
           </td>
-          <td style="text-align:right; {% if f.return_ytd > 0 %}color:var(--green);{% elif f.return_ytd < 0 %}color:var(--red);{% endif %}">
-            {{ "%.1f"|format(f.return_ytd) }}%
+          <td style="text-align:right; {% if f.return_ytd is number and f.return_ytd > 0 %}color:var(--green);{% elif f.return_ytd is number and f.return_ytd < 0 %}color:var(--red);{% endif %}">
+            {% if f.return_ytd is number %}{{ "%.1f"|format(f.return_ytd) }}%{% else %}-{% endif %}
           </td>
-          <td style="text-align:right; font-size:12px;">{% if f.spread %}{{ "%.2f"|format(f.spread) }}{% else %}-{% endif %}</td>
-          <td style="text-align:right; font-size:12px;">{% if f.tracking_error %}{{ "%.2f"|format(f.tracking_error) }}{% else %}-{% endif %}</td>
+          <td style="text-align:right; font-size:12px;">{% if f.spread is number %}{{ "%.2f"|format(f.spread) }}{% else %}-{% endif %}</td>
+          <td style="text-align:right; font-size:12px;">{% if f.tracking_error is number %}{{ "%.2f"|format(f.tracking_error) }}{% else %}-{% endif %}</td>
         </tr>
         {% endfor %}
       </tbody>

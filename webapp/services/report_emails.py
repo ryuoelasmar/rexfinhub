@@ -154,8 +154,8 @@ def _wrap_email(title: str, accent: str, body: str,
     if dash_link:
         cta = f"""
 <tr><td style="padding:20px 30px;text-align:center;">
-  <a href="{dash_link}/" style="display:inline-block;padding:12px 28px;
-    background:{accent};color:{_WHITE};text-decoration:none;border-radius:6px;
+  <a href="{dash_link}/" style="display:inline-block;padding:14px 32px;
+    background:{accent};color:{_WHITE};text-decoration:none;border-radius:8px;
     font-weight:600;font-size:14px;">Visit REX FinHub</a>
 </td></tr>"""
 
@@ -167,14 +167,13 @@ def _wrap_email(title: str, accent: str, body: str,
   color:{_NAVY};line-height:1.5;">
 <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:{_LIGHT};">
 <tr><td align="center" style="padding:20px 10px;">
-<table width="660" cellpadding="0" cellspacing="0" border="0"
-  style="background:{_WHITE};border-radius:12px;overflow:hidden;
-  box-shadow:0 2px 8px rgba(0,0,0,0.08);">
+<table width="640" cellpadding="0" cellspacing="0" border="0"
+  style="background:{_WHITE};border-radius:8px;overflow:hidden;
+  box-shadow:0 2px 12px rgba(0,0,0,0.08);">
 
 <!-- Header -->
 <tr><td style="background:{accent};padding:24px 30px;">
-  <div style="font-size:22px;font-weight:700;color:{_WHITE};letter-spacing:-0.5px;">{_esc(title)}</div>
-  <div style="font-size:12px;color:rgba(255,255,255,0.8);margin-top:4px;">{_esc(date_str)}</div>
+  <div style="font-size:22px;font-weight:700;color:{_WHITE};letter-spacing:-0.5px;">{_esc(title)} | {_esc(date_str)}</div>
 </td></tr>
 
 {body}
@@ -186,7 +185,7 @@ def _wrap_email(title: str, accent: str, body: str,
     REX Financial Intelligence Hub &middot; Data sourced from Bloomberg L.P. and REX Shares, LLC
   </div>
   <div style="font-size:10px;color:{_GRAY};margin-top:4px;font-style:italic;">
-    Note: ETNs are excluded from this report due to how Bloomberg classifies the underlying data.
+    Note: ETN data reflects proprietary share/price data where available. Bloomberg-reported ETN figures may differ.
   </div>
 </td></tr>
 
@@ -224,7 +223,7 @@ def _kpi_row(kpis: list[tuple[str, str, str]], label: str = "") -> str:
     )
 
 
-def _section_title(title: str, accent: str = _TEAL) -> str:
+def _section_title(title: str, accent: str = _NAVY) -> str:
     return (
         f'<tr><td style="padding:18px 30px 5px;">'
         f'<div style="font-size:16px;font-weight:700;color:{_NAVY};margin:0 0 8px 0;'
@@ -510,6 +509,8 @@ def _flow_bars(inflows: list[dict], outflows: list[dict], n: int = 10) -> str:
 
     all_flows = [abs(f.get("flow_1w", 0)) for f in top_in + top_out]
     max_flow = max(all_flows) if all_flows else 1
+    if max_flow == 0:
+        max_flow = 1  # avoid division by zero when all flows are zero
 
     # Build rows: inflows first (green, bars go right), then outflows (red, bars go left)
     rows_html = ""
@@ -617,6 +618,61 @@ def _issuer_share_bars(issuers: list[dict], n: int = 6) -> str:
     )
 
 
+def _flow_share_bar(issuers: list[dict], n: int = 6) -> str:
+    """Market share bar with REX highlighted in green, others in blue/gray."""
+    if not issuers:
+        return ""
+    top = issuers[:n]
+    segments_html = ""
+    legend = ""
+    for i, iss in enumerate(top):
+        share = iss.get("market_share", 0)
+        is_rex = iss.get("is_rex", False)
+        color = _REX_GREEN if is_rex else _CHART_COLORS[i % len(_CHART_COLORS)]
+        name = _esc(iss["issuer"][:18])
+        label_style = f"font-weight:700;" if is_rex else ""
+        if share >= 1:
+            segments_html += (
+                f'<td style="width:{share:.1f}%;background:{color};height:22px;'
+                f'font-size:0;line-height:0;">&nbsp;</td>'
+            )
+        legend += (
+            f'<td style="padding:3px 6px 3px 0;font-size:10px;color:{_NAVY};'
+            f'white-space:nowrap;{label_style}">'
+            f'<span style="display:inline-block;width:8px;height:8px;'
+            f'background:{color};border-radius:2px;margin-right:3px;'
+            f'vertical-align:middle;"></span>'
+            f'{name} ({share:.0f}%)</td>'
+        )
+
+    other_share = 100 - sum(iss.get("market_share", 0) for iss in top)
+    if other_share > 1:
+        segments_html += (
+            f'<td style="width:{other_share:.1f}%;background:{_BORDER};height:22px;'
+            f'font-size:0;line-height:0;">&nbsp;</td>'
+        )
+        legend += (
+            f'<td style="padding:3px 6px 3px 0;font-size:10px;color:{_GRAY};'
+            f'white-space:nowrap;">'
+            f'<span style="display:inline-block;width:8px;height:8px;'
+            f'background:{_BORDER};border-radius:2px;margin-right:3px;'
+            f'vertical-align:middle;"></span>'
+            f'Other ({other_share:.0f}%)</td>'
+        )
+
+    return (
+        f'<tr><td style="padding:8px 30px 4px;">'
+        f'<div style="font-size:11px;font-weight:600;color:{_GRAY};text-transform:uppercase;'
+        f'letter-spacing:0.5px;margin-bottom:6px;">Market Share</div>'
+        f'<table width="100%" cellpadding="0" cellspacing="0" border="0" '
+        f'style="border-collapse:collapse;border-radius:6px;overflow:hidden;">'
+        f'<tr>{segments_html}</tr></table>'
+        f'<table cellpadding="0" cellspacing="0" border="0" style="margin-top:6px;">'
+        f'<tr>{legend}</tr></table>'
+        f'</td></tr>'
+    )
+
+
 # ---------------------------------------------------------------------------
 # Segment section builder (shared by both emails)
 # ---------------------------------------------------------------------------
@@ -651,7 +707,11 @@ def _breakdown_table(breakdown: list[dict], breakdown_label: str,
     for b in breakdown[:10]:
         row = [b["name"][:25]]
         if include_direction:
-            row.append(f'{b.get("num_long", 0)}L / {b.get("num_short", 0)}S')
+            tac = b.get("num_tactical", 0)
+            if tac:
+                row.append(f'{b.get("num_long", 0)}L / {b.get("num_short", 0)}S / {tac}T')
+            else:
+                row.append(f'{b.get("num_long", 0)}L / {b.get("num_short", 0)}S')
         if include_type:
             row.append(f'{b.get("num_traditional", 0)}T / {b.get("num_synthetic", 0)}S')
         row += [str(b["count"]), b["aum_fmt"], b["flow_1w_fmt"]]
@@ -694,7 +754,7 @@ def _segment_tables(issuers: list[dict], top10: list[dict], bottom10: list[dict]
         rex_idxs = set()
         for iss in issuers[:15]:
             ri = len(rows)
-            if "REX" in iss["issuer"].upper() or "rex" in iss["issuer"].lower():
+            if iss.get("is_rex", False):
                 rex_idxs.add(ri)
             if include_yield:
                 rows.append([
@@ -762,8 +822,241 @@ def _segment_kpi_banner(kpis: dict) -> str:
     return body
 
 
+# ---------------------------------------------------------------------------
+# Key Highlights — Executive callout boxes
+# ---------------------------------------------------------------------------
+def _key_highlights_box(bullets: list[str], accent: str = _NAVY) -> str:
+    """Prominent highlights callout box at the top of the report.
+
+    Dark left border, light background, bullet points.
+    Designed to be the first thing an executive sees after the header.
+    """
+    if not bullets:
+        return ""
+    bg = "#f4f5f6"
+    items = ""
+    for b in bullets:
+        items += (
+            f'<tr><td style="padding:3px 0;font-size:13px;color:{_NAVY};line-height:1.5;">'
+            f'<span style="color:{accent};font-weight:700;margin-right:6px;">&#8226;</span>'
+            f'{_esc(b)}</td></tr>'
+        )
+    return (
+        f'<tr><td style="padding:15px 30px 10px;">'
+        f'<table width="100%" cellpadding="0" cellspacing="0" border="0" '
+        f'style="background:{bg};border-left:4px solid {accent};border-radius:0 8px 8px 0;">'
+        f'<tr><td style="padding:14px 18px;">'
+        f'<table width="100%" cellpadding="0" cellspacing="0" border="0">'
+        f'<tr><td style="padding:0 0 8px;font-size:10px;font-weight:700;color:{accent};'
+        f'text-transform:uppercase;letter-spacing:1px;">Key Highlights</td></tr>'
+        f'{items}'
+        f'</table></td></tr>'
+        f'</table></td></tr>'
+    )
+
+
+def _mini_callout(text: str, accent: str = _NAVY) -> str:
+    """Small inline callout within a section -- one-line highlight for quick scanning."""
+    if not text:
+        return ""
+    return (
+        f'<tr><td style="padding:4px 30px 8px;">'
+        f'<div style="padding:8px 14px;background:#f8f9fa;border-left:3px solid {accent};'
+        f'border-radius:0 4px 4px 0;font-size:12px;color:{_NAVY};">'
+        f'{_esc(text)}</div>'
+        f'</td></tr>'
+    )
+
+
+def _segment_callout(top10: list[dict], bottom10: list[dict],
+                     rex_funds: list[dict] | None = None) -> str:
+    """Auto-generate a one-line mini callout for a segment based on its movers."""
+    parts = []
+    # Top mover
+    if top10:
+        t = top10[0]
+        parts.append(f"{t['ticker']}: {t.get('flow_1w_fmt', '$0')} 1W (top inflow)")
+    # REX note if present
+    if rex_funds:
+        best_rex = max(rex_funds, key=lambda f: abs(f.get("flow_1w", 0)))
+        if abs(best_rex.get("flow_1w", 0)) > 0 and (not top10 or best_rex["ticker"] != top10[0]["ticker"]):
+            parts.append(f"REX {best_rex['ticker']}: {best_rex['flow_1w_fmt']}")
+    if not parts:
+        return ""
+    return _mini_callout(" | ".join(parts))
+
+
+def _li_highlights(data: dict) -> list[str]:
+    """Generate 3-5 executive highlights for the L&I report."""
+    bullets = []
+    kpis = data.get("kpis", {})
+    if not kpis:
+        return bullets
+
+    # 1. Market direction
+    total_aum = kpis.get("total_aum", "$0")
+    flow_1w = kpis.get("flow_1w", "$0")
+    count = kpis.get("count", 0)
+    bullets.append(f"L&I market: {total_aum} AUM across {count} ETPs ({flow_1w} 1W net flow)")
+
+    # 2. REX position
+    rex = data.get("rex_kpis", {})
+    if rex and rex.get("count", 0) > 0:
+        bullets.append(
+            f"REX: {rex['count']} funds, {rex['total_aum']} AUM ({rex['share']} market share)"
+        )
+
+    # 3. Top REX fund mover
+    rex_funds = data.get("rex_funds", [])
+    if not rex_funds:
+        rex_funds = (data.get("ss_rex_funds", []) or []) + (data.get("index_rex_funds", []) or [])
+    if rex_funds:
+        top_rex = max(rex_funds, key=lambda f: abs(f.get("flow_1w", 0)))
+        if abs(top_rex.get("flow_1w", 0)) > 0:
+            bullets.append(
+                f"{top_rex['ticker']}: {top_rex['flow_1w_fmt']} 1W flow -- top REX mover"
+            )
+
+    # 4. Top competitor issuer
+    all_issuers = (data.get("ss_issuers", []) or []) + (data.get("index_issuers", []) or [])
+    non_rex = [i for i in all_issuers if not i.get("is_rex", False)]
+    if non_rex:
+        top_iss = max(non_rex, key=lambda i: abs(i.get("flow_1w", 0)))
+        if abs(top_iss.get("flow_1w", 0)) > 0:
+            bullets.append(
+                f"{top_iss['issuer']}: {top_iss['flow_1w_fmt']} 1W -- top competitor"
+            )
+
+    # 5. Segment comparison
+    ss_kpis = data.get("ss_kpis", {})
+    idx_kpis = data.get("index_kpis", {})
+    if ss_kpis.get("count", 0) > 0 and idx_kpis.get("count", 0) > 0:
+        ss_flow = ss_kpis.get("flow_1w", "$0")
+        idx_flow = idx_kpis.get("flow_1w", "$0")
+        bullets.append(f"Single stock: {ss_flow} 1W vs index/ETF: {idx_flow} 1W")
+
+    return bullets[:5]
+
+
+def _cc_highlights(data: dict) -> list[str]:
+    """Generate 3-5 executive highlights for the Income report."""
+    bullets = []
+    kpis = data.get("kpis", {})
+    if not kpis:
+        return bullets
+
+    # 1. Market direction
+    total_aum = kpis.get("total_aum", "$0")
+    flow_1w = kpis.get("flow_1w", "$0")
+    count = kpis.get("count", 0)
+    avg_yield = kpis.get("avg_yield", "0.0%")
+    bullets.append(f"Income market: {total_aum} AUM, {count} ETPs, {avg_yield} avg yield ({flow_1w} 1W)")
+
+    # 2. REX position
+    rex = data.get("rex_kpis", {})
+    if rex and rex.get("count", 0) > 0:
+        bullets.append(
+            f"REX: {rex['count']} funds, {rex['total_aum']} AUM ({rex['share']} market share)"
+        )
+
+    # 3. Top yielding REX fund
+    rex_funds = data.get("rex_funds", [])
+    if not rex_funds:
+        rex_funds = (data.get("ss_rex_funds", []) or []) + (data.get("index_rex_funds", []) or [])
+    yielders = [f for f in rex_funds if f.get("yield_val", 0) > 0]
+    if yielders:
+        top_yield = max(yielders, key=lambda f: f.get("yield_val", 0))
+        bullets.append(
+            f"{top_yield['ticker']}: {top_yield['yield_fmt']} yield -- top REX yielder"
+        )
+
+    # 4. Top REX flow mover
+    if rex_funds:
+        top_rex = max(rex_funds, key=lambda f: abs(f.get("flow_1w", 0)))
+        if abs(top_rex.get("flow_1w", 0)) > 0:
+            bullets.append(
+                f"{top_rex['ticker']}: {top_rex['flow_1w_fmt']} 1W flow -- top REX mover"
+            )
+
+    # 5. Top competitor issuer
+    all_issuers = (data.get("ss_issuers", []) or []) + (data.get("index_issuers", []) or [])
+    non_rex = [i for i in all_issuers if not i.get("is_rex", False)]
+    if non_rex:
+        top_iss = max(non_rex, key=lambda i: abs(i.get("flow_1w", 0)))
+        if abs(top_iss.get("flow_1w", 0)) > 0:
+            bullets.append(
+                f"{top_iss['issuer']}: {top_iss['flow_1w_fmt']} 1W -- top competitor"
+            )
+
+    return bullets[:5]
+
+
+def _flow_highlights(data: dict) -> list[str]:
+    """Generate 3-5 executive highlights for the Flow report."""
+    bullets = []
+
+    # 1. Full market overview
+    grand = data.get("grand_kpis", {})
+    if grand:
+        bullets.append(
+            f"ETP Universe: {grand.get('total_aum', '$0')} AUM across "
+            f"{grand.get('count', 0):,} active ETPs ({grand.get('flow_1w', '$0')} 1W net flow)"
+        )
+
+    # 2. REX Financial position
+    rex = data.get("rex_kpis", {})
+    if rex and rex.get("count", 0) > 0:
+        bullets.append(
+            f"REX Financial: {rex.get('count', 0)} funds, {rex.get('total_aum', '$0')} AUM "
+            f"({rex.get('market_share', '0.0%')} market share)"
+        )
+
+    # 3. Top REX fund mover
+    rex_funds = data.get("rex_funds", [])
+    if rex_funds:
+        top_rex = max(rex_funds, key=lambda f: abs(f.get("flow_1w", 0)))
+        if abs(top_rex.get("flow_1w", 0)) > 0:
+            bullets.append(
+                f"{top_rex['ticker']}: {top_rex.get('flow_1w_fmt', '$0')} 1W -- top REX mover"
+            )
+
+    # 4. Biggest suite by flow
+    suites = data.get("suites", [])
+    if suites:
+        best = max(suites, key=lambda s: abs(
+            sum(f.get("flow_1w", 0) for f in s.get("top10", []) + s.get("bottom10", []))
+        ))
+        best_flow = best["kpis"].get("flow_1w", "$0")
+        bullets.append(
+            f"{best['label']} category: {best_flow} 1W flow, "
+            f"{best['kpis'].get('count', 0)} ETPs"
+        )
+
+    # 5. Top competitor fund mover
+    all_movers = []
+    for suite in suites:
+        for f in suite.get("top10", []) + suite.get("bottom10", []):
+            if not f.get("is_rex", False):
+                all_movers.append(f)
+    if all_movers:
+        top_comp = max(all_movers, key=lambda f: abs(f.get("flow_1w", 0)))
+        if abs(top_comp.get("flow_1w", 0)) > 0:
+            issuer = top_comp.get("issuer", "")
+            iss_tag = f" ({issuer})" if issuer else ""
+            bullets.append(
+                f"{top_comp['ticker']}{iss_tag}: {top_comp.get('flow_1w_fmt', '$0')} 1W -- top competitor"
+            )
+
+    return bullets[:5]
+
+
+
+# (removed: _rex_scorecard and _competitive_movers -- replaced by per-suite layout in build_flow_email)
+
+
 def _build_report_email(data: dict, report_type: str, title: str, accent: str,
-                        dashboard_url: str = "", include_yield: bool = False) -> str:
+                        dashboard_url: str = "", include_yield: bool = False,
+                        highlights: list[str] | None = None) -> str:
     """Unified email builder for both L&I and Income reports.
 
     Each segment is self-contained:
@@ -784,10 +1077,20 @@ def _build_report_email(data: dict, report_type: str, title: str, accent: str,
     is_li = report_type == "li"
     body = ""
 
+    # Key Highlights box (right after header, before any sections)
+    if highlights:
+        body += _key_highlights_box(highlights, accent)
+
     # ====================================================================
     # SINGLE STOCK SEGMENT (first)
     # ====================================================================
     body += _section_title("Single Stock", accent)
+
+    # Mini callout for this segment
+    body += _segment_callout(
+        data.get("ss_top10", []), data.get("ss_bottom10", []),
+        data.get("ss_rex_funds", []),
+    )
 
     # KPI Banner
     body += _segment_kpi_banner(data.get("ss_kpis", {}))
@@ -818,6 +1121,12 @@ def _build_report_email(data: dict, report_type: str, title: str, accent: str,
     # INDEX / ETF / BASKET SEGMENT (second)
     # ====================================================================
     body += _section_title("Index / ETF / Basket", accent)
+
+    # Mini callout for this segment
+    body += _segment_callout(
+        data.get("index_top10", []), data.get("index_bottom10", []),
+        data.get("index_rex_funds", []),
+    )
 
     # KPI Banner
     body += _segment_kpi_banner(data.get("index_kpis", {}))
@@ -860,11 +1169,13 @@ def build_li_email(dashboard_url: str = "", db=None) -> tuple[str, list]:
 
     date_str = _data_date_str(data)
     date_mm_dd = _date_mm_dd(data)
-    title = f"REX ETP Leverage & Inverse Report: {date_mm_dd}"
+    title = "REX ETP Leverage & Inverse Report"
 
+    highlights = _li_highlights(data)
     html = _build_report_email(
         data, "li", title, _NAVY,
         dashboard_url=dashboard_url, include_yield=False,
+        highlights=highlights,
     )
     return html, []
 
@@ -873,7 +1184,7 @@ def build_li_email(dashboard_url: str = "", db=None) -> tuple[str, list]:
 # Income (Covered Call) Report Email
 # ---------------------------------------------------------------------------
 def build_cc_email(dashboard_url: str = "", db=None) -> tuple[str, list]:
-    """Build executive-ready email for Income (Covered Call) ETFs report.
+    """Build executive-ready email for Income (Covered Call) ETPs report.
 
     Returns (html, images) where images is always [] (no CID images in v3).
     """
@@ -882,11 +1193,13 @@ def build_cc_email(dashboard_url: str = "", db=None) -> tuple[str, list]:
 
     date_str = _data_date_str(data)
     date_mm_dd = _date_mm_dd(data)
-    title = f"REX ETP Income Report: {date_mm_dd}"
+    title = "REX ETP Income Report"
 
+    highlights = _cc_highlights(data)
     html = _build_report_email(
         data, "cc", title, _NAVY,
         dashboard_url=dashboard_url, include_yield=True,
+        highlights=highlights,
     )
     return html, []
 
@@ -897,137 +1210,140 @@ def build_cc_email(dashboard_url: str = "", db=None) -> tuple[str, list]:
 # ---------------------------------------------------------------------------
 # Flow Report Email (REX vs Competitors)
 # ---------------------------------------------------------------------------
-def _competitor_summary_line(summary: dict) -> str:
-    """Render a compact summary line below a group table."""
-    parts = []
-    cnt = summary.get("competitor_count", 0)
-    if cnt:
-        parts.append(f"{cnt} competitor{'s' if cnt != 1 else ''}")
-    net = summary.get("net_peer_flow_fmt", "")
-    if net:
-        parts.append(f"Net peer flow: {net}")
-    top = summary.get("top_gainer", "")
-    if top:
-        parts.append(f"Top: {top}")
-    bottom = summary.get("top_loser", "")
-    if bottom:
-        parts.append(f"Bottom: {bottom}")
-    if not parts:
-        return ""
-    text = " | ".join(parts)
-    return (
-        f'<tr><td style="padding:2px 30px 10px;">'
-        f'<div style="font-size:11px;color:{_GRAY};font-style:italic;">'
-        f'{_esc(text)}</div></td></tr>'
-    )
-
-
-def _flow_fund_table(funds: list[dict], highlight_col: int = 4) -> str:
-    """Render a standard flow table for a list of fund dicts."""
-    headers = ["Ticker", "Fund", "Issuer", "AUM", "Flow 1W", "Flow 1M"]
-    aligns = ["left", "left", "left", "right", "right", "right"]
-    widths = ["55px", "195px", "110px", "75px", "75px", "75px"]
-    rows = []
-    rex_row_indices = set()
-    for i, fund in enumerate(funds):
-        rows.append([
-            fund.get("ticker", ""),
-            fund.get("fund_name", "")[:35],
-            fund.get("issuer", "")[:18],
-            fund.get("aum_fmt", "$0"),
-            fund.get("flow_1w_fmt", "$0"),
-            fund.get("flow_1m_fmt", "$0"),
-        ])
-        if fund.get("is_rex"):
-            rex_row_indices.add(i)
-    return _table(headers, rows, aligns,
-                  highlight_col=highlight_col, rex_rows=rex_row_indices,
-                  col_widths=widths, nowrap=True)
-
-
 def build_flow_email(dashboard_url: str = "", db=None) -> tuple[str, list]:
-    """Build REX Competitive Flow Report email (category-based).
+    """Build REX ETP Competitive Flow Report email (suite-based v5).
 
-    Returns (html, []) -- no CID images.
+    v5 layout -- CEO-driven, full market + REX suite peer comparison:
+      1. Key Highlights (auto-generated bullets)
+      2. Grand KPIs (ALL active ETPs)
+      3. REX Financial KPIs
+      4. Per Suite (T-REX, MicroSectors, Growth & Income,
+                    Premium Income, Autocallable, Thematic):
+         - Category KPIs
+         - REX KPIs with market share
+         - Market share bar (REX highlighted green)
+         - Issuer comparison table
+         - Top 10 / Bottom 10 flow bars
     """
     from webapp.services.report_data import get_flow_report
     data = get_flow_report(db)
 
-    date_str = _data_date_str(data)
-    date_mm_dd = _date_mm_dd(data)
-    title = f"REX ETP Flow Report: {date_mm_dd}"
+    # If DB cache has old format (pre-v5), recompute locally
+    if data.get("available") and "grand_kpis" not in data:
+        data = get_flow_report(None)
 
-    if not data.get("available") or not data.get("categories"):
+    date_str = _data_date_str(data)
+    title = "REX ETP Flow Report"
+
+    if not data.get("available"):
         return _wrap_email(title, _NAVY,
                            '<tr><td style="padding:20px 30px;">Flow report data not available.</td></tr>',
                            dashboard_url, date_str), []
 
-    kpis = data.get("kpis", {})
-    categories = data.get("categories", [])
-    issuer_analysis = data.get("issuer_analysis", [])
+    grand_kpis = data.get("grand_kpis", {})
+    rex_kpis = data.get("rex_kpis", {})
+    suites = data.get("suites", [])
 
     body = ""
 
-    # --- KPI Banner ---
-    body += _kpi_row([
-        ("Products", kpis.get("products", "0"), _NAVY),
-        ("REX AUM", kpis.get("rex_aum", "$0"), _NAVY),
-        ("REX Flow 1W", kpis.get("rex_flow_1w", "$0"),
-         _GREEN if kpis.get("rex_flow_1w_positive", True) else _RED),
-        ("REX Flow 1M", kpis.get("rex_flow_1m", "$0"),
-         _GREEN if kpis.get("rex_flow_1m_positive", True) else _RED),
-        ("REX Share", kpis.get("rex_share", "0.0%"), _BLUE),
-    ], label="Summary")
+    # --- 1. Key Highlights ---
+    highlights = _flow_highlights(data)
+    body += _key_highlights_box(highlights)
 
-    # --- Issuer Flow Analysis ---
-    if issuer_analysis:
-        body += _section_title("Issuer Flow Analysis", _TEAL)
-        headers = ["Issuer", "# Funds", "AUM", "Flow 1W", "Flow 1M"]
-        aligns = ["left", "right", "right", "right", "right"]
-        widths = ["180px", "60px", "100px", "100px", "100px"]
-        rows = []
-        rex_row_indices = set()
-        for i, entry in enumerate(issuer_analysis):
-            rows.append([
-                entry.get("issuer", "")[:28],
-                str(entry.get("fund_count", 0)),
-                entry.get("aum_fmt", "$0"),
-                entry.get("flow_1w_fmt", "$0"),
-                entry.get("flow_1m_fmt", "$0"),
-            ])
-            if entry.get("is_rex"):
-                rex_row_indices.add(i)
-        body += _table(headers, rows, aligns, highlight_col=3,
-                       rex_rows=rex_row_indices, col_widths=widths, nowrap=True)
+    # --- 2. Grand KPIs (ALL Active ETPs) ---
+    body += _section_title("ETP Market Overview")
+    grand_kpi_items = [
+        ("Active ETPs", f'{grand_kpis.get("count", 0):,}', _NAVY),
+        ("Total AUM", grand_kpis.get("total_aum", "$0"), _NAVY),
+        ("1W Flow", grand_kpis.get("flow_1w", "$0"),
+         _GREEN if grand_kpis.get("flow_1w_positive", True) else _RED),
+        ("1M Flow", grand_kpis.get("flow_1m", "$0"),
+         _GREEN if grand_kpis.get("flow_1m_positive", True) else _RED),
+    ]
+    body += _kpi_row(grand_kpi_items)
 
-    # --- Category sections ---
-    for cat in categories:
-        cat_name = cat.get("name", "")
-        cat_summary = cat.get("summary", {})
-        rex_share = cat_summary.get("rex_share_fmt", "")
-        aum_label = cat_summary.get("total_aum_fmt", "")
-        subtitle = f"{cat_name}  ({aum_label} AUM"
-        if rex_share:
-            subtitle += f", REX {rex_share}"
-        subtitle += ")"
-        body += _section_title(subtitle, _TEAL)
+    # --- 3. REX Financial KPIs ---
+    body += _section_title("REX Financial")
+    rex_kpi_items = [
+        ("Funds", str(rex_kpis.get("count", 0)), _NAVY),
+        ("AUM", rex_kpis.get("total_aum", "$0"), _NAVY),
+        ("1W Flow", rex_kpis.get("flow_1w", "$0"),
+         _GREEN if rex_kpis.get("flow_1w_positive", True) else _RED),
+        ("Market Share", rex_kpis.get("market_share", "0.0%"), _NAVY),
+    ]
+    body += _kpi_row(rex_kpi_items)
 
-        if cat.get("type") == "underlier":
-            # Per-underlier groups
-            for group in cat.get("groups", []):
-                underlier = group.get("underlier", "")
-                g_aum = group.get("total_aum_fmt", "")
-                g_rex_share = group.get("rex_share_fmt", "")
-                g_label = underlier
-                if g_rex_share and group.get("has_rex"):
-                    g_label += f" - REX Share: {g_rex_share}"
-                body += _sub_heading(f"{g_label}  ({g_aum})")
-                body += _flow_fund_table(group.get("funds", []))
-                body += _competitor_summary_line(group.get("summary", {}))
+    # --- 4. Per-Suite Deep Dives ---
+    for suite in suites:
+        kpis = suite.get("kpis", {})
+        rex_s = suite.get("rex_kpis", {})
 
-        elif cat.get("type") == "flat":
-            body += _flow_fund_table(cat.get("funds", []))
-            body += _competitor_summary_line(cat_summary)
+        # Skip empty suites
+        if kpis.get("count", 0) == 0:
+            continue
+
+        body += _section_title(
+            f'{suite["label"]}',
+        )
+
+        # Peer label
+        body += (
+            f'<tr><td style="padding:0 30px 8px;">'
+            f'<div style="font-size:11px;color:{_GRAY};font-style:italic;">'
+            f'Peer group: {_esc(suite.get("peer_label", ""))}'
+            f'</div></td></tr>'
+        )
+
+        # Category KPIs row
+        cat_kpi_items = [
+            ("ETPs", str(kpis.get("count", 0)), _NAVY),
+            ("AUM", kpis.get("total_aum", "$0"), _NAVY),
+            ("1W Flow", kpis.get("flow_1w", "$0"),
+             _GREEN if kpis.get("flow_1w_positive", True) else _RED),
+            ("1M Flow", kpis.get("flow_1m", "$0"),
+             _GREEN if kpis.get("flow_1m_positive", True) else _RED),
+        ]
+        body += _kpi_row(cat_kpi_items, label="Category")
+
+        # REX KPIs row (within this suite)
+        if rex_s.get("count", 0) > 0:
+            rex_suite_items = [
+                ("REX Funds", str(rex_s.get("count", 0)), _REX_GREEN),
+                ("REX AUM", rex_s.get("total_aum", "$0"), _REX_GREEN),
+                ("REX 1W Flow", rex_s.get("flow_1w", "$0"),
+                 _GREEN if rex_s.get("flow_1w_positive", True) else _RED),
+                ("Market Share", rex_s.get("market_share", "0.0%"), _REX_GREEN),
+            ]
+            body += _kpi_row(rex_suite_items, label="REX Financial")
+
+        # Market share bar (REX highlighted in green via is_rex flag)
+        issuers = suite.get("issuers", [])[:8]
+        if issuers:
+            body += _flow_share_bar(issuers, n=6)
+
+        # Issuer comparison table (REX rows highlighted)
+        if issuers:
+            headers = ["Issuer", "ETPs", "AUM", "1W Flow", "1M Flow", "Share"]
+            aligns = ["left", "right", "right", "right", "right", "right"]
+            widths = ["140px", "50px", "80px", "80px", "80px", "55px"]
+            iss_rows = []
+            rex_idxs = set()
+            for ri, iss in enumerate(issuers):
+                if iss.get("is_rex", False):
+                    rex_idxs.add(ri)
+                iss_rows.append([
+                    _esc(iss["issuer"][:28]), str(iss["count"]), iss["aum_fmt"],
+                    iss["flow_1w_fmt"], iss["flow_1m_fmt"],
+                    f'{iss["market_share"]:.1f}%',
+                ])
+            body += _table(headers, iss_rows, aligns, highlight_col=3,
+                           rex_rows=rex_idxs, col_widths=widths)
+
+        # Flow bars (top 10 inflows / bottom 10 outflows)
+        top10 = suite.get("top10", [])[:10]
+        bot10 = suite.get("bottom10", [])[:10]
+        if top10 or bot10:
+            body += _flow_bars(top10, bot10, n=10)
 
     html = _wrap_email(title, _NAVY, body, dashboard_url, date_str)
     return html, []

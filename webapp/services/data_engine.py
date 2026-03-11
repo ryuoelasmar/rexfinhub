@@ -228,7 +228,7 @@ def _build_category_attributes(xl: pd.ExcelFile) -> pd.DataFrame:
     # --- Crypto block ---
     crypto_cols_map = {
         "ticker.2": "_ticker",
-        "map_crypto_is_spot": "map_crypto_is_spot",
+        "map_crypto_type": "map_crypto_type",
         "map_crypto_underlier": "map_crypto_underlier",
     }
     crypto_available = {k: v for k, v in crypto_cols_map.items() if k in cm.columns}
@@ -305,6 +305,9 @@ def build_master_data(xl: pd.ExcelFile = None) -> pd.DataFrame:
     # Deduplicate on (ticker, etp_category) to avoid row multiplication
     try:
         fm = _read_sheet(xl, "fund_mapping")
+        if "is_primary" in fm.columns:
+            fm["is_primary"] = pd.to_numeric(fm["is_primary"], errors="coerce").fillna(1)
+            fm = fm[fm["is_primary"] != 0]
         fm = fm[["etp_category", "ticker"]].dropna(subset=["ticker"])
         fm = fm.drop_duplicates(subset=["ticker", "etp_category"])
         df = df.merge(fm, on="ticker", how="left")
@@ -315,6 +318,9 @@ def build_master_data(xl: pd.ExcelFile = None) -> pd.DataFrame:
         if csv_path.exists():
             fm = pd.read_csv(csv_path, engine="python", on_bad_lines="skip")
             if {"ticker", "etp_category"}.issubset(fm.columns):
+                if "is_primary" in fm.columns:
+                    fm["is_primary"] = pd.to_numeric(fm["is_primary"], errors="coerce").fillna(1)
+                    fm = fm[fm["is_primary"] != 0]
                 fm = fm[["ticker", "etp_category"]].dropna(subset=["ticker"])
                 fm = fm.drop_duplicates(subset=["ticker", "etp_category"])
                 df = df.merge(fm, on="ticker", how="left")
@@ -368,7 +374,7 @@ def build_master_data(xl: pd.ExcelFile = None) -> pd.DataFrame:
                                   "map_li_underlier"],
             "attributes_CC.csv": ["map_cc_underlier", "map_cc_index",
                                   "cc_type", "cc_category"],
-            "attributes_Crypto.csv": ["map_crypto_is_spot", "map_crypto_underlier"],
+            "attributes_Crypto.csv": ["map_crypto_type", "map_crypto_underlier"],
             "attributes_Defined.csv": ["map_defined_category"],
             "attributes_Thematic.csv": ["map_thematic_category"],
         }
@@ -767,9 +773,12 @@ def build_all_from_csvs(csv_dir: Path) -> dict:
             return pd.DataFrame()
         return pd.read_csv(p, engine="python", on_bad_lines="skip")
 
-    # fund_mapping -> etp_category
+    # fund_mapping -> etp_category (single category per ticker)
     fm = _csv("fund_mapping.csv")
     if {"ticker", "etp_category"}.issubset(fm.columns):
+        if "is_primary" in fm.columns:
+            fm["is_primary"] = pd.to_numeric(fm["is_primary"], errors="coerce").fillna(1)
+            fm = fm[fm["is_primary"] != 0]
         fm = fm[["ticker", "etp_category"]].dropna(subset=["ticker"])
         fm = fm.drop_duplicates(subset=["ticker", "etp_category"])
         df = df.merge(fm, on="ticker", how="left")
@@ -795,7 +804,7 @@ def build_all_from_csvs(csv_dir: Path) -> dict:
                               "map_li_underlier"],
         "attributes_CC.csv": ["map_cc_underlier", "map_cc_index",
                               "cc_type", "cc_category"],
-        "attributes_Crypto.csv": ["map_crypto_is_spot", "map_crypto_underlier"],
+        "attributes_Crypto.csv": ["map_crypto_type", "map_crypto_underlier"],
         "attributes_Defined.csv": ["map_defined_category"],
         "attributes_Thematic.csv": ["map_thematic_category"],
     }
