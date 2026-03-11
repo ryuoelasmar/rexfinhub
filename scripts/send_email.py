@@ -157,16 +157,50 @@ def do_weekly(preview: bool):
 # CLI
 # ---------------------------------------------------------------------------
 
+def do_market_share(preview: bool):
+    """Generate market share analysis (4 categories x 2 charts + summary table)."""
+    from scripts.generate_market_share_charts import main as gen_charts
+
+    print("\n  Generating market share charts...")
+    gen_charts()
+
+    report_dir = PROJECT_ROOT / "reports"
+    html_file = sorted(report_dir.glob("rex_market_share_analysis_*.html"), reverse=True)
+    if not html_file:
+        print("  ERROR: no HTML file generated")
+        return
+
+    html_path = html_file[0]
+    html = html_path.read_text(encoding="utf-8")
+
+    if preview:
+        # Copy to previews dir + open
+        dest = PREVIEW_DIR / "market_share.html"
+        PREVIEW_DIR.mkdir(parents=True, exist_ok=True)
+        dest.write_text(html, encoding="utf-8")
+        print(f"  market_share: {len(html):,} chars -> {dest.name}")
+        webbrowser.open(str(dest.resolve()))
+    else:
+        subject = f"REX Market Share Analysis: {datetime.now().strftime('%m/%d/%Y')}"
+        ok = _send_via_smtp(html, subject)
+        print(f"  {'Sent' if ok else 'FAILED'}: {subject}")
+
+
+VALID_BUNDLES = ("daily", "weekly", "market_share", "all")
+
+
 def main():
     args = [a.lower() for a in sys.argv[1:]]
 
-    if len(args) < 2 or args[0] not in ("send", "preview") or args[1] not in ("daily", "weekly", "all"):
+    if len(args) < 2 or args[0] not in ("send", "preview") or args[1] not in VALID_BUNDLES:
         print("Usage:")
-        print("  send daily       REX Daily ETP Report")
-        print("  send weekly      Weekly Report + L&I + Income + Flow")
-        print("  preview daily    Open daily report in browser")
-        print("  preview weekly   Open all weekly reports in browser")
-        print("  preview all      Open daily + weekly reports in browser")
+        print("  send daily          REX Daily ETP Report")
+        print("  send weekly         Weekly Report + L&I + Income + Flow")
+        print("  send market_share   Market Share Analysis (CEO charts)")
+        print("  preview daily       Open daily report in browser")
+        print("  preview weekly      Open all weekly reports in browser")
+        print("  preview market_share  Open market share analysis in browser")
+        print("  preview all         Open daily + weekly reports in browser")
         sys.exit(0)
 
     action = args[0]
@@ -180,6 +214,8 @@ def main():
         do_daily(preview)
     elif bundle == "weekly":
         do_weekly(preview)
+    elif bundle == "market_share":
+        do_market_share(preview)
     else:  # "all"
         do_daily(preview)
         do_weekly(preview)

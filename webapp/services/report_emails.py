@@ -1054,6 +1054,92 @@ def _flow_highlights(data: dict) -> list[str]:
 # (removed: _rex_scorecard and _competitive_movers -- replaced by per-suite layout in build_flow_email)
 
 
+# ---------------------------------------------------------------------------
+# Market Position section (market share charts + summary table)
+# ---------------------------------------------------------------------------
+def _market_position_section(cat_ss: str, cat_idx: str,
+                             label_ss: str, label_idx: str,
+                             accent: str) -> str:
+    """Generate Market Position section with summary table + 4 charts.
+
+    Args:
+        cat_ss:  category_display value for single stock segment
+        cat_idx: category_display value for index/ETF segment
+        label_ss / label_idx: human-readable labels
+        accent: color for section header
+    """
+    try:
+        from scripts.generate_market_share_charts import generate_category_charts
+    except Exception as e:
+        log.warning("Market share charts unavailable: %s", e)
+        return ""
+
+    cats = [
+        (cat_ss, label_ss),
+        (cat_idx, label_idx),
+    ]
+    results = []
+    for cat_db, label in cats:
+        try:
+            r = generate_category_charts(cat_db, label)
+            if r:
+                results.append(r)
+        except Exception as e:
+            log.warning("Chart generation failed for %s: %s", label, e)
+
+    if not results:
+        return ""
+
+    # Build summary table rows
+    tbl_rows = ""
+    for d in results:
+        cur = d["cur"]
+        yr1 = d.get("yr1")
+        yr1_aum = _fmt_currency(yr1["rex_aum"]) if yr1 else "--"
+        yr1_share = f"{yr1['rex_share']:.1f}%" if yr1 else "--"
+        peak = d.get("peak_share", 0)
+
+        tbl_rows += f"""<tr>
+  <td style="padding:5px 8px;border-bottom:1px solid #e8e8e8;font-weight:600;font-size:11px;">{_esc(d['label'])}</td>
+  <td style="padding:5px 8px;border-bottom:1px solid #e8e8e8;text-align:right;font-size:11px;">{_fmt_currency(cur['total_aum'])}</td>
+  <td style="padding:5px 8px;border-bottom:1px solid #e8e8e8;text-align:right;font-weight:700;color:{_BLUE};font-size:11px;">{_fmt_currency(cur['rex_aum'])}</td>
+  <td style="padding:5px 8px;border-bottom:1px solid #e8e8e8;text-align:center;font-size:11px;">{cur['rex_products']}</td>
+  <td style="padding:5px 8px;border-bottom:1px solid #e8e8e8;text-align:right;font-weight:700;color:{_RED};font-size:11px;">{cur['rex_share']:.1f}%</td>
+  <td style="padding:5px 8px;border-bottom:1px solid #e8e8e8;text-align:right;font-size:10px;color:#888;">{yr1_aum}</td>
+  <td style="padding:5px 8px;border-bottom:1px solid #e8e8e8;text-align:right;font-size:10px;color:#888;">{yr1_share}</td>
+  <td style="padding:5px 8px;border-bottom:1px solid #e8e8e8;text-align:right;font-size:10px;color:#888;">{peak:.1f}%</td>
+</tr>"""
+
+    # Chart images
+    chart_html = ""
+    for d in results:
+        chart_html += f"""<tr><td style="padding:10px 30px 2px;">
+  <div style="font-size:12px;font-weight:700;color:{_NAVY};border-left:3px solid {_BLUE};padding-left:8px;margin-bottom:4px;">{_esc(d['label'])}</div>
+</td></tr>
+<tr><td style="padding:2px 30px;"><img src="data:image/png;base64,{d['rex_b64']}" style="width:100%;max-width:620px;" alt="REX Position"></td></tr>
+<tr><td style="padding:2px 30px 8px;"><img src="data:image/png;base64,{d['comp_b64']}" style="width:100%;max-width:620px;" alt="Competitive Landscape"></td></tr>"""
+
+    hdr_style = "padding:4px 8px;font-size:8px;font-weight:700;color:#636e72;text-transform:uppercase;border-bottom:2px solid {navy};".format(navy=_NAVY)
+
+    return f"""{_section_title("Market Position", accent)}
+<tr><td style="padding:8px 30px 4px;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
+    <tr style="background:#f8f9fa;">
+      <td style="{hdr_style}">Category</td>
+      <td style="{hdr_style}text-align:right;">Market</td>
+      <td style="{hdr_style}text-align:right;color:{_BLUE};">REX AUM</td>
+      <td style="{hdr_style}text-align:center;">#</td>
+      <td style="{hdr_style}text-align:right;color:{_RED};">Share</td>
+      <td style="{hdr_style}text-align:right;">1Y Ago</td>
+      <td style="{hdr_style}text-align:right;">1Y Share</td>
+      <td style="{hdr_style}text-align:right;">Peak</td>
+    </tr>
+    {tbl_rows}
+  </table>
+</td></tr>
+{chart_html}"""
+
+
 def _build_report_email(data: dict, report_type: str, title: str, accent: str,
                         dashboard_url: str = "", include_yield: bool = False,
                         highlights: list[str] | None = None) -> str:
@@ -1080,6 +1166,20 @@ def _build_report_email(data: dict, report_type: str, title: str, accent: str,
     # Key Highlights box (right after header, before any sections)
     if highlights:
         body += _key_highlights_box(highlights, accent)
+
+    # Market Position section (summary table + market share charts)
+    if is_li:
+        body += _market_position_section(
+            "Leverage & Inverse - Single Stock",
+            "Leverage & Inverse - Index/Basket/ETF Based",
+            "L&I Single Stock", "L&I Index/ETF", accent,
+        )
+    else:
+        body += _market_position_section(
+            "Income - Single Stock",
+            "Income - Index/Basket/ETF Based",
+            "Income Single Stock", "Income Index/ETF", accent,
+        )
 
     # ====================================================================
     # SINGLE STOCK SEGMENT (first)

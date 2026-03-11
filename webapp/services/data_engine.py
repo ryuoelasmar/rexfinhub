@@ -499,6 +499,7 @@ def _unpivot_aum(master_df: pd.DataFrame) -> pd.DataFrame:
     """
     Unpivot AUM columns (t_w4.aum, t_w4.aum_1 .. t_w4.aum_36) into long format.
     Returns columns: ticker, date, months_ago, aum_value, as_of_date
+    Zeros out AUM for months before a product's inception date.
     """
     # Find AUM columns
     aum_cols = [c for c in master_df.columns
@@ -509,9 +510,14 @@ def _unpivot_aum(master_df: pd.DataFrame) -> pd.DataFrame:
                                       "aum_value", "as_of_date"])
 
     id_col = "ticker"
+    melt_cols = [id_col] + aum_cols
+    has_inception = "inception_date" in master_df.columns
+    if has_inception:
+        melt_cols.append("inception_date")
+
     ts = pd.melt(
-        master_df[[id_col] + aum_cols],
-        id_vars=[id_col],
+        master_df[melt_cols],
+        id_vars=[id_col] + (["inception_date"] if has_inception else []),
         var_name="aum_col",
         value_name="aum_value",
     )
@@ -529,6 +535,16 @@ def _unpivot_aum(master_df: pd.DataFrame) -> pd.DataFrame:
     ts["date"] = ts["months_ago"].apply(
         lambda m: as_of - pd.DateOffset(months=m)
     )
+
+    # Zero out AUM for months before inception (Bloomberg backfills stale data)
+    if has_inception:
+        incep = pd.to_datetime(ts["inception_date"], errors="coerce")
+        pre_inception = ts["date"] < incep
+        zeroed = (pre_inception & (ts["aum_value"] > 0)).sum()
+        if zeroed:
+            ts.loc[pre_inception, "aum_value"] = 0.0
+            log.info("Zeroed %d pre-inception AUM values during unpivot", zeroed)
+        ts = ts.drop(columns=["inception_date"])
 
     ts = ts.drop(columns=["aum_col"])
     return ts

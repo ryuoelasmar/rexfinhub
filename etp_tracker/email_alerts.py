@@ -318,11 +318,66 @@ def _gather_market_snapshot(db=None) -> dict | None:
             except Exception:
                 continue
 
+        # Market pulse: index proxies + industry totals
+        market_pulse = {}
+        try:
+            _PULSE_TICKERS = {"SPY US": "S&P 500", "QQQ US": "NASDAQ", "IBIT US": "Bitcoin"}
+            for _ptk, _plbl in _PULSE_TICKERS.items():
+                _prow = master[master["ticker"] == _ptk]
+                if not _prow.empty:
+                    _pret = float(_prow.iloc[0].get("t_w3.total_return_1day", 0))
+                    market_pulse[_plbl] = {"return_1d": _pret, "return_1d_fmt": f"{_pret:+.2f}%"}
+            # Industry totals (all ETFs + ETNs)
+            _all_dedup = master.drop_duplicates(subset=["ticker"], keep="first") if "ticker" in master.columns else master
+            _ind_aum = float(_all_dedup["t_w4.aum"].sum()) if "t_w4.aum" in _all_dedup.columns else 0
+            _ind_flow_1d = float(_all_dedup["t_w4.fund_flow_1day"].sum()) if "t_w4.fund_flow_1day" in _all_dedup.columns else 0
+            market_pulse["_industry"] = {
+                "aum": _ind_aum, "aum_fmt": f"${_ind_aum/1000:.1f}B" if _ind_aum >= 1000 else f"${_ind_aum:.0f}M",
+                "flow_1d": _ind_flow_1d, "flow_1d_fmt": _fmt_flow_val(_ind_flow_1d),
+                "flow_1d_positive": _ind_flow_1d >= 0,
+            }
+        except Exception:
+            pass
+
+        # Daily movers: top 5 inflows + top 3 outflows by 1D flow
+        daily_movers = {"inflows": [], "outflows": []}
+        if not rex_df.empty and "t_w4.fund_flow_1day" in rex_df.columns:
+            valid_1d = rex_df[rex_df["t_w4.fund_flow_1day"].notna()].copy()
+            for _, row in valid_1d.nlargest(5, "t_w4.fund_flow_1day").iterrows():
+                _f1d = float(row.get("t_w4.fund_flow_1day", 0))
+                _aum = float(row.get("t_w4.aum", 0))
+                daily_movers["inflows"].append({
+                    "ticker": str(row.get("ticker_clean", row.get("ticker", ""))),
+                    "aum_fmt": _fmt_aum(_aum),
+                    "flow_1d": _f1d, "flow_1d_fmt": _fmt_flow_val(_f1d),
+                })
+            for _, row in valid_1d.nsmallest(3, "t_w4.fund_flow_1day").iterrows():
+                _f1d = float(row.get("t_w4.fund_flow_1day", 0))
+                if _f1d >= 0:
+                    continue
+                _aum = float(row.get("t_w4.aum", 0))
+                daily_movers["outflows"].append({
+                    "ticker": str(row.get("ticker_clean", row.get("ticker", ""))),
+                    "aum_fmt": _fmt_aum(_aum),
+                    "flow_1d": _f1d, "flow_1d_fmt": _fmt_flow_val(_f1d),
+                })
+
+        # Data date from market data
+        data_as_of = ""
+        try:
+            from webapp.services.market_data import get_data_as_of
+            data_as_of = get_data_as_of(db)
+        except Exception:
+            pass
+
         return {
             "kpis": kpis,
             "top_movers": top_movers,
+            "daily_movers": daily_movers,
             "winners_losers": winners_losers,
             "landscape": landscape,
+            "market_pulse": market_pulse,
+            "data_as_of": data_as_of,
         }
     except Exception:
         return None
@@ -366,6 +421,51 @@ def _render_market_scorecard(snapshot: dict) -> str:
         <div style="{_lbl}">Products</div>
       </td>
     </tr>
+  </table>
+</td></tr>"""
+
+
+def _render_market_pulse(pulse: dict) -> str:
+    """Render market pulse: index proxies + industry totals (email-safe HTML)."""
+    if not pulse:
+        return ""
+
+    _cell = f"padding:10px 6px;background:{_LIGHT};border-radius:8px;text-align:center;"
+    _val = f"font-size:18px;font-weight:700;"
+    _lbl = f"font-size:9px;color:{_GRAY};text-transform:uppercase;letter-spacing:0.5px;"
+
+    # Index proxy cards (SPY, QQQ, BTC)
+    index_cells = []
+    for label in ["S&P 500", "NASDAQ", "Bitcoin"]:
+        info = pulse.get(label)
+        if info:
+            ret = info["return_1d"]
+            color = _GREEN if ret >= 0 else _RED
+            index_cells.append(
+                f'<td width="23%" style="{_cell}">'
+                f'<div style="{_val}color:{color};">{info["return_1d_fmt"]}</div>'
+                f'<div style="{_lbl}">{label}</div></td>'
+                f'<td width="2%"></td>'
+            )
+    if not index_cells:
+        return ""
+
+    # Industry flow card
+    ind = pulse.get("_industry", {})
+    ind_flow_color = _GREEN if ind.get("flow_1d_positive", True) else _RED
+    index_cells.append(
+        f'<td width="23%" style="{_cell}">'
+        f'<div style="{_val}color:{ind_flow_color};">{ind.get("flow_1d_fmt", "$0")}</div>'
+        f'<div style="{_lbl}">ETP 1D Net Flow</div></td>'
+    )
+
+    return f"""
+<tr><td style="padding:10px 30px 5px;">
+  <div style="font-size:14px;font-weight:600;color:{_NAVY};margin:0 0 6px 0;">
+    Market Pulse
+  </div>
+  <table width="100%" cellpadding="0" cellspacing="0" border="0">
+    <tr>{''.join(index_cells)}</tr>
   </table>
 </td></tr>"""
 
@@ -615,29 +715,48 @@ def _daily_highlights_box(bullets: list[str]) -> str:
 def _daily_highlights(data: dict) -> list[str]:
     """Generate 3-5 executive highlights for the daily filing report."""
     bullets = []
+    snapshot = data.get("market_snapshot")
 
-    # 1. New launches (7d)
+    # 1. REX AUM + flow headline
+    if snapshot:
+        kpis = snapshot.get("kpis", {})
+        aum = kpis.get("aum", "")
+        flow_1d = kpis.get("flow_1d_fmt", "")
+        products = kpis.get("products", 0)
+        if aum:
+            bullets.append(f"REX AUM: {aum} across {products} products ({flow_1d} 1D net flow)")
+
+    # 2. Top REX flow mover
+    if snapshot:
+        dm = snapshot.get("daily_movers", {})
+        inflows = dm.get("inflows", [])
+        if inflows:
+            top = inflows[0]
+            bullets.append(f"{top['ticker']}: {top['flow_1d_fmt']} 1D flow -- top REX mover")
+
+    # 3. New launches (7d) — name the issuers, not "(None)"
     launches = data.get("launches", [])
     if launches:
         rex_launches = [l for l in launches if l.get("is_rex")]
         if rex_launches:
             tickers = ", ".join(l["ticker"] for l in rex_launches[:3])
-            bullets.append(f"{len(launches)} new ETP launch(es) this week -- REX: {tickers}")
+            bullets.append(f"{len(launches)} new ETP launches this week -- REX: {tickers}")
         else:
-            issuers = set(l.get("trust_name", "")[:20] for l in launches[:3])
-            bullets.append(f"{len(launches)} new ETP launch(es) this week ({', '.join(issuers)})")
+            # Show actual ticker examples, not trust names
+            tickers = ", ".join(l.get("ticker", "?") for l in launches[:3] if l.get("ticker"))
+            bullets.append(f"{len(launches)} new ETP launches this week ({tickers})")
 
-    # 3. Filing activity
+    # 4. Filing activity
     filing_groups = data.get("filing_groups", [])
     if filing_groups:
         rex_filings = [f for f in filing_groups if f.get("is_rex")]
         total_trusts = len(filing_groups)
         if rex_filings:
             bullets.append(f"{total_trusts} trusts filed 485 forms -- includes REX filings")
-        else:
-            bullets.append(f"{total_trusts} trusts filed 485 forms in the last 24h")
+        elif total_trusts > 0:
+            bullets.append(f"{total_trusts} trusts filed 485 forms today")
 
-    # 4. Effective / Pending status
+    # 5. Effective / Pending status
     newly_effective = data.get("newly_effective_1d", 0)
     total_pending = data.get("total_pending", 0)
     if newly_effective > 0 or total_pending > 0:
@@ -645,18 +764,8 @@ def _daily_highlights(data: dict) -> list[str]:
         if newly_effective > 0:
             parts.append(f"{newly_effective:,} fund(s) went effective today")
         if total_pending > 0:
-            parts.append(f"{total_pending:,} pending")
+            parts.append(f"{total_pending:,} pending effectiveness")
         bullets.append(" | ".join(parts))
-
-    # 5. Top REX flow mover (from Bloomberg snapshot)
-    snapshot = data.get("market_snapshot")
-    if snapshot:
-        movers = snapshot.get("top_movers", {})
-        inflows = movers.get("inflows", [])
-        rex_movers = [m for m in inflows if m.get("is_rex")]
-        if rex_movers:
-            top = rex_movers[0]
-            bullets.append(f"{top['ticker']}: {top.get('flow_1w_fmt', '')} 1W flow -- top REX mover")
 
     return bullets[:5]
 
@@ -677,6 +786,15 @@ def _render_daily_html(data: dict, dashboard_url: str = "", custom_message: str 
     _header_bg = _NAVY
     _accent = _BLUE
 
+    # --- Data date: prefer Bloomberg data date over datetime.now() ---
+    snapshot = data.get("market_snapshot")
+    _data_date_str = ""
+    if snapshot:
+        _data_date_str = snapshot.get("data_as_of", "")
+    if not _data_date_str:
+        _data_date_str = today.strftime("%B %d, %Y")
+    _date_short = today.strftime("%Y-%m-%d")
+
     # --- Custom message ---
     msg_html = ""
     if custom_message:
@@ -691,39 +809,10 @@ def _render_daily_html(data: dict, dashboard_url: str = "", custom_message: str 
     # --- Header ---
     header = f"""
 <tr><td style="background:{_header_bg};padding:24px 30px;">
-  <div style="color:{_WHITE};font-size:22px;font-weight:700;letter-spacing:-0.5px;">{_title} | {today.strftime('%B %d, %Y')}</div>
+  <div style="color:{_WHITE};font-size:22px;font-weight:700;letter-spacing:-0.5px;">{_title} | {_data_date_str}</div>
 </td></tr>"""
 
-    # --- KPI Scorecard (top of email) ---
-    newly_effective = data.get("newly_effective_1d", 0)
-    total_pending = data.get("total_pending", 0)
-    launches = data.get("launches", [])
-
-    _kpi_cell = f"padding:12px 8px;background:{_LIGHT};border-radius:8px;text-align:center;"
-    _kpi_val = f"font-size:24px;font-weight:700;color:{_NAVY};"
-    _kpi_lbl = f"font-size:10px;color:{_GRAY};text-transform:uppercase;letter-spacing:0.5px;"
-
-    scorecard = f"""
-<tr><td style="padding:20px 30px 10px;">
-  <table width="100%" cellpadding="0" cellspacing="0" border="0">
-    <tr>
-      <td width="31%" style="{_kpi_cell}">
-        <div style="{_kpi_val}color:{_BLUE};">{len(launches)}</div>
-        <div style="{_kpi_lbl}">New Launches (7d)</div>
-      </td>
-      <td width="3%"></td>
-      <td width="31%" style="{_kpi_cell}">
-        <div style="{_kpi_val}color:{_GREEN};">{newly_effective}</div>
-        <div style="{_kpi_lbl}">Effective Today</div>
-      </td>
-      <td width="3%"></td>
-      <td width="31%" style="{_kpi_cell}">
-        <div style="{_kpi_val}color:{_ORANGE};">{total_pending}</div>
-        <div style="{_kpi_lbl}">Pending</div>
-      </td>
-    </tr>
-  </table>
-</td></tr>"""
+    # (Old 3-card scorecard removed — data now in highlights + REX Market Snapshot)
 
     # --- New Fund Launches ---
     launches = data.get("launches", [])
@@ -975,15 +1064,26 @@ def _render_daily_html(data: dict, dashboard_url: str = "", custom_message: str 
   {more_html}
 </td></tr>"""
 
-    # --- Winners & Losers (1D return — graceful skip if unavailable) ---
-    movers_section = ""
-    snapshot = data.get("market_snapshot")
+    # --- Bloomberg-backed sections (graceful skip if unavailable) ---
+    rex_snapshot_section = ""
+    market_pulse_section = ""
+    daily_movers_section = ""
+    landscape_section = ""
     if snapshot:
-        wl = snapshot.get("winners_losers", {})
-        winners = wl.get("winners", [])
-        losers = wl.get("losers", [])
-        if winners or losers:
-            movers_section = _render_winners_losers(winners, losers)
+        # REX Snapshot (4 KPI cards)
+        rex_snapshot_section = _render_market_scorecard(snapshot)
+        # Market Pulse (SPY, QQQ, BTC, industry flow)
+        pulse = snapshot.get("market_pulse", {})
+        if pulse:
+            market_pulse_section = _render_market_pulse(pulse)
+        # Daily REX Movers (by 1D flow)
+        dm = snapshot.get("daily_movers", {})
+        if dm and (dm.get("inflows") or dm.get("outflows")):
+            daily_movers_section = _render_daily_movers(dm)
+        # Market Landscape (5 categories)
+        ls = snapshot.get("landscape", [])
+        if ls:
+            landscape_section = _render_landscape_compact(ls)
 
     # --- Dashboard CTA ---
     cta_section = _dashboard_cta(dash_link) if dash_link else ""
@@ -992,7 +1092,7 @@ def _render_daily_html(data: dict, dashboard_url: str = "", custom_message: str 
     footer = f"""
 <tr><td style="padding:16px 30px;border-top:1px solid {_BORDER};">
   <div style="font-size:11px;color:{_GRAY};text-align:center;">
-    {_title} | {today.strftime('%Y-%m-%d')}
+    {_title} | {_data_date_str}
   </div>
   <div style="font-size:10px;color:{_GRAY};text-align:center;margin-top:4px;">
     Data sourced from SEC EDGAR &amp; Bloomberg | To unsubscribe, contact relasmar@rexfin.com
@@ -1005,13 +1105,25 @@ def _render_daily_html(data: dict, dashboard_url: str = "", custom_message: str 
     # --- Key Highlights ---
     highlights_html = _daily_highlights_box(_daily_highlights(data))
 
-    # --- Assemble ---
-    body = header + msg_html + highlights_html + scorecard + movers_section + launches_section + filings_section + pending_section + cta_section + footer
+    # --- Assemble (executive order) ---
+    # 1. Market Pulse (what happened in the market today)
+    # 2. REX Snapshot  (how are we doing)
+    # 3. REX Daily Movers (which products are moving money)
+    # 4. Competitive Intel (filings, launches, effectiveness)
+    # 5. Market Landscape (category-level context)
+    body = (
+        header + msg_html + highlights_html
+        + market_pulse_section + rex_snapshot_section
+        + daily_movers_section
+        + filings_section + launches_section + pending_section
+        + landscape_section
+        + cta_section + footer
+    )
 
     return f"""<!DOCTYPE html>
 <html lang="en"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>{_title} - {today.strftime('%Y-%m-%d')}</title>
+<title>{_title} - {_data_date_str}</title>
 </head>
 <body style="margin:0;padding:0;background:{_LIGHT};
   font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;

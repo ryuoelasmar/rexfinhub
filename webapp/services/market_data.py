@@ -224,6 +224,7 @@ def _load_ts_from_db(db: Session) -> pd.DataFrame:
 
     Uses pd.read_sql to avoid loading 285K ORM objects into memory.
     Peak memory is ~3x lower than the ORM .all() approach.
+    Zeros out AUM for months before a product's inception date.
     """
     try:
         conn = db.get_bind()
@@ -248,6 +249,26 @@ def _load_ts_from_db(db: Session) -> pd.DataFrame:
         now = pd.Timestamp(_dt.now().date())
         df["date"] = df["months_ago"].apply(lambda m: now - pd.DateOffset(months=int(m)))
 
+    # Zero out AUM for months before inception (Bloomberg backfills stale data)
+    try:
+        incep_df = pd.read_sql(
+            "SELECT ticker, inception_date FROM mkt_master_data", conn
+        )
+        if not incep_df.empty:
+            incep_df["inception_date"] = pd.to_datetime(
+                incep_df["inception_date"], errors="coerce"
+            )
+            incep_df = incep_df.dropna(subset=["inception_date"])
+            df = df.merge(incep_df, on="ticker", how="left")
+            pre = df["date"] < df["inception_date"]
+            zeroed = (pre & (df["aum_value"] > 0)).sum()
+            if zeroed:
+                df.loc[pre, "aum_value"] = 0.0
+                log.info("Zeroed %d pre-inception AUM values in time series", zeroed)
+            df = df.drop(columns=["inception_date"])
+    except Exception as e:
+        log.warning("Pre-inception zeroing failed (non-fatal): %s", e)
+
     return df
 
 
@@ -270,7 +291,20 @@ def data_available(db: Session) -> bool:
 
 
 def get_data_as_of(db: Session) -> str:
-    """Return latest pipeline run date as 'Feb 20, 2026' or empty string."""
+    """Return data date as 'March 10, 2026' -- prefers time series date over pipeline timestamp."""
+    # Prefer actual data date from time series (last Bloomberg data point)
+    try:
+        ts_row = db.execute(
+            select(MktTimeSeries.as_of_date)
+            .where(MktTimeSeries.as_of_date.isnot(None))
+            .order_by(MktTimeSeries.as_of_date.desc())
+            .limit(1)
+        ).scalar()
+        if ts_row and hasattr(ts_row, "strftime"):
+            return ts_row.strftime("%B %d, %Y")
+    except Exception:
+        pass
+    # Fallback: pipeline run timestamp
     row = db.execute(
         select(MktPipelineRun.finished_at)
         .where(MktPipelineRun.status == "completed")
@@ -278,7 +312,7 @@ def get_data_as_of(db: Session) -> str:
         .limit(1)
     ).scalar()
     if row:
-        return row.strftime("%b %d, %Y")
+        return row.strftime("%B %d, %Y")
     return ""
 
 
