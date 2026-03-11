@@ -231,13 +231,13 @@ QGRD US,Defined Risk
 TFJL US,Floor
 TBJL US,Buffer
 BSTP US,Buffer
-BALT US,Shield
+BALT US,Buffer
 EBUF US,Buffer
 EAPR US,Buffer
 EJAN US,Buffer
 EJUL US,Buffer
 EOCT US,Buffer
-ACEI US,Autocallable
+ACEI US,Barrier
 ZAPR US,Buffer
 ZAUG US,Buffer
 ZDEK US,Buffer
@@ -294,7 +294,7 @@ NNOV US,Buffer
 NSEP US,Buffer
 NOCT US,Buffer
 QHDG US,Hedged Equity
-ACII US,Autocallable
+ACII US,Barrier
 IBUF US,Buffer
 IFLR US,Floor
 IAPR US,Buffer
@@ -420,7 +420,7 @@ PSMR US,Buffer
 PSMD US,Buffer
 PSMJ US,Buffer
 PSMO US,Buffer
-PWS US,Shield
+PWS US,Hedged Equity
 PBQQ US,Ladder
 BUFP US,Ladder
 PBFR US,Ladder

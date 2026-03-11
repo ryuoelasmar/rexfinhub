@@ -213,22 +213,37 @@ def _load_from_db(db: Session) -> dict[str, Any]:
     data_flow = pd.DataFrame()
     data_notional = pd.DataFrame()
 
-    # Data as-of date from latest pipeline run
+    # Data as-of date: prefer actual data date over pipeline run timestamp
     data_as_of = ""
     data_as_of_short = ""
-    latest_run = db.execute(
-        select(MktPipelineRun)
-        .where(MktPipelineRun.status == "completed")
-        .order_by(MktPipelineRun.finished_at.desc())
-    ).scalars().first()
-    if latest_run and latest_run.finished_at:
-        data_as_of = latest_run.finished_at.strftime("%B %d, %Y")
-        data_as_of_short = latest_run.finished_at.strftime("%m/%d/%Y")
-    elif has_timeseries and len(data_aum) > 0:
+    if has_timeseries and len(data_aum) > 0:
         last_date = data_aum.index.max()
         if pd.notna(last_date):
             data_as_of = last_date.strftime("%B %d, %Y")
             data_as_of_short = last_date.strftime("%m/%d/%Y")
+    if not data_as_of:
+        latest_run = db.execute(
+            select(MktPipelineRun)
+            .where(MktPipelineRun.status == "completed")
+            .order_by(MktPipelineRun.finished_at.desc())
+        ).scalars().first()
+        if latest_run and latest_run.finished_at:
+            data_as_of = latest_run.finished_at.strftime("%B %d, %Y")
+            data_as_of_short = latest_run.finished_at.strftime("%m/%d/%Y")
+
+    # Apply MicroSectors ETN proprietary overrides (internal reports only).
+    # The DB has Bloomberg-reported ETN data; reports get true AUM + flows.
+    try:
+        from market.microsectors import read_overrides as _ms_read, apply_overrides as _ms_apply
+        from market.config import DATA_FILE as _report_data_file
+        if _report_data_file.exists():
+            _ms_xl = pd.ExcelFile(_report_data_file, engine="openpyxl")
+            if "microsector" in _ms_xl.sheet_names:
+                _ms_ov = _ms_read(_ms_xl)
+                if _ms_ov:
+                    _ms_apply(master, _ms_ov)
+    except Exception as e:
+        log.warning("MicroSectors override failed (non-fatal): %s", e)
 
     log.info("Report data loaded from DB: %d funds, timeseries=%s", len(master), has_timeseries)
 
@@ -407,9 +422,13 @@ def _load_all() -> dict[str, Any]:
     # Mark REX
     master["is_rex"] = master["ticker_clean"].isin(rex_tickers)
 
-    # Merge fund_mapping (etp_category)
+    # Merge fund_mapping (etp_category) - single category per ticker
     if "ticker" in fund_map.columns and "etp_category" in fund_map.columns:
         fm = fund_map[["ticker", "etp_category"]].copy()
+        if "is_primary" in fund_map.columns:
+            fm["is_primary"] = pd.to_numeric(fund_map["is_primary"], errors="coerce").fillna(1)
+            fm = fm[fm["is_primary"] != 0].drop(columns=["is_primary"])
+        fm = fm.drop_duplicates(subset=["ticker"])
         fm = fm.rename(columns={"ticker": "ticker_clean"})
         master = master.merge(fm, on="ticker_clean", how="left")
     else:
@@ -446,6 +465,28 @@ def _load_all() -> dict[str, Any]:
         if pd.notna(last_date):
             data_as_of = last_date.strftime("%B %d, %Y")
             data_as_of_short = last_date.strftime("%m/%d/%Y")
+
+    # Derive category_display + rex_suite (needed for flow report suite matching)
+    try:
+        from webapp.services.data_engine import _derive_category_display, _join_rex_suite
+        if "category_display" not in master.columns:
+            _derive_category_display(master)
+        if "rex_suite" not in master.columns:
+            _join_rex_suite(master)
+    except Exception as e:
+        log.warning("Could not derive category_display/rex_suite: %s", e)
+
+    # Apply MicroSectors ETN true data overrides (AUM + flows)
+    try:
+        from market.microsectors import read_overrides as _ms_read, apply_overrides as _ms_apply
+        if DATA_FILE.exists():
+            _ms_xl = pd.ExcelFile(DATA_FILE, engine="openpyxl")
+            if "microsector" in _ms_xl.sheet_names:
+                _ms_ov = _ms_read(_ms_xl)
+                if _ms_ov:
+                    _ms_apply(master, _ms_ov)
+    except Exception as e:
+        log.warning("MicroSectors override failed (non-fatal): %s", e)
 
     log.info("Report data loaded: %d funds, timeseries=%s", len(master), has_timeseries)
 
@@ -824,6 +865,7 @@ def _compute_breakdown(df: pd.DataFrame, groupby_col: str, total_aum: float,
             direction = grp["map_li_direction"].str.lower()
             row["num_long"] = int(direction.isin(["long", "leveraged"]).sum())
             row["num_short"] = int(direction.isin(["short", "inverse"]).sum())
+            row["num_tactical"] = int((direction == "tactical").sum())
         if include_type and "cc_type" in grp.columns:
             row["num_traditional"] = int((grp["cc_type"] == "Traditional").sum())
             row["num_synthetic"] = int((grp["cc_type"] == "Synthetic").sum())
@@ -932,6 +974,7 @@ def _compute_email_segment(df: pd.DataFrame, data_aum: pd.DataFrame,
             "flow_ytd": float(grp["fund_flow_ytd"].sum()),
             "flow_ytd_fmt": _fmt_flow(float(grp["fund_flow_ytd"].sum())),
             "market_share": (aum / total_aum * 100) if total_aum > 0 else 0.0,
+            "is_rex": bool(grp["is_rex"].any()) if "is_rex" in grp.columns else False,
         }
         if include_yield and "annualized_yield" in grp.columns:
             avg_y = float(grp["annualized_yield"].replace(0, float("nan")).mean())
@@ -1012,8 +1055,8 @@ def get_li_report(db: Session | None = None) -> dict:
     data_notional = cache["data_notional"]
     rex_tickers = cache["rex_tickers"]
 
-    # Filter to LI tickers (ETF only -- exclude ETNs)
-    li = master[(master["etp_category"] == "LI") & (master["fund_type"] == "ETF")].copy()
+    # Filter to LI tickers (ETFs + ETNs)
+    li = master[(master["etp_category"] == "LI") & (master["fund_type"].isin(["ETF", "ETN"]))].copy()
     if li.empty:
         return {"available": True, "data_as_of": cache["data_as_of"], "data_as_of_short": cache.get("data_as_of_short", ""),
                 "kpis": {}, "providers": [], "top10": [], "bottom10": [],
@@ -1023,6 +1066,7 @@ def get_li_report(db: Session | None = None) -> dict:
     # KPIs
     total_aum = float(li["aum"].sum())
     flow_1w = float(li["fund_flow_1week"].sum())
+    flow_1m_total = float(li["fund_flow_1month"].sum())
     flow_ytd = float(li["fund_flow_ytd"].sum())
 
     # WoW AUM change from time-series
@@ -1035,6 +1079,8 @@ def get_li_report(db: Session | None = None) -> dict:
         "aum_change_positive": aum_change_positive,
         "flow_1w": _fmt_flow(flow_1w),
         "flow_1w_positive": flow_1w >= 0,
+        "flow_1m": _fmt_flow(flow_1m_total),
+        "flow_1m_positive": flow_1m_total >= 0,
         "flow_ytd": _fmt_flow(flow_ytd),
         "flow_ytd_positive": flow_ytd >= 0,
     }
@@ -1064,17 +1110,23 @@ def get_li_report(db: Session | None = None) -> dict:
         }
         if has_direction:
             lev = grp[grp["map_li_direction"].str.lower().isin(["long", "leveraged"])]
-            inv = grp[~grp["map_li_direction"].str.lower().isin(["long", "leveraged"])]
+            inv = grp[grp["map_li_direction"].str.lower().isin(["short", "inverse"])]
+            tac = grp[grp["map_li_direction"].str.lower() == "tactical"]
             p["num_leveraged"] = len(lev)
             p["num_inverse"] = len(inv)
+            p["num_tactical"] = len(tac)
             p["aum_leveraged"] = float(lev["aum"].sum())
             p["aum_leveraged_fmt"] = _fmt_currency(float(lev["aum"].sum()))
             p["aum_inverse"] = float(inv["aum"].sum())
             p["aum_inverse_fmt"] = _fmt_currency(float(inv["aum"].sum()))
+            p["aum_tactical"] = float(tac["aum"].sum())
+            p["aum_tactical_fmt"] = _fmt_currency(float(tac["aum"].sum()))
             p["flow_1w_leveraged"] = float(lev["fund_flow_1week"].sum())
             p["flow_1w_leveraged_fmt"] = _fmt_flow(float(lev["fund_flow_1week"].sum()))
             p["flow_1w_inverse"] = float(inv["fund_flow_1week"].sum())
             p["flow_1w_inverse_fmt"] = _fmt_flow(float(inv["fund_flow_1week"].sum()))
+            p["flow_1w_tactical"] = float(tac["fund_flow_1week"].sum())
+            p["flow_1w_tactical_fmt"] = _fmt_flow(float(tac["fund_flow_1week"].sum()))
         providers.append(p)
     providers.sort(key=lambda x: x["aum"], reverse=True)
 
@@ -1096,20 +1148,26 @@ def get_li_report(db: Session | None = None) -> dict:
     }
     if has_direction:
         lev_all = li[li["map_li_direction"].str.lower().isin(["long", "leveraged"])]
-        inv_all = li[~li["map_li_direction"].str.lower().isin(["long", "leveraged"])]
+        inv_all = li[li["map_li_direction"].str.lower().isin(["short", "inverse"])]
+        tac_all = li[li["map_li_direction"].str.lower() == "tactical"]
         total_row["num_leveraged"] = len(lev_all)
         total_row["num_inverse"] = len(inv_all)
+        total_row["num_tactical"] = len(tac_all)
         total_row["aum_leveraged"] = float(lev_all["aum"].sum())
         total_row["aum_leveraged_fmt"] = _fmt_currency(float(lev_all["aum"].sum()))
         total_row["aum_inverse"] = float(inv_all["aum"].sum())
         total_row["aum_inverse_fmt"] = _fmt_currency(float(inv_all["aum"].sum()))
+        total_row["aum_tactical"] = float(tac_all["aum"].sum())
+        total_row["aum_tactical_fmt"] = _fmt_currency(float(tac_all["aum"].sum()))
         total_row["flow_1w_leveraged"] = float(lev_all["fund_flow_1week"].sum())
         total_row["flow_1w_leveraged_fmt"] = _fmt_flow(float(lev_all["fund_flow_1week"].sum()))
         total_row["flow_1w_inverse"] = float(inv_all["fund_flow_1week"].sum())
         total_row["flow_1w_inverse_fmt"] = _fmt_flow(float(inv_all["fund_flow_1week"].sum()))
+        total_row["flow_1w_tactical"] = float(tac_all["fund_flow_1week"].sum())
+        total_row["flow_1w_tactical_fmt"] = _fmt_flow(float(tac_all["fund_flow_1week"].sum()))
 
     # REX fund detail (for spotlight section)
-    rex_li = li[li["is_rex"]].sort_values("aum", ascending=False)
+    rex_li = li[li["is_rex"] == 1].sort_values("aum", ascending=False)
     rex_funds_list = []
     for _, r in rex_li.iterrows():
         aum_val = _safe_float(r.get("aum", 0))
@@ -1231,6 +1289,9 @@ def _fund_rows(df: pd.DataFrame, total_aum: float) -> list[dict]:
         elif direction in ("short", "inverse"):
             ptype = "Inverse"
             lev_factor = f"-{leverage * 100:.0f}%" if leverage else ""
+        elif direction == "tactical":
+            ptype = "Tactical"
+            lev_factor = ""
         else:
             ptype = "Leveraged"
             lev_factor = f"{leverage * 100:.0f}%" if leverage else ""
@@ -1297,6 +1358,7 @@ def get_cc_report(db: Session | None = None) -> dict:
 
     total_aum = float(cc["aum"].sum())
     flow_1w = float(cc["fund_flow_1week"].sum())
+    flow_1m_total = float(cc["fund_flow_1month"].sum())
     avg_yield = float(cc["annualized_yield"].replace(0, float("nan")).mean()) if "annualized_yield" in cc.columns else 0.0
 
     # WoW AUM change from time-series
@@ -1309,11 +1371,13 @@ def get_cc_report(db: Session | None = None) -> dict:
         "aum_change_positive": aum_change_positive,
         "flow_1w": _fmt_flow(flow_1w),
         "flow_1w_positive": flow_1w >= 0,
+        "flow_1m": _fmt_flow(flow_1m_total),
+        "flow_1m_positive": flow_1m_total >= 0,
         "avg_yield": _fmt_pct(avg_yield),
     }
 
     # Table 1: REX CC funds
-    rex_cc = cc[cc["is_rex"]].sort_values("aum", ascending=False)
+    rex_cc = cc[cc["is_rex"] == 1].sort_values("aum", ascending=False)
     rex_funds_list = []
     rex_total_aum = 0.0
     for _, r in rex_cc.iterrows():
@@ -1351,7 +1415,7 @@ def get_cc_report(db: Session | None = None) -> dict:
         "All": cc,
         "Traditional": cc[cc.get("cc_type", pd.Series(dtype=str)) == "Traditional"] if "cc_type" in cc.columns else pd.DataFrame(),
         "Synthetic": cc[cc.get("cc_type", pd.Series(dtype=str)) == "Synthetic"] if "cc_type" in cc.columns else pd.DataFrame(),
-        "Single Stock": cc[cc.get("cc_type", pd.Series(dtype=str)) == "Single Stock"] if "cc_type" in cc.columns else pd.DataFrame(),
+        "Single Stock": cc[cc.get("cc_category", pd.Series(dtype=str)) == "Single Stock"] if "cc_category" in cc.columns else pd.DataFrame(),
     }
 
     # Table 2: Top 10 by 1M flow per segment
@@ -1560,7 +1624,7 @@ def _rex_market_share_ts(data_aum: pd.DataFrame, all_cc_tickers: list[str],
 # Single-Stock Report
 # ---------------------------------------------------------------------------
 def get_ss_report(db: Session | None = None) -> dict:
-    """Data for Single-Stock Leveraged ETFs report.
+    """Data for Single-Stock Leveraged ETPs report.
 
     If db is provided, reads from mkt_report_cache (zero memory).
     Otherwise computes from files (used during local sync).
@@ -1582,17 +1646,16 @@ def get_ss_report(db: Session | None = None) -> dict:
     data_flow = cache["data_flow"]
     data_notional = cache["data_notional"]
 
-    # Filter to single-stock ETFs: leveraged (LI subcategory) + covered call (CC category)
-    # ETF only -- exclude ETNs
+    # Filter to single-stock ETPs: leveraged (LI subcategory) + covered call (CC category)
     ss_li = master[
         (master["etp_category"] == "LI") &
-        (master["fund_type"] == "ETF") &
+        (master["fund_type"].isin(["ETF", "ETN"])) &
         (master.get("map_li_subcategory", pd.Series(dtype=str)).str.lower() == "single stock")
     ].copy() if "map_li_subcategory" in master.columns else pd.DataFrame()
 
     ss_cc = master[
         (master["etp_category"] == "CC") &
-        (master["fund_type"] == "ETF") &
+        (master["fund_type"].isin(["ETF", "ETN"])) &
         (master.get("cc_category", pd.Series(dtype=str)) == "Single Stock")
     ].copy() if "cc_category" in master.columns else pd.DataFrame()
 
@@ -1603,6 +1666,8 @@ def get_ss_report(db: Session | None = None) -> dict:
         ss_cc["ss_product_type"] = "Covered Call"
 
     ss = pd.concat([ss_li, ss_cc], ignore_index=True)
+    # Deduplicate tickers that appear in both LI and CC single-stock
+    ss = ss.drop_duplicates(subset=["ticker_clean"], keep="first")
 
     if ss.empty:
         return {"available": True, "data_as_of": cache["data_as_of"], "data_as_of_short": cache.get("data_as_of_short", ""),
@@ -1710,7 +1775,7 @@ def get_ss_report(db: Session | None = None) -> dict:
     underlier_summary = underlier_summary[:15]
 
     # REX SS products (for spotlight section)
-    rex_ss = ss[ss["is_rex"]].sort_values("aum", ascending=False)
+    rex_ss = ss[ss["is_rex"] == 1].sort_values("aum", ascending=False)
     rex_ss_funds = []
     for _, r in rex_ss.iterrows():
         aum_val = _safe_float(r.get("aum", 0))
@@ -1792,158 +1857,69 @@ def get_ss_report(db: Session | None = None) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Flow Report (REX Competitive Flow Analysis — category-based)
+# Flow Report (REX Competitive Flow Analysis — suite-based)
 # ---------------------------------------------------------------------------
-_INCOME_TICKERS = {"FEPI", "CEPI", "AIPI", "JEPI", "JEPQ", "GPIX", "QYLD", "SPYI", "QQQI", "IWMI"}
-_AUTOCALL_TICKERS = {"ATCL", "CAIE", "CAIQ", "ACEI", "ACII", "PAYH", "PAYM", "ANV", "TLA"}
-
-
-def _fund_dict(tc: str, info: dict, is_rex: bool) -> dict:
-    """Build a standard fund dict from ticker_lookup info."""
-    aum = info["aum"]
-    flow_1w = info["fund_flow_1week"]
-    flow_1m = info["fund_flow_1month"]
-    issuer = info["issuer_display"] if info["issuer_display"] else info["issuer"]
-    name = info["fund_name"]
-    return {
-        "ticker": tc,
-        "fund_name": name if name else tc,
-        "issuer": issuer,
-        "is_rex": is_rex,
-        "aum": aum,
-        "aum_fmt": _fmt_currency(aum),
-        "flow_1w": flow_1w,
-        "flow_1w_fmt": _fmt_flow(flow_1w),
-        "flow_1m": flow_1m,
-        "flow_1m_fmt": _fmt_flow(flow_1m),
-    }
-
-
-def _group_summary(funds: list[dict], rex_set: set[str]) -> dict:
-    """Compute summary stats for a list of fund dicts."""
-    peers = [f for f in funds if not f["is_rex"]]
-    net_peer_flow = sum(f["flow_1w"] for f in peers)
-    top = max(funds, key=lambda f: f["flow_1w"]) if funds else None
-    bottom = min(funds, key=lambda f: f["flow_1w"]) if funds else None
-    return {
-        "competitor_count": len(peers),
-        "net_peer_flow": net_peer_flow,
-        "net_peer_flow_fmt": _fmt_flow(net_peer_flow),
-        "top_gainer": f"{top['ticker']} ({_fmt_flow(top['flow_1w'])})" if top else "",
-        "top_loser": f"{bottom['ticker']} ({_fmt_flow(bottom['flow_1w'])})" if bottom else "",
-    }
-
-
-def _build_underlier_groups(df: pd.DataFrame, ticker_lookup: dict, rex_set: set[str],
-                            max_groups: int | None = None,
-                            underlier_col: str = "map_li_underlier") -> list[dict]:
-    """Group single-stock funds by underlier, returning per-group data."""
-    groups = []
-    for underlier, sub in df.groupby(underlier_col, sort=False):
-        if not underlier or pd.isna(underlier):
-            continue
-        funds = []
-        for _, row in sub.iterrows():
-            tc = str(row.get("ticker_clean", "")).strip()
-            if not tc or tc not in ticker_lookup:
-                continue
-            funds.append(_fund_dict(tc, ticker_lookup[tc], tc in rex_set))
-        if not funds:
-            continue
-        # Sort: non-REX first (competitors on top), then by AUM desc
-        funds.sort(key=lambda f: (1 if f["is_rex"] else 0, -f["aum"]))
-        has_rex = any(f["is_rex"] for f in funds)
-        total_aum = sum(f["aum"] for f in funds)
-        rex_aum = sum(f["aum"] for f in funds if f["is_rex"])
-        rex_share = (rex_aum / total_aum * 100) if total_aum > 0 else 0.0
-        # Clean underlier label (strip " US" / " Curncy")
-        label = str(underlier).replace(" US", "").replace(" Curncy", "").strip()
-        groups.append({
-            "underlier": label,
-            "funds": funds,
-            "has_rex": has_rex,
-            "total_aum": total_aum,
-            "total_aum_fmt": _fmt_currency(total_aum),
-            "rex_aum": rex_aum,
-            "rex_share": rex_share,
-            "rex_share_fmt": _fmt_pct(rex_share),
-            "summary": _group_summary(funds, rex_set),
-        })
-    # Sort: non-REX groups first (competitors on top), then by total AUM desc
-    groups.sort(key=lambda g: (1 if g["has_rex"] else 0, -g["total_aum"]))
-
-    if max_groups and len(groups) > max_groups:
-        non_rex = [g for g in groups if not g["has_rex"]]
-        rex_groups = [g for g in groups if g["has_rex"]]
-        if len(non_rex) > max_groups:
-            groups = non_rex[:max_groups]
-        else:
-            remaining = max(0, max_groups - len(non_rex))
-            rex_groups.sort(key=lambda g: -g["total_aum"])
-            groups = non_rex + rex_groups[:remaining]
-
-    return groups
-
-
-def _build_flat_group(ticker_lookup: dict, ticker_set: set[str], rex_set: set[str]) -> list[dict]:
-    """Build a flat fund list from a hardcoded ticker set."""
-    funds = []
-    for tc in ticker_set:
-        info = ticker_lookup.get(tc)
-        if info is None:
-            continue
-        funds.append(_fund_dict(tc, info, tc in rex_set))
-    funds.sort(key=lambda f: (1 if f["is_rex"] else 0, -f["aum"]))
-    return funds
-
-
-def _build_issuer_analysis(all_funds: list[dict], rex_set: set[str],
-                           max_issuers: int | None = None) -> list[dict]:
-    """Aggregate tracked funds by issuer for executive summary."""
-    issuer_map: dict[str, dict] = {}
-    for f in all_funds:
-        issuer = f.get("issuer", "") or "Unknown"
-        if issuer not in issuer_map:
-            issuer_map[issuer] = {
-                "issuer": issuer,
-                "is_rex": False,
-                "fund_count": 0,
-                "aum": 0.0,
-                "flow_1w": 0.0,
-                "flow_1m": 0.0,
-            }
-        entry = issuer_map[issuer]
-        entry["fund_count"] += 1
-        entry["aum"] += f["aum"]
-        entry["flow_1w"] += f["flow_1w"]
-        entry["flow_1m"] += f["flow_1m"]
-        if f["is_rex"]:
-            entry["is_rex"] = True
-
-    result = []
-    for entry in issuer_map.values():
-        entry["aum_fmt"] = _fmt_currency(entry["aum"])
-        entry["flow_1w_fmt"] = _fmt_flow(entry["flow_1w"])
-        entry["flow_1m_fmt"] = _fmt_flow(entry["flow_1m"])
-        result.append(entry)
-    # Non-REX first (competitors on top), then by abs flow desc
-    result.sort(key=lambda e: (1 if e["is_rex"] else 0, -abs(e["flow_1w"])))
-
-    if max_issuers and len(result) > max_issuers:
-        non_rex = [e for e in result if not e["is_rex"]]
-        rex_issuers = [e for e in result if e["is_rex"]]
-        if len(non_rex) > max_issuers:
-            result = non_rex[:max_issuers]
-        else:
-            remaining = max(0, max_issuers - len(non_rex))
-            rex_issuers.sort(key=lambda e: -abs(e["flow_1w"]))
-            result = non_rex + rex_issuers[:remaining]
-
-    return result
+_FLOW_SUITES = [
+    # --- Leverage & Inverse ---
+    {
+        "key": "trex",
+        "label": "T-REX",
+        "rex_suites": ["T-REX"],
+        "peer_category": "Leverage & Inverse - Single Stock",
+    },
+    {
+        "key": "microsectors",
+        "label": "MicroSectors",
+        "rex_suites": ["MicroSectors"],
+        "peer_category": "Leverage & Inverse - Index/Basket/ETF Based",
+    },
+    # --- Income ---
+    {
+        "key": "epi",
+        "label": "Equity Premium Income",
+        "rex_suites": ["Equity Premium Income", "London"],
+        "peer_tickers": [
+            "JEPI US", "JEPQ US", "GPIX US",
+            "QYLD US", "QQQI US", "IWMI US",
+        ],
+    },
+    {
+        "key": "growth_income",
+        "label": "Growth & Income",
+        "rex_suites": ["Growth & Income"],
+        "peer_category": "Income - Single Stock",
+    },
+    {
+        "key": "incomemax",
+        "label": "IncomeMax",
+        "rex_suites": ["IncomeMax"],
+        "peer_tickers": ["ULTY US", "SLTY US"],
+    },
+    {
+        "key": "autocallable",
+        "label": "Autocallable",
+        "rex_suites": ["Autocallable"],
+        "peer_category": "Income - Index/Basket/ETF Based",
+        "peer_name_filter": r"(?i)autocall",
+    },
+    # --- Thematic ---
+    {
+        "key": "thematic",
+        "label": "Thematic",
+        "rex_suites": ["DRNZ", "Thematic"],
+        "peer_tickers": ["JEDI US", "DADS US"],
+    },
+    {
+        "key": "crypto",
+        "label": "Crypto",
+        "rex_suites": ["Crypto"],
+        "peer_category": "Crypto",
+    },
+]
 
 
 def get_flow_report(db: Session | None = None) -> dict:
-    """Data for REX Competitive Flow Report (category-based, data-driven).
+    """Data for REX Competitive Flow Report (suite-based, full market).
 
     If db is provided, reads from mkt_report_cache (zero memory on Render).
     Otherwise computes from MktMasterData.
@@ -1961,170 +1937,166 @@ def get_flow_report(db: Session | None = None) -> dict:
         return {"available": False, "data_as_of": "", "data_as_of_short": ""}
 
     master = cache["master"].copy()
+    data_aum = cache.get("data_aum", pd.DataFrame())
     rex_tickers = cache["rex_tickers"]
 
-    # Build ticker lookup (ticker_clean -> plain dict, no pandas Series)
-    ticker_lookup: dict[str, dict] = {}
-    for _, row in master.iterrows():
-        tc = str(row.get("ticker_clean", "")).strip()
-        if tc:
-            ticker_lookup[tc] = {
-                "fund_name": str(row.get("fund_name", "") or "").strip(),
-                "issuer_display": str(row.get("issuer_display", "") or "").strip(),
-                "issuer": str(row.get("issuer", "") or "").strip(),
-                "aum": _safe_float(row.get("aum")),
-                "fund_flow_1week": _safe_float(row.get("fund_flow_1week")),
-                "fund_flow_1month": _safe_float(row.get("fund_flow_1month")),
-            }
-
-    # --- Single Stock (LI category, single stock subcategory, ETF only) ---
-    ss_mask = (
-        (master["etp_category"] == "LI")
-        & (master["map_li_subcategory"] == "Single Stock")
-    )
-    # Filter to ETF only if fund_type column exists
+    # --- Active ETP mask (ETFs + ETNs, excludes open-end funds / SICAVs) ---
+    active_etf_mask = pd.Series(True, index=master.index)
+    if "market_status" in master.columns:
+        active_etf_mask = active_etf_mask & (master["market_status"] == "ACTV")
     if "fund_type" in master.columns:
-        ss_mask = ss_mask & (master["fund_type"] == "ETF")
-    ss_df = master[ss_mask].copy()
+        active_etf_mask = active_etf_mask & (master["fund_type"].isin(["ETF", "ETN"]))
 
-    ss_long = ss_df[ss_df["map_li_direction"] == "Long"]
-    ss_short = ss_df[ss_df["map_li_direction"] == "Short"]
+    active_df = master[active_etf_mask]
 
-    long_groups = _build_underlier_groups(ss_long, ticker_lookup, rex_tickers, max_groups=15)
-    short_groups = _build_underlier_groups(ss_short, ticker_lookup, rex_tickers, max_groups=15)
+    # Deduplicate by ticker for grand KPIs (multi-category tickers appear N times)
+    active_deduped = active_df.drop_duplicates(subset=["ticker_clean"], keep="first")
 
-    # --- Income (hardcoded ticker set) ---
-    income_funds = _build_flat_group(ticker_lookup, _INCOME_TICKERS, rex_tickers)
+    # --- Grand KPIs (ALL active ETPs) ---
+    grand_aum = float(active_deduped["aum"].sum())
+    grand_flow_1w = float(active_deduped["fund_flow_1week"].sum())
+    grand_flow_1m = float(active_deduped["fund_flow_1month"].sum())
 
-    # --- Autocall (hardcoded ticker set) ---
-    autocall_funds = _build_flat_group(ticker_lookup, _AUTOCALL_TICKERS, rex_tickers)
+    grand_kpis = {
+        "count": len(active_deduped),
+        "total_aum": _fmt_currency(grand_aum),
+        "flow_1w": _fmt_flow(grand_flow_1w),
+        "flow_1w_positive": grand_flow_1w >= 0,
+        "flow_1m": _fmt_flow(grand_flow_1m),
+        "flow_1m_positive": grand_flow_1m >= 0,
+    }
 
-    # --- Income - Single Stock (CC category, Single Stock subcategory) ---
-    cc_ss_mask = (master["etp_category"] == "CC")
-    if "cc_category" in master.columns:
-        cc_ss_mask = cc_ss_mask & (master["cc_category"] == "Single Stock")
-    if "fund_type" in master.columns:
-        cc_ss_mask = cc_ss_mask & (master["fund_type"] == "ETF")
-    cc_ss_df = master[cc_ss_mask].copy()
-    cc_ss_groups = _build_underlier_groups(
-        cc_ss_df, ticker_lookup, rex_tickers,
-        max_groups=15, underlier_col="map_cc_underlier"
+    # --- REX KPIs (ALL active REX ETPs, deduplicated) ---
+    rex_df = active_deduped[active_deduped["is_rex"] == 1]
+    rex_aum = float(rex_df["aum"].sum())
+    rex_flow_1w = float(rex_df["fund_flow_1week"].sum())
+    rex_flow_1m = float(rex_df["fund_flow_1month"].sum())
+    rex_market_share = (rex_aum / grand_aum * 100) if grand_aum > 0 else 0.0
+
+    rex_kpis = {
+        "count": len(rex_df),
+        "total_aum": _fmt_currency(rex_aum),
+        "flow_1w": _fmt_flow(rex_flow_1w),
+        "flow_1w_positive": rex_flow_1w >= 0,
+        "flow_1m": _fmt_flow(rex_flow_1m),
+        "flow_1m_positive": rex_flow_1m >= 0,
+        "market_share": _fmt_pct(rex_market_share),
+    }
+
+    # --- Per-suite data ---
+    issuer_col = (
+        "issuer_display" if "issuer_display" in master.columns
+        else ("issuer" if "issuer" in master.columns else "fund_name")
     )
+    has_rex_suite = "rex_suite" in master.columns
+    has_category_display = "category_display" in master.columns
 
-    # --- Thematic - Drones (DRNZ + competitors) ---
-    thematic_mask = (master["etp_category"] == "Thematic")
-    if "map_thematic_category" in master.columns:
-        thematic_mask = thematic_mask & (master["map_thematic_category"] == "Drones")
-    if "fund_type" in master.columns:
-        thematic_mask = thematic_mask & (master["fund_type"] == "ETF")
-    thematic_df = master[thematic_mask].copy()
-    thematic_funds = _build_flat_group(
-        ticker_lookup,
-        set(thematic_df["ticker_clean"].dropna().unique()),
-        rex_tickers,
-    )
+    suites = []
+    all_rex_funds = []
 
-    # Build categories list
-    def _cat_summary(funds_list: list[dict]) -> dict:
-        total_aum = sum(f["aum"] for f in funds_list)
-        rex_aum = sum(f["aum"] for f in funds_list if f["is_rex"])
-        rex_share = (rex_aum / total_aum * 100) if total_aum > 0 else 0.0
-        return {
-            "total_aum": total_aum,
-            "total_aum_fmt": _fmt_currency(total_aum),
-            "rex_aum": rex_aum,
-            "rex_aum_fmt": _fmt_currency(rex_aum),
-            "rex_share": rex_share,
-            "rex_share_fmt": _fmt_pct(rex_share),
+    for suite_cfg in _FLOW_SUITES:
+        # REX funds in this suite
+        if has_rex_suite:
+            rex_suite_mask = (
+                master["rex_suite"].isin(suite_cfg["rex_suites"])
+                & active_etf_mask
+            )
+        else:
+            rex_suite_mask = pd.Series(False, index=master.index)
+        suite_rex_df = master[rex_suite_mask]
+
+        # Deduplicate REX funds by ticker (multi-category products appear N times)
+        if "ticker_clean" in suite_rex_df.columns:
+            suite_rex_df = suite_rex_df.drop_duplicates(subset=["ticker_clean"], keep="first")
+
+        # Build peer group: ticker-based or category-based
+        if "peer_tickers" in suite_cfg:
+            # Ticker-based: specific competitors + REX suite funds together
+            peer_ticker_set = set(suite_cfg["peer_tickers"])
+            if not suite_rex_df.empty and "ticker" in suite_rex_df.columns:
+                peer_ticker_set.update(suite_rex_df["ticker"].tolist())
+            peer_mask = (
+                master["ticker"].isin(peer_ticker_set)
+                & active_etf_mask
+            )
+        elif has_category_display and "peer_category" in suite_cfg:
+            # Category-based: full category as peer group
+            peer_mask = (
+                (master["category_display"] == suite_cfg["peer_category"])
+                & active_etf_mask
+            )
+            # Optional name filter to narrow peer group (e.g. autocallable)
+            name_filter = suite_cfg.get("peer_name_filter")
+            if name_filter and "fund_name" in master.columns:
+                peer_mask = peer_mask & master["fund_name"].str.contains(
+                    name_filter, case=False, na=False
+                )
+        else:
+            peer_mask = rex_suite_mask  # fallback: just REX funds
+        peer_df = master[peer_mask]
+
+        # Deduplicate peers by ticker (multi-category products appear N times)
+        if "ticker_clean" in peer_df.columns:
+            peer_df = peer_df.drop_duplicates(subset=["ticker_clean"], keep="first")
+
+        # Compute segment KPIs via _compute_email_segment on full peer category
+        seg = _compute_email_segment(
+            peer_df, data_aum, rex_tickers=rex_tickers,
+        )
+
+        # Enrich issuer dicts with is_rex flag
+        for iss in seg["issuers"]:
+            iss_mask = peer_df[issuer_col] == iss["issuer"]
+            iss["is_rex"] = bool(
+                peer_df.loc[iss_mask, "is_rex"].any()
+            ) if "is_rex" in peer_df.columns else False
+
+        # REX-specific KPIs within this suite
+        suite_rex_aum = float(suite_rex_df["aum"].sum()) if not suite_rex_df.empty else 0.0
+        suite_rex_flow_1w = float(suite_rex_df["fund_flow_1week"].sum()) if not suite_rex_df.empty else 0.0
+        peer_total_aum = float(peer_df["aum"].sum()) if not peer_df.empty else 0.0
+        suite_rex_share = (
+            (suite_rex_aum / peer_total_aum * 100)
+            if peer_total_aum > 0 else 0.0
+        )
+
+        rex_kpis_suite = {
+            "count": len(suite_rex_df),
+            "total_aum": _fmt_currency(suite_rex_aum),
+            "flow_1w": _fmt_flow(suite_rex_flow_1w),
+            "flow_1w_positive": suite_rex_flow_1w >= 0,
+            "market_share": _fmt_pct(suite_rex_share),
         }
 
-    # Flatten all funds from underlier groups for summary
-    all_long_funds = [f for g in long_groups for f in g["funds"]]
-    all_short_funds = [f for g in short_groups for f in g["funds"]]
-    all_cc_ss_funds = [f for g in cc_ss_groups for f in g["funds"]]
+        suites.append({
+            "key": suite_cfg["key"],
+            "label": suite_cfg["label"],
+            "peer_label": suite_cfg.get("peer_category", suite_cfg["label"]),
+            "kpis": seg["kpis"],
+            "rex_kpis": rex_kpis_suite,
+            "issuers": seg["issuers"],
+            "top10": seg["top10"],
+            "bottom10": seg["bottom10"],
+        })
 
-    # Order: smallest/competitor-heavy first, REX-heavy single stock last
-    categories = [
-        {
-            "name": "Income",
-            "type": "flat",
-            "funds": income_funds,
-            "summary": {
-                **_cat_summary(income_funds),
-                **_group_summary(income_funds, rex_tickers),
-            },
-        },
-        {
-            "name": "Autocall",
-            "type": "flat",
-            "funds": autocall_funds,
-            "summary": {
-                **_cat_summary(autocall_funds),
-                **_group_summary(autocall_funds, rex_tickers),
-            },
-        },
-        {
-            "name": "Income - Single Stock",
-            "type": "underlier",
-            "groups": cc_ss_groups,
-            "summary": _cat_summary(all_cc_ss_funds),
-        },
-        {
-            "name": "Thematic - Drones",
-            "type": "flat",
-            "funds": thematic_funds,
-            "summary": {
-                **_cat_summary(thematic_funds),
-                **_group_summary(thematic_funds, rex_tickers),
-            },
-        },
-        {
-            "name": "Single Stock - Inverse",
-            "type": "underlier",
-            "groups": short_groups,
-            "summary": _cat_summary(all_short_funds),
-        },
-        {
-            "name": "Single Stock - Long",
-            "type": "underlier",
-            "groups": long_groups,
-            "summary": _cat_summary(all_long_funds),
-        },
-    ]
+        # Accumulate REX funds from each suite for the global list
+        all_rex_funds.extend(seg.get("rex_funds", []))
 
-    # Collect all tracked funds across categories for issuer analysis
-    all_tracked = (all_long_funds + all_short_funds + income_funds
-                   + autocall_funds + all_cc_ss_funds + thematic_funds)
-    issuer_analysis = _build_issuer_analysis(all_tracked, rex_tickers, max_issuers=20)
-
-    # Active-only product count
-    active_count = len(all_tracked)
-    if "market_status" in master.columns:
-        active_master = master[master["market_status"].isin(["ACTV", "Active"])]
-        active_count = len(active_master)
-
-    # Summary KPIs
-    total_rex_aum = sum(f["aum"] for f in all_tracked if f["is_rex"])
-    total_rex_flow_1w = sum(f["flow_1w"] for f in all_tracked if f["is_rex"])
-    total_rex_flow_1m = sum(f["flow_1m"] for f in all_tracked if f["is_rex"])
-    grand_total_aum = sum(f["aum"] for f in all_tracked)
-    overall_rex_share = (total_rex_aum / grand_total_aum * 100) if grand_total_aum > 0 else 0.0
-
-    kpis = {
-        "products": str(active_count),
-        "rex_aum": _fmt_currency(total_rex_aum),
-        "rex_flow_1w": _fmt_flow(total_rex_flow_1w),
-        "rex_flow_1w_positive": total_rex_flow_1w >= 0,
-        "rex_flow_1m": _fmt_flow(total_rex_flow_1m),
-        "rex_flow_1m_positive": total_rex_flow_1m >= 0,
-        "rex_share": _fmt_pct(overall_rex_share),
-    }
+    # Deduplicate rex_funds by ticker (suites sharing a peer_category may overlap)
+    seen_tickers: set[str] = set()
+    deduped_rex_funds = []
+    for rf in all_rex_funds:
+        t = rf.get("ticker", "")
+        if t not in seen_tickers:
+            seen_tickers.add(t)
+            deduped_rex_funds.append(rf)
 
     return {
         "available": True,
         "data_as_of": cache.get("data_as_of", ""),
         "data_as_of_short": cache.get("data_as_of_short", ""),
-        "kpis": kpis,
-        "issuer_analysis": issuer_analysis,
-        "categories": categories,
+        "grand_kpis": grand_kpis,
+        "rex_kpis": rex_kpis,
+        "suites": suites,
+        "rex_funds": deduped_rex_funds,
     }

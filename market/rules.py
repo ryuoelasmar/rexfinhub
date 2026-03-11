@@ -21,6 +21,10 @@ def load_fund_mapping(rules_dir: Path | None = None) -> pd.DataFrame:
     """Load fund_mapping.csv -> DataFrame[ticker, etp_category]."""
     path = _resolve("fund_mapping", rules_dir)
     df = _read(path)
+    # Keep only primary category per ticker (is_primary != 0)
+    if "is_primary" in df.columns:
+        df["is_primary"] = pd.to_numeric(df["is_primary"], errors="coerce").fillna(1)
+        df = df[df["is_primary"] != 0]
     df = df[["ticker", "etp_category"]].dropna(subset=["ticker"])
     df = df.drop_duplicates(subset=["ticker", "etp_category"])
     log.info("fund_mapping: %d rows loaded", len(df))

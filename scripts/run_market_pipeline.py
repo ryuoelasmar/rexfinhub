@@ -13,7 +13,6 @@ Usage:
     python scripts/run_market_pipeline.py --force          # ignore change detection
 """
 import argparse
-import json
 import logging
 import os
 import shutil
@@ -25,59 +24,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 os.chdir(PROJECT_ROOT)
 
-from market.config import DATA_FILE, RULES_DIR, HISTORY_DIR, LAST_RUN_FILE
-
-
-# ---------------------------------------------------------------------------
-# Change detection helpers
-# ---------------------------------------------------------------------------
-
-def _get_file_mtime(path: Path) -> str:
-    """Get file modification time as ISO string."""
-    return datetime.fromtimestamp(path.stat().st_mtime).isoformat()
-
-
-def _load_last_run() -> dict | None:
-    """Load the last run metadata, or None if no previous run."""
-    if not LAST_RUN_FILE.exists():
-        return None
-    try:
-        return json.loads(LAST_RUN_FILE.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
-        return None
-
-
-def _save_last_run(data_file: Path, run_id: int | None, row_count: int) -> None:
-    """Save run metadata for change detection."""
-    LAST_RUN_FILE.parent.mkdir(parents=True, exist_ok=True)
-    meta = {
-        "data_file": str(data_file),
-        "file_mtime": _get_file_mtime(data_file),
-        "file_size": data_file.stat().st_size,
-        "run_at": datetime.now().isoformat(),
-        "run_id": run_id,
-        "row_count": row_count,
-    }
-    LAST_RUN_FILE.write_text(json.dumps(meta, indent=2), encoding="utf-8")
-
-
-def _file_changed(data_file: Path) -> bool:
-    """Check if the data file has changed since the last pipeline run."""
-    last = _load_last_run()
-    if last is None:
-        return True  # no previous run -> always process
-
-    current_mtime = _get_file_mtime(data_file)
-    current_size = data_file.stat().st_size
-
-    if str(data_file) != last.get("data_file"):
-        return True  # different file
-    if current_mtime != last.get("file_mtime"):
-        return True  # modification time changed
-    if current_size != last.get("file_size"):
-        return True  # file size changed
-
-    return False
+from market.config import DATA_FILE, RULES_DIR, HISTORY_DIR
 
 
 def _snapshot_to_history(data_file: Path) -> Path | None:
@@ -105,8 +52,9 @@ def main():
     parser.add_argument("--rules", type=str, help="Path to rules directory")
     parser.add_argument("--no-db", action="store_true", help="Skip database write")
     parser.add_argument("--no-export", action="store_true", help="Skip Excel export")
-    parser.add_argument("--no-upload", action="store_true", help="Skip Render DB upload")
-    parser.add_argument("--force", action="store_true", help="Force run even if data unchanged")
+    parser.add_argument("--no-upload", action="store_true", default=True,
+                        help="Skip Render DB upload (default: skip — proprietary ETN data)")
+    parser.add_argument("--upload", action="store_true", help="Force Render DB upload")
     parser.add_argument("--verbose", "-v", action="store_true", help="Verbose logging")
     args = parser.parse_args()
 
@@ -128,15 +76,6 @@ def main():
     if not data_file.exists():
         print(f"ERROR: Data file not found: {data_file}")
         sys.exit(1)
-
-    # --- Change detection ---
-    if not args.force and not _file_changed(data_file):
-        last = _load_last_run()
-        print(f"  Data unchanged since last run ({last.get('run_at', '?')})")
-        print("  Use --force to re-process. Exiting.")
-        sys.exit(0)
-
-    print(f"  File modified: {_get_file_mtime(data_file)}")
 
     # --- Step 2: Load rules ---
     print("[2/11] Loading rules...")
@@ -339,8 +278,10 @@ def main():
             _sess2.close()
 
     # --- Step 11: Upload DB to Render ---
-    if args.no_upload or args.no_db:
-        print("[11/11] Render upload skipped")
+    # Disabled by default: proprietary MicroSectors ETN data should stay local.
+    # Use --upload to explicitly push to Render.
+    if (not args.upload) or args.no_db:
+        print("[11/11] Render upload skipped (use --upload to force)")
     else:
         print("[11/11] Uploading database to Render...")
         try:
@@ -355,9 +296,6 @@ def main():
             upload_db_to_render()
         except Exception as e:
             print(f"  Upload failed (non-fatal): {e}")
-
-    # Save run metadata for change detection
-    _save_last_run(data_file, run_id, len(etp))
 
     print("\nDone.")
 

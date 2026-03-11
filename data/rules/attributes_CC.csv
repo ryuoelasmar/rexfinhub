@@ -76,7 +76,7 @@ GPTY US,,Basket,Traditional,Tech
 CHPY US,,Basket,Traditional,Tech
 RNTY US,,Basket,Traditional,Real Estate
 HCOW US,,Basket,Traditional,Broad Beta
-IDVO US,,Basket,Traditional,Broad Beta
+IDVO US,,Basket,Traditional,International
 DYLG US,,DJI,Traditional,Broad Beta
 DJIA US,,DJI,Traditional,Broad Beta
 TYLG US,,BXLKH,Traditional,Tech
@@ -96,14 +96,14 @@ XLVI US,,Basket,Traditional,Sector
 XLII US,,Basket,Traditional,Sector
 XLFI US,,Basket,Traditional,Sector
 XLYI US,,Basket,Traditional,Sector
-SLTY US,,Basket,Synthetic,Broad Beta
+SLTY US,,Basket,Synthetic,Specialty
 ETCO US,,ETH,Synthetic,Crypto
-TDAQ US,,Basket,Traditional,Broad Beta
-WPAY US,,FOF,Traditional,Broad Beta
-ACKY US,,Basket,Traditional,Broad Beta
+TDAQ US,,NDX,Traditional,Tech
+WPAY US,,FOF,Traditional,Single Stock
+ACKY US,,Basket,Traditional,Single Stock
 SEPI US,,Basket,Traditional,Broad Beta
-QLDY US,,Basket,Synthetic,Broad Beta
-NIHI US,,MXEA,Traditional,Broad Beta
+QLDY US,,NDX,Synthetic,Tech
+NIHI US,,MXEA,Traditional,International
 ETHI US,,ETH,Synthetic,Crypto
 RDVI US,,Basket,Traditional,Broad Beta
 CSHI US,,Basket,Traditional,Fixed Income
@@ -114,7 +114,7 @@ TDVI US,,Basket,Traditional,Tech
 HYBI US,,Basket,Traditional,Fixed Income
 LQTI US,,Basket,Traditional,Fixed Income
 XBTY US,BITX US,,Synthetic,Crypto
-DOGG US,,Basket,Traditional,Broad Beta
+DOGG US,,Basket,Traditional,Small Caps
 HYTI US,,Basket,Traditional,Fixed Income
 CANQ US,,NDX,Traditional,Tech
 QQQT US,,NDX,Synthetic,Tech
@@ -130,7 +130,6 @@ SPUT US,,Basket,Synthetic,Broad Beta
 SPYH US,,SPX,Traditional,Broad Beta
 FGSI US,,Basket,Traditional,Broad Beta
 QUP US,,Basket,Synthetic,Tech
-QDWN US,,Basket,Synthetic,Tech
 BNDY US,,Basket,Synthetic,Fixed Income
 PVEX US,,Basket,Traditional,Broad Beta
 HEQT US,,Basket,Traditional,Broad Beta
@@ -244,7 +243,7 @@ HMYY US,HIMS US,,Synthetic,Single Stock
 GOOY US,GOOGL US,,Synthetic,Single Stock
 GOOP US,GOOGL US,,Synthetic,Single Stock
 GOOW US,GOOGL US,,Synthetic,Single Stock
-IGME US,GME US,,Synthetic,Crypto
+IGME US,GME US,,Synthetic,Single Stock
 GMEY US,GME US,,Synthetic,Single Stock
 YETH US,ETH,,Synthetic,Crypto
 DRAY US,DKNG US,,Synthetic,Single Stock
@@ -263,7 +262,7 @@ FIAT US,COIN US,,Synthetic,Single Stock
 BRKC US,BRK/B US,,Synthetic,Single Stock
 BRKW US,BRK/B US,,Synthetic,Single Stock
 YBMN US,BMNR US,,Synthetic,Single Stock
-BCCC US,BCCC US,,Synthetic,Crypto
+BCCC US,BTC,,Synthetic,Crypto
 BABO US,BABA US,,Synthetic,Single Stock
 BABW US,BABA US,,Synthetic,Single Stock
 BBYY US,BABA US,,Synthetic,Single Stock
@@ -299,7 +298,7 @@ ISBG US,,Basket,Synthetic,Crypto
 ISSB US,,Basket,Synthetic,Crypto
 KYLD US,,Basket,Traditional,Broad Beta
 MEMY US,,Basket,Synthetic,Single Stock
-NLSI US,,Basket,Traditional,Broad Beta
+NLSI US,,Basket,Traditional,Specialty
 OEI US,,Basket,Traditional,Broad Beta
 PLGI US,,Basket,Traditional,Broad Beta
 TPAY US,,SPX,Synthetic,Broad Beta

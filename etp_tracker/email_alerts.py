@@ -38,6 +38,19 @@ _WHITE = "#ffffff"
 _TEAL = "#00897B"
 
 
+def _fmt_aum(val: float) -> str:
+    """Format AUM value (in millions) for display."""
+    if val is None or val != val:  # NaN
+        return "$0"
+    if abs(val) >= 1000:
+        return f"${val / 1000:,.1f}B"
+    if abs(val) >= 1:
+        return f"${val:,.1f}M"
+    if abs(val) >= 0.01:
+        return f"${val:.2f}M"
+    return "$0"
+
+
 def _load_recipients(project_root: Path | None = None) -> list[str]:
     if project_root is None:
         project_root = Path(__file__).parent.parent
@@ -184,16 +197,16 @@ def _gather_market_snapshot(db=None) -> dict | None:
         if not data_available(db):
             return None
 
-        # REX KPIs (ETF only)
-        rex = get_rex_summary(db, fund_structure="ETF")
-        master = get_master_data(db)
+        # REX KPIs (ETFs + ETNs) -- with ETN overrides for internal reports
+        rex = get_rex_summary(db, fund_structure="ETF,ETN", etn_overrides=True)
+        master = get_master_data(db, etn_overrides=True)
 
-        # Filter to ETFs
+        # Filter to ETPs (ETFs + ETNs)
         ft_col = next((c for c in master.columns if c.lower().strip() == "fund_type"), None)
         if ft_col:
-            master = master[master[ft_col] == "ETF"]
+            master = master[master[ft_col].isin(["ETF", "ETN"])]
 
-        # 1D flow (sum across all REX ETFs)
+        # 1D flow (sum across all REX ETPs)
         rex_df = master[master["is_rex"] == True].copy()
         if "ticker_clean" in rex_df.columns:
             rex_df = rex_df.drop_duplicates(subset=["ticker_clean"], keep="first")
@@ -249,31 +262,32 @@ def _gather_market_snapshot(db=None) -> dict | None:
                     "return_1w_fmt": f"{ret:+.2f}%",
                 })
 
-        # Daily movers: top 3 inflows + top 3 outflows by 1D flow
-        daily_movers = {"inflows": [], "outflows": []}
-        if not rex_df.empty and "t_w4.fund_flow_1day" in rex_df.columns:
-            valid_1d = rex_df[rex_df["t_w4.fund_flow_1day"].notna()].copy()
-            for _, row in valid_1d.nlargest(3, "t_w4.fund_flow_1day").iterrows():
-                flow = float(row.get("t_w4.fund_flow_1day", 0))
-                aum = float(row.get("aum", row.get("t_w4.aum", 0)) or 0)
-                daily_movers["inflows"].append({
-                    "ticker": str(row.get("ticker_clean", row.get("ticker", ""))),
+        # Winners & Losers: top 5 / worst 5 by 1D return
+        winners_losers = {"winners": [], "losers": []}
+        if not rex_df.empty and "t_w3.total_return_1day" in rex_df.columns:
+            valid_ret = rex_df[rex_df["t_w3.total_return_1day"].notna()].copy()
+            _flow_col = "t_w4.fund_flow_1day" if "t_w4.fund_flow_1day" in valid_ret.columns else None
+            for _, row in valid_ret.nlargest(5, "t_w3.total_return_1day").iterrows():
+                ret = float(row.get("t_w3.total_return_1day", 0))
+                flow = float(row.get(_flow_col, 0)) if _flow_col else 0.0
+                winners_losers["winners"].append({
+                    "ticker": str(row.get("ticker_clean", "")),
+                    "name": str(row.get("fund_name", ""))[:55],
+                    "return_1d": ret,
+                    "return_1d_fmt": f"{ret:+.2f}%",
                     "flow_1d": flow,
                     "flow_1d_fmt": _fmt_flow_val(flow),
-                    "aum": aum,
-                    "aum_fmt": f"${aum:.0f}M" if aum < 1000 else f"${aum/1000:.1f}B",
                 })
-            for _, row in valid_1d.nsmallest(3, "t_w4.fund_flow_1day").iterrows():
-                flow = float(row.get("t_w4.fund_flow_1day", 0))
-                if flow >= 0:
-                    continue
-                aum = float(row.get("aum", row.get("t_w4.aum", 0)) or 0)
-                daily_movers["outflows"].append({
-                    "ticker": str(row.get("ticker_clean", row.get("ticker", ""))),
+            for _, row in valid_ret.nsmallest(5, "t_w3.total_return_1day").iterrows():
+                ret = float(row.get("t_w3.total_return_1day", 0))
+                flow = float(row.get(_flow_col, 0)) if _flow_col else 0.0
+                winners_losers["losers"].append({
+                    "ticker": str(row.get("ticker_clean", "")),
+                    "name": str(row.get("fund_name", ""))[:55],
+                    "return_1d": ret,
+                    "return_1d_fmt": f"{ret:+.2f}%",
                     "flow_1d": flow,
                     "flow_1d_fmt": _fmt_flow_val(flow),
-                    "aum": aum,
-                    "aum_fmt": f"${aum:.0f}M" if aum < 1000 else f"${aum/1000:.1f}B",
                 })
 
         # Landscape: 5 categories with AUM, 1W flow, REX market share
@@ -287,7 +301,7 @@ def _gather_market_snapshot(db=None) -> dict | None:
         landscape = []
         for cat in _LANDSCAPE_CATS:
             try:
-                cat_data = get_category_summary(db, cat, fund_structure="ETF")
+                cat_data = get_category_summary(db, cat, fund_structure="ETF,ETN", etn_overrides=True)
                 cat_aum = cat_data.get("cat_kpis", {}).get("total_aum", 0)
                 cat_flow_1w = cat_data.get("cat_kpis", {}).get("flow_1w", 0)
                 rex_share = cat_data.get("market_share", 0)
@@ -307,7 +321,7 @@ def _gather_market_snapshot(db=None) -> dict | None:
         return {
             "kpis": kpis,
             "top_movers": top_movers,
-            "daily_movers": daily_movers,
+            "winners_losers": winners_losers,
             "landscape": landscape,
         }
     except Exception:
@@ -503,12 +517,148 @@ def _dashboard_cta(dash_link: str) -> str:
     return (
         f'<tr><td style="padding:20px 30px;" align="center">'
         f'<table cellpadding="0" cellspacing="0" border="0"><tr>'
-        f'<td style="background:{_BLUE};border-radius:8px;padding:16px 40px;">'
-        f'<a href="{_esc(dash_link)}" style="color:{_WHITE};text-decoration:none;font-size:16px;font-weight:700;">Open Dashboard</a>'
+        f'<td style="background:{_BLUE};border-radius:8px;padding:14px 32px;">'
+        f'<a href="{_esc(dash_link)}" style="color:{_WHITE};text-decoration:none;font-size:14px;font-weight:700;">Open Dashboard</a>'
         f'</td></tr></table>'
         f'<div style="font-size:12px;color:{_GRAY};margin-top:8px;">View full details, filings, and AI analysis</div>'
         f'</td></tr>'
     )
+
+
+def _render_winners_losers(winners: list[dict], losers: list[dict]) -> str:
+    """Render Winners & Losers by 1D return with 1D flow (like weekly report)."""
+    if not winners and not losers:
+        return ""
+
+    _col_hdr = (
+        f"padding:3px 6px;font-size:9px;color:{_GRAY};text-transform:uppercase;"
+        f"letter-spacing:0.5px;border-bottom:1px solid {_BORDER};"
+    )
+
+    def _section(title: str, items: list, color: str) -> str:
+        if not items:
+            return ""
+        rows = ""
+        for item in items[:5]:
+            ticker = _esc(item.get("ticker", ""))
+            name = _esc(item.get("name", ""))
+            if len(name) > 50:
+                name = name[:47] + "..."
+            ret = _esc(item.get("return_1d_fmt", ""))
+            ret_val = item.get("return_1d", 0)
+            ret_clr = color if abs(ret_val) >= 0.005 else _NAVY
+            flow = _esc(item.get("flow_1d_fmt", ""))
+            flow_val = item.get("flow_1d", 0)
+            flow_clr = _GREEN if flow_val > 0.005 else (_RED if flow_val < -0.005 else _NAVY)
+            rows += (
+                f'<tr>'
+                f'<td style="padding:3px 6px;font-size:11px;font-weight:600;'
+                f'border-bottom:1px solid {_BORDER};white-space:nowrap;width:50px;">{ticker}</td>'
+                f'<td style="padding:3px 6px;font-size:10px;color:{_GRAY};'
+                f'border-bottom:1px solid {_BORDER};">{name}</td>'
+                f'<td style="padding:3px 6px;font-size:11px;text-align:right;font-weight:600;'
+                f'border-bottom:1px solid {_BORDER};color:{ret_clr};width:65px;">{ret}</td>'
+                f'<td style="padding:3px 6px;font-size:11px;text-align:right;font-weight:600;'
+                f'border-bottom:1px solid {_BORDER};color:{flow_clr};width:65px;">{flow}</td>'
+                f'</tr>'
+            )
+        return (
+            f'<div style="font-size:13px;font-weight:700;color:{color};margin:10px 0 4px;">{title}</div>'
+            f'<table width="100%" cellpadding="0" cellspacing="0" border="0"'
+            f' style="border-collapse:collapse;">'
+            f'<tr><td style="{_col_hdr}width:50px;">Ticker</td>'
+            f'<td style="{_col_hdr}">Fund Name</td>'
+            f'<td style="{_col_hdr}text-align:right;width:65px;">1D Return</td>'
+            f'<td style="{_col_hdr}text-align:right;width:65px;">1D Flow</td></tr>'
+            f'{rows}</table>'
+        )
+
+    winners_html = _section("Winners", winners, _GREEN)
+    losers_html = _section("Losers", losers, _RED)
+
+    return (
+        f'<tr><td style="padding:15px 30px 10px;">'
+        f'<div style="font-size:16px;font-weight:700;color:{_NAVY};margin:0 0 4px 0;'
+        f'padding-bottom:6px;border-bottom:2px solid {_BLUE};">'
+        f'REX Winners & Losers</div>'
+        f'{winners_html}{losers_html}'
+        f'</td></tr>'
+    )
+
+
+def _daily_highlights_box(bullets: list[str]) -> str:
+    """Render a key highlights callout box for the daily report."""
+    if not bullets:
+        return ""
+    bg = "#f4f5f6"
+    items = ""
+    for b in bullets:
+        items += (
+            f'<tr><td style="padding:3px 0;font-size:13px;color:{_NAVY};line-height:1.5;">'
+            f'<span style="color:{_NAVY};font-weight:700;margin-right:6px;">&#8226;</span>'
+            f'{_esc(b)}</td></tr>'
+        )
+    return (
+        f'<tr><td style="padding:15px 30px 10px;">'
+        f'<table width="100%" cellpadding="0" cellspacing="0" border="0" '
+        f'style="background:{bg};border-left:4px solid {_NAVY};border-radius:0 8px 8px 0;">'
+        f'<tr><td style="padding:14px 18px;">'
+        f'<table width="100%" cellpadding="0" cellspacing="0" border="0">'
+        f'<tr><td style="padding:0 0 8px;font-size:10px;font-weight:700;color:{_NAVY};'
+        f'text-transform:uppercase;letter-spacing:1px;">Key Highlights</td></tr>'
+        f'{items}'
+        f'</table></td></tr>'
+        f'</table></td></tr>'
+    )
+
+
+def _daily_highlights(data: dict) -> list[str]:
+    """Generate 3-5 executive highlights for the daily filing report."""
+    bullets = []
+
+    # 1. New launches (7d)
+    launches = data.get("launches", [])
+    if launches:
+        rex_launches = [l for l in launches if l.get("is_rex")]
+        if rex_launches:
+            tickers = ", ".join(l["ticker"] for l in rex_launches[:3])
+            bullets.append(f"{len(launches)} new ETP launch(es) this week -- REX: {tickers}")
+        else:
+            issuers = set(l.get("trust_name", "")[:20] for l in launches[:3])
+            bullets.append(f"{len(launches)} new ETP launch(es) this week ({', '.join(issuers)})")
+
+    # 3. Filing activity
+    filing_groups = data.get("filing_groups", [])
+    if filing_groups:
+        rex_filings = [f for f in filing_groups if f.get("is_rex")]
+        total_trusts = len(filing_groups)
+        if rex_filings:
+            bullets.append(f"{total_trusts} trusts filed 485 forms -- includes REX filings")
+        else:
+            bullets.append(f"{total_trusts} trusts filed 485 forms in the last 24h")
+
+    # 4. Effective / Pending status
+    newly_effective = data.get("newly_effective_1d", 0)
+    total_pending = data.get("total_pending", 0)
+    if newly_effective > 0 or total_pending > 0:
+        parts = []
+        if newly_effective > 0:
+            parts.append(f"{newly_effective:,} fund(s) went effective today")
+        if total_pending > 0:
+            parts.append(f"{total_pending:,} pending")
+        bullets.append(" | ".join(parts))
+
+    # 5. Top REX flow mover (from Bloomberg snapshot)
+    snapshot = data.get("market_snapshot")
+    if snapshot:
+        movers = snapshot.get("top_movers", {})
+        inflows = movers.get("inflows", [])
+        rex_movers = [m for m in inflows if m.get("is_rex")]
+        if rex_movers:
+            top = rex_movers[0]
+            bullets.append(f"{top['ticker']}: {top.get('flow_1w_fmt', '')} 1W flow -- top REX mover")
+
+    return bullets[:5]
 
 
 def _render_daily_html(data: dict, dashboard_url: str = "", custom_message: str = "",
@@ -522,10 +672,10 @@ def _render_daily_html(data: dict, dashboard_url: str = "", custom_message: str 
 
     _is_evening = edition == "evening"
     _titles = {"daily": "REX Daily ETP Report", "evening": "REX Daily ETP Report",
-               "morning": "REX ETF Morning Brief"}
+               "morning": "REX ETP Morning Brief"}
     _title = _titles.get(edition, "REX Daily ETP Report")
-    _header_bg = "#2d3436" if _is_evening else _TEAL
-    _accent = _ORANGE if _is_evening else _TEAL
+    _header_bg = _NAVY
+    _accent = _BLUE
 
     # --- Custom message ---
     msg_html = ""
@@ -541,24 +691,13 @@ def _render_daily_html(data: dict, dashboard_url: str = "", custom_message: str 
     # --- Header ---
     header = f"""
 <tr><td style="background:{_header_bg};padding:24px 30px;">
-  <table width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
-    <td style="color:{_WHITE};font-size:22px;font-weight:700;">{_title}</td>
-    <td align="right" style="color:rgba(255,255,255,0.7);font-size:13px;">{today.strftime('%A, %B %d, %Y')}</td>
-  </tr></table>
+  <div style="color:{_WHITE};font-size:22px;font-weight:700;letter-spacing:-0.5px;">{_title} | {today.strftime('%B %d, %Y')}</div>
 </td></tr>"""
 
     # --- KPI Scorecard (top of email) ---
-    rex_aum = data.get("rex_aum", 0)
     newly_effective = data.get("newly_effective_1d", 0)
     total_pending = data.get("total_pending", 0)
-
-    # Format REX AUM as currency
-    if rex_aum >= 1_000:
-        _rex_aum_fmt = f"${rex_aum / 1_000:,.1f}B"
-    elif rex_aum >= 1:
-        _rex_aum_fmt = f"${rex_aum:,.0f}M"
-    else:
-        _rex_aum_fmt = f"${rex_aum:,.1f}M"
+    launches = data.get("launches", [])
 
     _kpi_cell = f"padding:12px 8px;background:{_LIGHT};border-radius:8px;text-align:center;"
     _kpi_val = f"font-size:24px;font-weight:700;color:{_NAVY};"
@@ -569,8 +708,8 @@ def _render_daily_html(data: dict, dashboard_url: str = "", custom_message: str 
   <table width="100%" cellpadding="0" cellspacing="0" border="0">
     <tr>
       <td width="31%" style="{_kpi_cell}">
-        <div style="{_kpi_val}">{_rex_aum_fmt}</div>
-        <div style="{_kpi_lbl}">REX AUM</div>
+        <div style="{_kpi_val}color:{_BLUE};">{len(launches)}</div>
+        <div style="{_kpi_lbl}">New Launches (7d)</div>
       </td>
       <td width="3%"></td>
       <td width="31%" style="{_kpi_cell}">
@@ -593,30 +732,29 @@ def _render_daily_html(data: dict, dashboard_url: str = "", custom_message: str 
         for f in launches[:15]:
             ticker = _esc(f.get("ticker", ""))
             name = _esc(f.get("fund_name", ""))
-            if len(name) > 40:
-                name = name[:37] + "..."
-            issuer = _esc(f.get("trust_name", ""))
-            if len(issuer) > 25:
-                issuer = issuer[:22] + "..."
+            if len(name) > 55:
+                name = name[:52] + "..."
             eff_date = _esc(f.get("effective_date", ""))
+            aum_val = f.get("aum", 0)
+            aum_fmt = _fmt_aum(aum_val) if aum_val > 0 else "--"
             is_rex = f.get("is_rex", False)
-            issuer_html = issuer
+            ticker_html = ticker
             if is_rex:
-                issuer_html = (
-                    f'{issuer} <span style="background:{_BLUE};color:{_WHITE};'
-                    f'padding:1px 5px;border-radius:3px;font-size:8px;'
+                ticker_html = (
+                    f'{ticker} <span style="background:{_BLUE};color:{_WHITE};'
+                    f'padding:1px 4px;border-radius:3px;font-size:8px;'
                     f'font-weight:700;vertical-align:middle;">REX</span>'
                 )
             launch_rows.append(
                 f'<tr>'
                 f'<td style="padding:5px 8px;border-bottom:1px solid {_BORDER};'
-                f'font-size:11px;font-weight:600;white-space:nowrap;">{ticker}</td>'
+                f'font-size:11px;font-weight:600;white-space:nowrap;">{ticker_html}</td>'
                 f'<td style="padding:5px 8px;border-bottom:1px solid {_BORDER};'
                 f'font-size:11px;">{name}</td>'
                 f'<td style="padding:5px 8px;border-bottom:1px solid {_BORDER};'
-                f'font-size:10px;color:{_GRAY};">{issuer_html}</td>'
+                f'font-size:10px;text-align:right;white-space:nowrap;">{aum_fmt}</td>'
                 f'<td style="padding:5px 8px;border-bottom:1px solid {_BORDER};'
-                f'font-size:10px;text-align:right;color:{_GRAY};">{eff_date}</td>'
+                f'font-size:10px;text-align:right;color:{_GRAY};white-space:nowrap;">{eff_date}</td>'
                 f'</tr>'
             )
         more_html = ""
@@ -633,13 +771,13 @@ def _render_daily_html(data: dict, dashboard_url: str = "", custom_message: str 
 <tr><td style="padding:15px 30px 10px;">
   <div style="font-size:16px;font-weight:700;color:{_NAVY};margin:0 0 8px 0;
     padding-bottom:6px;border-bottom:2px solid {_GREEN};">
-    New Fund Launches
+    New Fund Launches (7d)
   </div>
   <table width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;">
     <tr>
       <td style="{_col}">Ticker</td>
       <td style="{_col}">Fund Name</td>
-      <td style="{_col}">Issuer</td>
+      <td style="{_col}text-align:right;">AUM</td>
       <td style="{_col}text-align:right;">Launched</td>
     </tr>
     {''.join(launch_rows)}
@@ -651,11 +789,11 @@ def _render_daily_html(data: dict, dashboard_url: str = "", custom_message: str 
 <tr><td style="padding:15px 30px 10px;">
   <div style="font-size:16px;font-weight:700;color:{_NAVY};margin:0 0 8px 0;
     padding-bottom:6px;border-bottom:2px solid {_GREEN};">
-    New Fund Launches
+    New Fund Launches (7d)
   </div>
   <div style="padding:12px;background:{_LIGHT};border-radius:6px;
     font-size:13px;color:{_GRAY};text-align:center;">
-    No new launches today.
+    No new launches in the last 7 days.
   </div>
 </td></tr>"""
 
@@ -837,36 +975,38 @@ def _render_daily_html(data: dict, dashboard_url: str = "", custom_message: str 
   {more_html}
 </td></tr>"""
 
-    # --- Market Snapshot (Bloomberg data — graceful skip if unavailable) ---
-    market_section = ""
+    # --- Winners & Losers (1D return — graceful skip if unavailable) ---
+    movers_section = ""
     snapshot = data.get("market_snapshot")
     if snapshot:
-        market_section = (
-            _render_market_scorecard(snapshot)
-            + _render_daily_movers(snapshot.get("daily_movers", {}))
-            + _render_top_movers(snapshot.get("top_movers", {}))
-            + _render_landscape_compact(snapshot.get("landscape", []))
-        )
+        wl = snapshot.get("winners_losers", {})
+        winners = wl.get("winners", [])
+        losers = wl.get("losers", [])
+        if winners or losers:
+            movers_section = _render_winners_losers(winners, losers)
 
     # --- Dashboard CTA ---
     cta_section = _dashboard_cta(dash_link) if dash_link else ""
 
     # --- Footer ---
-    _data_source = "Data sourced from SEC EDGAR"
-    if snapshot:
-        _data_source += " &amp; Bloomberg"
     footer = f"""
 <tr><td style="padding:16px 30px;border-top:1px solid {_BORDER};">
   <div style="font-size:11px;color:{_GRAY};text-align:center;">
     {_title} | {today.strftime('%Y-%m-%d')}
   </div>
   <div style="font-size:10px;color:{_GRAY};text-align:center;margin-top:4px;">
-    {_data_source} | To unsubscribe, contact relasmar@rexfin.com
+    Data sourced from SEC EDGAR &amp; Bloomberg | To unsubscribe, contact relasmar@rexfin.com
+  </div>
+  <div style="font-size:9px;color:{_GRAY};text-align:center;margin-top:3px;font-style:italic;">
+    Note: ETN data reflects proprietary share/price data where available. Bloomberg-reported ETN figures may differ.
   </div>
 </td></tr>"""
 
-    # --- Assemble (KPIs at top) ---
-    body = header + msg_html + scorecard + market_section + launches_section + filings_section + pending_section + cta_section + footer
+    # --- Key Highlights ---
+    highlights_html = _daily_highlights_box(_daily_highlights(data))
+
+    # --- Assemble ---
+    body = header + msg_html + highlights_html + scorecard + movers_section + launches_section + filings_section + pending_section + cta_section + footer
 
     return f"""<!DOCTYPE html>
 <html lang="en"><head><meta charset="UTF-8">
@@ -878,7 +1018,7 @@ def _render_daily_html(data: dict, dashboard_url: str = "", custom_message: str 
   color:{_NAVY};line-height:1.5;">
 <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:{_LIGHT};">
 <tr><td align="center" style="padding:20px 10px;">
-<table width="600" cellpadding="0" cellspacing="0" border="0"
+<table width="640" cellpadding="0" cellspacing="0" border="0"
        style="background:{_WHITE};border-radius:8px;overflow:hidden;
               box-shadow:0 2px 12px rgba(0,0,0,0.08);">
 {body}
@@ -906,22 +1046,22 @@ def _gather_daily_data(db_session, since_date: str | None = None,
     since_dt = date_type.fromisoformat(since_date)
     yesterday = date_type.today() - timedelta(days=1)
 
-    # --- New launches: Bloomberg inception_date in last 24h ---
+    # --- New launches: Bloomberg inception_date in last 7 days ---
     launches = []
     try:
         from webapp.services.market_data import data_available, get_master_data
         if data_available(db_session):
-            master = get_master_data(db_session)
+            master = get_master_data(db_session, etn_overrides=True)
             ft_col = next((c for c in master.columns if c.lower().strip() == "fund_type"), None)
             if ft_col:
-                master = master[master[ft_col] == "ETF"]
+                master = master[master[ft_col].isin(["ETF", "ETN"])]
             if "market_status" in master.columns:
                 master = master[master["market_status"].isin(["ACTV", "Active"])]
             if "inception_date" in master.columns and "ticker_clean" in master.columns:
                 master = master.drop_duplicates(subset=["ticker_clean"], keep="first")
                 inception = pd.to_datetime(master["inception_date"], errors="coerce")
                 today_ts = pd.Timestamp.today().normalize()
-                cutoff = today_ts - pd.Timedelta(days=1)
+                cutoff = today_ts - pd.Timedelta(days=7)
                 recent = master[(inception >= cutoff) & (inception <= today_ts)].copy()
                 recent["_inception"] = inception[recent.index]
                 recent = recent.sort_values("_inception", ascending=False)
@@ -932,12 +1072,17 @@ def _gather_daily_data(db_session, since_date: str | None = None,
                     issuer = str(row.get("issuer_display", row.get("issuer", "")))
                     inc_date = row["_inception"].strftime("%Y-%m-%d") if pd.notna(row["_inception"]) else ""
                     is_rex = bool(row.get("is_rex", False)) if is_rex_col else False
+                    aum_col = next((c for c in ["t_w4.aum", "aum"] if c in row.index), None)
+                    aum_val = float(row.get(aum_col, 0)) if aum_col else 0.0
+                    if aum_val != aum_val:  # NaN check
+                        aum_val = 0.0
                     launches.append({
                         "ticker": ticker if ticker else "--",
                         "fund_name": name,
                         "trust_name": issuer,
                         "effective_date": inc_date,
                         "is_rex": is_rex,
+                        "aum": aum_val,
                     })
     except Exception:
         pass
@@ -1052,7 +1197,7 @@ def _gather_daily_data(db_session, since_date: str | None = None,
     try:
         from webapp.services.market_data import data_available, get_master_data
         if data_available(db_session):
-            _master_kpi = get_master_data(db_session)
+            _master_kpi = get_master_data(db_session, etn_overrides=True)
             _aum_col = "t_w4.aum" if "t_w4.aum" in _master_kpi.columns else "aum"
             if "is_rex" in _master_kpi.columns and _aum_col in _master_kpi.columns:
                 _rex = _master_kpi[_master_kpi["is_rex"] == True]
@@ -1116,7 +1261,7 @@ def _send_html_digest(html_body: str, recipients: list[str],
         images: Optional list of (content_id, png_bytes, filename) for inline CID images.
     """
     if subject_override:
-        subject = f"{subject_override} - {datetime.now().strftime('%Y-%m-%d')}"
+        subject = subject_override
     else:
         _labels = {"daily": "Daily ETP Report", "morning": "Morning Brief", "evening": "Daily ETP Report"}
         _label = _labels.get(edition, "Daily ETP Report")
@@ -1504,7 +1649,7 @@ def _render_morning_brief_html(data: dict, dashboard_url: str = "") -> str:
   color:{_NAVY};line-height:1.5;">
 <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:{_LIGHT};">
 <tr><td align="center" style="padding:20px 10px;">
-<table width="600" cellpadding="0" cellspacing="0" border="0"
+<table width="640" cellpadding="0" cellspacing="0" border="0"
        style="background:{_WHITE};border-radius:8px;overflow:hidden;
               box-shadow:0 2px 12px rgba(0,0,0,0.08);">
 {body}

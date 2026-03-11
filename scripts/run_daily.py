@@ -30,31 +30,6 @@ DASHBOARD_URL = "https://rex-etp-tracker.onrender.com"
 RENDER_API_URL = "https://rex-etp-tracker.onrender.com/api/v1"
 
 
-def export_excel(output_dir: Path) -> None:
-    """Generate combined Excel files from all trust outputs."""
-    import pandas as pd
-
-    # Combine all fund status
-    frames_status = []
-    frames_names = []
-    for folder in output_dir.iterdir():
-        if not folder.is_dir():
-            continue
-        for f4 in folder.glob("*_4_Fund_Status.csv"):
-            frames_status.append(pd.read_csv(f4, dtype=str))
-        for f5 in folder.glob("*_5_Name_History.csv"):
-            frames_names.append(pd.read_csv(f5, dtype=str))
-
-    if frames_status:
-        df = pd.concat(frames_status, ignore_index=True)
-        df.to_excel(output_dir / "etp_tracker_summary.xlsx", index=False, engine="openpyxl")
-        print(f"  Excel: etp_tracker_summary.xlsx ({len(df)} funds)")
-
-    if frames_names:
-        df = pd.concat(frames_names, ignore_index=True)
-        df.to_excel(output_dir / "etp_name_history.xlsx", index=False, engine="openpyxl")
-        print(f"  Excel: etp_name_history.xlsx ({len(df)} entries)")
-
 
 def _load_api_key() -> str:
     """Load API_KEY from .env."""
@@ -102,7 +77,7 @@ def main():
     print(f"=== ETP Filing Tracker - Daily Run ({today}) ===")
 
     # Step 1: Run pipeline
-    print("\n[1/5] Running pipeline...")
+    print("\n[1/4] Running pipeline...")
     ciks, overrides = load_ciks_from_db()
     n, changed_trusts = run_pipeline(
         ciks=ciks,
@@ -114,12 +89,8 @@ def main():
     )
     print(f"  Processed {n} trusts ({len(changed_trusts)} with new filings)")
 
-    # Step 2: Export Excel
-    print("\n[2/5] Exporting Excel...")
-    export_excel(OUTPUT_DIR)
-
-    # Step 3: Sync to database
-    print("\n[3/5] Syncing to database...")
+    # Step 2: Sync to database
+    print("\n[2/4] Syncing to database...")
     try:
         from webapp.database import init_db, SessionLocal
         from webapp.services.sync_service import seed_trusts, sync_all
@@ -134,8 +105,8 @@ def main():
     except Exception as e:
         print(f"  DB sync failed (non-fatal): {e}")
 
-    # Step 3.25: Sync market data to SQLite
-    print("\n[3.25/5] Syncing market data...")
+    # Step 2b: Sync market data to SQLite
+    print("\n[2b/4] Syncing market data...")
     try:
         from webapp.services.market_sync import sync_market_data
         db_mkt = SessionLocal()
@@ -147,8 +118,8 @@ def main():
     except Exception as e:
         print(f"  Market sync failed (non-fatal): {e}")
 
-    # Step 3.5: Rescore screener
-    print("\n[3.5/5] Rescoring screener...")
+    # Step 3: Rescore screener
+    print("\n[3/4] Rescoring screener...")
     try:
         from webapp.services.screener_3x_cache import compute_and_cache
         compute_and_cache()
@@ -156,7 +127,7 @@ def main():
     except Exception as e:
         print(f"  Screener rescore failed (non-fatal): {e}")
 
-    # Step 3.75: Checkpoint WAL so upload sends complete data
+    # Checkpoint WAL so upload sends complete data
     try:
         import sqlite3
         _db_path = str(PROJECT_ROOT / "data" / "etp_tracker.db")
@@ -167,7 +138,7 @@ def main():
         pass
 
     # Step 4: Upload DB to Render
-    print("\n[4/5] Uploading database to Render...")
+    print("\n[4/4] Uploading database to Render...")
     upload_db_to_render()
 
     elapsed = time.time() - start

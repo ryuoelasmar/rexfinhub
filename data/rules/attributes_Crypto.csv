@@ -1,124 +1,52 @@
-ticker,map_crypto_is_spot,map_crypto_underlier
+ticker,map_crypto_type,map_crypto_underlier
 BTC US,Spot Single Asset,BTC only
 ETH US,Spot Single Asset,alt-coin only (ETH)
-ETHU US,Derivatives-based; leveraged,alt-coin only (ETH)
-BITX US,Derivatives-based; leveraged,BTC only
-BITU US,Derivatives-based; leveraged,BTC only
-BTCI US,Derivatives-based; income,BTC only
-ETHT US,Derivatives-based; leveraged,alt-coin only (ETH)
 ETHW US,Spot Single Asset,alt-coin only (ETH)
-YBTC US,Derivatives-based; income,BTC only
 BITQ US,Equity,multi-token crypto
 ETHV US,Spot Single Asset,alt-coin only (ETH)
 FDIG US,Equity,multi-token crypto
-LFGY US,Equity,multi-token crypto
 BTCW US,Spot Single Asset,BTC only
 STCE US,Equity,multi-token crypto
 WGMI US,Equity,BTC only
 NCIQ US,Spot Multi-asset; passive,multi-token crypto
 CRPT US,Equity,multi-token crypto
-YBIT US,Derivatives-based; income,BTC only
 EETH US,Derivatives-based; futures-based,alt-coin only (ETH)
-YETH US,Derivatives-based; income,alt-coin only (ETH)
 EZET US,Spot Single Asset,alt-coin only (ETH)
-ETHD US,Derivatives-based; leveraged,alt-coin only (ETH)
 SPBC US,Hybrid (spot/multi + derivatives),crypto + traditional asset
-BITI US,Derivatives-based; futures-based,BTC only
-XBTY US,Derivatives-based; income,BTC only
 HECO US,Hybrid (spot/multi + derivatives),multi-token crypto
-SBIT US,Derivatives-based; leveraged,BTC only
-CEPI US,Equity,multi-token crypto
-BTGD US,Derivatives-based; leveraged,crypto + traditional asset
-BTCL US,Derivatives-based; leveraged,BTC only
-BLOX US,Hybrid (spot/multi + derivatives),multi-token crypto
-CBTJ US,Derivatives-based; defined outcome,BTC only
 MAXI US,Derivatives-based; income,BTC only
-CBOJ US,Derivatives-based; defined outcome,BTC only
 BTF US,Derivatives-based; futures-based,multi-token crypto
 BITS US,Hybrid (spot/multi + derivatives),multi-token crypto
 TETH US,Spot Single Asset,alt-coin only (ETH)
-BTCC US,Derivatives-based; income,BTC only
-ETU US,Derivatives-based; leveraged,alt-coin only (ETH)
-OWNB US,Equity,BTC only
-CBXJ US,Derivatives-based; defined outcome,BTC only
 NODE US,Equity,multi-token crypto
 BITC US,Derivatives-based; futures-based,crypto + traditional asset
 BETH US,Derivatives-based; futures-based,multi-token crypto
-QBF US,Derivatives-based; defined outcome,BTC only
 FMKT US,Hybrid (spot/multi + derivatives),crypto + traditional asset
-BITY US,Derivatives-based; income,BTC only
-RSSX US,Hybrid (spot/multi + derivatives),crypto + traditional asset
-BTFX US,Derivatives-based; leveraged,BTC only
-BAGY US,Derivatives-based; income,BTC only
-DFII US,Derivatives-based; income,BTC only
 BETE US,Derivatives-based; futures-based,multi-token crypto
 SATO US,Equity,multi-token crypto
 DECO US,Hybrid (spot/multi + derivatives),multi-token crypto
 AETH US,Derivatives-based; futures-based,crypto + traditional asset
-CBTY US,Derivatives-based; defined outcome,BTC only
-CBXY US,Derivatives-based; defined outcome,BTC only
-BCCC US,Derivatives-based; income,BTC only
-SETH US,Derivatives-based; futures-based,alt-coin only (ETH)
 BTRN US,Derivatives-based; futures-based,BTC only
-BEGS US,Derivatives-based; leveraged,crypto + traditional asset
 BBB US,Hybrid (spot/multi + derivatives),crypto + traditional asset
-BPI US,Derivatives-based; income,BTC only
-CBXA US,Derivatives-based; defined outcome,BTC only
 MNRS US,Equity,BTC only
-CBOA US,Derivatives-based; defined outcome,BTC only
-CBOY US,Derivatives-based; defined outcome,BTC only
 BTOP US,Derivatives-based; futures-based,crypto + traditional asset
-BTCZ US,Derivatives-based; leveraged,BTC only
-CBTA US,Derivatives-based; defined outcome,BTC only
-BFJL US,Derivatives-based; defined outcome,BTC only
-ETQ US,Derivatives-based; leveraged,alt-coin only (ETH)
 WTIP US,Hybrid (spot/multi + derivatives),crypto + traditional asset
-ETCO US,Derivatives-based; income,alt-coin only (ETH)
 HBTC US,Derivatives-based; futures-based,BTC only
 OOSB US,Hybrid (spot/multi + derivatives),crypto + traditional asset
 SOLZ US,Spot Single Asset,alt-coin only (SOL)
-XXRP US,Derivatives-based; leveraged,alt-coin only (XRP)
-SLON US,Derivatives-based; leveraged,alt-coin only (SOL)
-SOLT US,Derivatives-based; leveraged,alt-coin only (SOL)
 DOJE US,Spot Single Asset,alt-coin only (DOGE)
 XRPI US,Spot Single Asset,alt-coin only (XRP)
-XRPT US,Derivatives-based; leveraged,alt-coin only (XRP)
-UXRP US,Derivatives-based; leveraged,alt-coin only (XRP)
-COYY US,Derivatives-based; income,multi-token crypto
-ETHI US,Derivatives-based; leveraged,alt-coin only (ETH)
 BCHG US,Spot Single Asset,alt-coin only (BCH)
 BITW US,Spot Multi-asset; passive,multi-token crypto
 BTCFX US,Derivatives-based; futures-based,BTC only
 LTCN US,Spot Single Asset,alt-coin only (LTC)
-BFOC US,Derivatives-based; defined outcome,BTC only
 DEFG US,Spot Multi-asset; thematic,multi-token crypto
 MANA US,Spot Single Asset,alt-coin only (MANA)
-OSOL US,Spot Single Asset,alt-coin only (SOL)
-CBOL US,Derivatives-based; defined outcome,BTC only
-CBOO US,Derivatives-based; defined outcome,BTC only
-CBTL US,Derivatives-based; defined outcome,BTC only
-CBTO US,Derivatives-based; defined outcome,BTC only
-CBXL US,Derivatives-based; defined outcome,BTC only
-CBXO US,Derivatives-based; defined outcome,BTC only
 DIME US,Spot Multi-asset; thematic,multi-token crypto
-EHY US,Derivatives-based; income,alt-coin only (ETH)
-ETTY US,Derivatives-based; income,alt-coin only (ETH)
-IETH US,Derivatives-based; income,alt-coin only (ETH)
-SOLM US,Derivatives-based; income,alt-coin only (SOL)
-BITK US,Derivatives-based; income,BTC only
-XRPM US,Derivatives-based; income,alt-coin only (XRP)
-TXXD US,Derivatives-based; leveraged,alt-coin only (DOGE)
 TXBC US,Spot Multi-asset; passive,multi-token crypto
 TTOP US,Spot Multi-asset; passive,multi-token crypto
-NEHI US,Derivatives-based; income,alt-coin only (ETH)
-SOLX US,Derivatives-based; leveraged,alt-coin only (SOL)
-XRPK US,Derivatives-based; leveraged,alt-coin only (XRP)
-TXXS US,Derivatives-based; leveraged,alt-coin only (SUI)
 STBQ US,Equity,multi-token crypto
 TKNQ US,Equity,multi-token crypto
-WTIB US,Derivatives-based; futures-based,crypto + traditional asset
-BFJA US,Derivatives-based; defined outcome,BTC only
-BFAP US,Derivatives-based; defined outcome,BTC only
 OOQB US,Hybrid (spot/multi + derivatives),crypto + traditional asset
 IBIT US,Spot Single Asset,BTC only
 ETHA US,Spot Single Asset,alt-coin only (ETH)
@@ -148,13 +76,9 @@ GLIV US,Spot Single Asset,alt-coin only (LPT)
 GLNK US,Spot Single Asset,alt-coin only (LINK)
 GSNR US,Spot Single Asset,alt-coin only (NEAR)
 GSOL US,Spot Single Asset,alt-coin only (SOL)
-OBNB US,Spot Single Asset,alt-coin only (BNB)
-ODOT US,Spot Single Asset,alt-coin only (DOT)
-OBNK US,Spot Single Asset,alt-coin only (BONK)
 BSOL US,Spot Single Asset,alt-coin only (SOL)
 HBR US,Spot Single Asset,alt-coin only (HBAR)
 LTCC US,Spot Single Asset,alt-coin only (LTC)
-ORO US,Spot Multi-asset; active,crypto + traditional asset
 XRPC US,Spot Single Asset,alt-coin only (XRP)
 XRP US,Spot Single Asset,alt-coin only (XRP)
 TSOL US,Spot Single Asset,alt-coin only (SOL)
@@ -171,12 +95,8 @@ TOXR US,Spot Single Asset,alt-coin only (XRP)
 CLNK US,Spot Single Asset,alt-coin only (LINK)
 VAVX US,Spot Single Asset,alt-coin only (AVAX)
 BPRO US,Hybrid (spot/multi + derivatives),crypto + traditional asset
-ISBG US,Derivatives-based; income,crypto + traditional asset
-ISSB US,Derivatives-based; income,crypto + traditional asset
 KRYP US,Spot Multi-asset; passive,multi-token crypto
-QXAS US,Derivatives-based; leveraged,multi-token crypto
 TDOG US,Spot Single Asset,alt-coin only (DOGE)
-XBCI US,Derivatives-based; income,BTC only
 GSUI US,Spot Single Asset,alt-coin only (SUI)
 SUIS US,Spot Single Asset,alt-coin only (SUI)
 BCOR US,Equity,BTC only

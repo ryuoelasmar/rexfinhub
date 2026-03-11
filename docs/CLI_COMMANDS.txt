@@ -1,0 +1,24 @@
+REX FinHub CLI Commands
+=======================
+
+PIPELINES
+  run bbg                   Bloomberg data pipeline (ingest, transform, DB, report cache, Render upload)
+  run bbg --no-upload       Same but skip Render upload
+  run bbg --no-db           Same but skip DB write
+  run bbg --no-export       Same but skip Excel export
+  run sec                   SEC filing pipeline (fetch filings, extract funds, sync DB)
+
+EMAIL PREVIEWS (opens in browser)
+  preview daily             Daily filing report
+  preview weekly            Weekly + L&I + Income + Flow reports
+  preview all               All reports (daily + weekly)
+
+EMAIL SEND (sends to all recipients)
+  send daily                Daily filing report
+  send weekly               Weekly + L&I + Income + Flow reports
+
+TOOLS
+  rules                     Open Streamlit rules editor (fund mapping, issuer mapping, etc.)
+
+DEV
+  scripts/dev.bat           Start local dev server (Caddy + uvicorn + browser-sync)

@@ -88,14 +88,14 @@
       <td>{{ p.leverage or '-' }}</td>
       <td style="text-align:right; font-weight:600;">{{ "{:,.1f}".format(p.aum) }}</td>
       <td style="text-align:right;">{% if p.expense_ratio %}{{ "%.2f"|format(p.expense_ratio) }}{% else %}-{% endif %}</td>
-      <td style="text-align:right; {% if p.flow_1m and p.flow_1m > 0 %}color:var(--green);{% elif p.flow_1m and p.flow_1m < 0 %}color:var(--red);{% endif %}">
-        {% if p.flow_1m %}{{ "{:,.1f}".format(p.flow_1m) }}{% else %}-{% endif %}
+      <td style="text-align:right; {% if p.flow_1m is number and p.flow_1m > 0 %}color:var(--green);{% elif p.flow_1m is number and p.flow_1m < 0 %}color:var(--red);{% endif %}">
+        {% if p.flow_1m is number %}{{ "{:,.1f}".format(p.flow_1m) }}{% else %}-{% endif %}
       </td>
-      <td style="text-align:right; {% if p.flow_3m and p.flow_3m > 0 %}color:var(--green);{% elif p.flow_3m and p.flow_3m < 0 %}color:var(--red);{% endif %}">
-        {% if p.flow_3m %}{{ "{:,.1f}".format(p.flow_3m) }}{% else %}-{% endif %}
+      <td style="text-align:right; {% if p.flow_3m is number and p.flow_3m > 0 %}color:var(--green);{% elif p.flow_3m is number and p.flow_3m < 0 %}color:var(--red);{% endif %}">
+        {% if p.flow_3m is number %}{{ "{:,.1f}".format(p.flow_3m) }}{% else %}-{% endif %}
       </td>
-      <td style="text-align:right; {% if p.flow_ytd and p.flow_ytd > 0 %}color:var(--green);{% elif p.flow_ytd and p.flow_ytd < 0 %}color:var(--red);{% endif %}">
-        {% if p.flow_ytd %}{{ "{:,.1f}".format(p.flow_ytd) }}{% else %}-{% endif %}
+      <td style="text-align:right; {% if p.flow_ytd is number and p.flow_ytd > 0 %}color:var(--green);{% elif p.flow_ytd is number and p.flow_ytd < 0 %}color:var(--red);{% endif %}">
+        {% if p.flow_ytd is number %}{{ "{:,.1f}".format(p.flow_ytd) }}{% else %}-{% endif %}
       </td>
       <td style="text-align:right;">{% if p.spread %}{{ "%.2f"|format(p.spread) }}{% else %}-{% endif %}</td>
     </tr>

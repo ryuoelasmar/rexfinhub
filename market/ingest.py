@@ -40,6 +40,10 @@ def read_input(data_file: Path | str | None = None) -> dict:
 
     etp, stock, mkt_status = _read_bbg_format(xl)
 
+    # NOTE: MicroSectors ETN proprietary overrides are NOT applied here.
+    # Website gets Bloomberg-reported ETN data as-is.
+    # Overrides are applied only in report_data.py for internal email reports.
+
     return {
         "etp_combined": etp,
         "stock_data": stock,

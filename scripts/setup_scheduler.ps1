@@ -3,11 +3,11 @@
 # Run this script ONCE as Administrator:
 #   powershell -ExecutionPolicy Bypass -File C:\Projects\rexfinhub\scripts\setup_scheduler.ps1
 #
-# Creates four scheduled tasks:
-#   REX_Scrape_0800  - 8:00 AM weekdays  (SEC + market pipeline + DB upload, no email)
-#   REX_Scrape_1200  - 12:00 PM weekdays (SEC + market pipeline + DB upload, no email)
-#   REX_Scrape_2100  - 9:00 PM weekdays  (SEC + market pipeline + DB upload, no email)
-#   REX_Email_1700   - 5:00 PM weekdays  (email dispatch only: daily brief + weekly on Mon)
+# Creates scheduled tasks:
+#   REX_SEC_0800  - 8:00 AM weekdays  (SEC pipeline + DB upload, no market, no email)
+#   REX_SEC_1200  - 12:00 PM weekdays (SEC pipeline + DB upload, no market, no email)
+#   REX_SEC_1600  - 4:00 PM weekdays  (SEC pipeline + DB upload, no market, no email)
+#   REX_SEC_2000  - 8:00 PM weekdays  (SEC pipeline + DB upload, no market, no email)
 #
 # All tasks:
 #   - Wake the PC from sleep (WakeToRun)
@@ -29,7 +29,9 @@ if (-not (Test-Path $Script)) {
 }
 
 # --- Remove legacy tasks if they exist ---
-foreach ($old in @("REX_Morning_Pipeline", "REX_Evening_Pipeline")) {
+foreach ($old in @("REX_Morning_Pipeline", "REX_Evening_Pipeline",
+                    "REX_Scrape_0800", "REX_Scrape_1200", "REX_Scrape_2100",
+                    "REX_Email_1700")) {
     $existing = Get-ScheduledTask -TaskName $old -ErrorAction SilentlyContinue
     if ($existing) {
         Unregister-ScheduledTask -TaskName $old -Confirm:$false
@@ -92,31 +94,31 @@ function New-PipelineTask {
     Write-Host "  Created: $TaskName" -ForegroundColor Green
 }
 
-# --- Create all four tasks ---
+# --- Create SEC scrape tasks (every 4 hours from 8 AM, weekdays) ---
 
 New-PipelineTask `
-    -TaskName "REX_Scrape_0800" `
+    -TaskName "REX_SEC_0800" `
     -TriggerTime "8:00AM" `
-    -ExtraArgs "--skip-email" `
-    -Description "REX ETP Tracker - 8 AM scrape. SEC + market pipeline + DB upload. No email."
+    -ExtraArgs "--skip-email --skip-market" `
+    -Description "REX SEC Scrape - 8 AM. SEC pipeline + DB upload. No market, no email."
 
 New-PipelineTask `
-    -TaskName "REX_Scrape_1200" `
+    -TaskName "REX_SEC_1200" `
     -TriggerTime "12:00PM" `
-    -ExtraArgs "--skip-email" `
-    -Description "REX ETP Tracker - 12 PM scrape. SEC + market pipeline + DB upload. No email."
+    -ExtraArgs "--skip-email --skip-market" `
+    -Description "REX SEC Scrape - 12 PM. SEC pipeline + DB upload. No market, no email."
 
 New-PipelineTask `
-    -TaskName "REX_Scrape_2100" `
-    -TriggerTime "9:00PM" `
-    -ExtraArgs "--skip-email" `
-    -Description "REX ETP Tracker - 9 PM scrape. SEC + market pipeline + DB upload. No email."
+    -TaskName "REX_SEC_1600" `
+    -TriggerTime "4:00PM" `
+    -ExtraArgs "--skip-email --skip-market" `
+    -Description "REX SEC Scrape - 4 PM. SEC pipeline + DB upload. No market, no email."
 
 New-PipelineTask `
-    -TaskName "REX_Email_1700" `
-    -TriggerTime "5:00PM" `
-    -ExtraArgs "--email-only" `
-    -Description "REX ETP Tracker - 5 PM email dispatch. Daily brief (+ weekly on Mondays)."
+    -TaskName "REX_SEC_2000" `
+    -TriggerTime "8:00PM" `
+    -ExtraArgs "--skip-email --skip-market" `
+    -Description "REX SEC Scrape - 8 PM. SEC pipeline + DB upload. No market, no email."
 
 # --- Verify ---
 Write-Host "`n--- Verification ---" -ForegroundColor Yellow
@@ -127,15 +129,17 @@ Get-ScheduledTask -TaskName "REX_*" | Format-Table TaskName, State, @{
 
 Write-Host "Done. All tasks will wake the PC from sleep to run." -ForegroundColor Green
 Write-Host ""
-Write-Host "Schedule:"
-Write-Host "  8:00 AM  - Scrape (SEC + market + upload)"
-Write-Host "  12:00 PM - Scrape (SEC + market + upload)"
-Write-Host "  5:00 PM  - Email dispatch (daily brief + weekly on Mon)"
-Write-Host "  9:00 PM  - Scrape (SEC + market + upload)"
+Write-Host "Schedule (weekdays only, SEC scrape only):"
+Write-Host "  8:00 AM  - SEC scrape + DB upload to Render"
+Write-Host "  12:00 PM - SEC scrape + DB upload to Render"
+Write-Host "  4:00 PM  - SEC scrape + DB upload to Render"
+Write-Host "  8:00 PM  - SEC scrape + DB upload to Render"
+Write-Host ""
+Write-Host "Bloomberg market data (run bbg) is NOT scheduled -- run manually."
+Write-Host "Emails are NOT scheduled -- send manually via 'send daily' / 'send weekly'."
 Write-Host ""
 Write-Host "To run manually:"
-Write-Host "  Start-ScheduledTask -TaskName 'REX_Scrape_0800'"
-Write-Host "  Start-ScheduledTask -TaskName 'REX_Email_1700'"
+Write-Host "  Start-ScheduledTask -TaskName 'REX_SEC_0800'"
 Write-Host ""
 Write-Host "To remove all:"
 Write-Host "  Get-ScheduledTask -TaskName 'REX_*' | Unregister-ScheduledTask -Confirm:`$false"

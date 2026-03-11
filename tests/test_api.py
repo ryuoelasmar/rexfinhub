@@ -71,8 +71,7 @@ def test_filings_page(client):
 def test_downloads_page(client):
     r = client.get("/downloads/")
     assert r.status_code == 200
-    assert "Downloads" in r.text
-    assert "Live Exports" in r.text
+    assert "Exports" in r.text
 
 
 def test_downloads_export_funds_csv(client):

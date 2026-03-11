@@ -1,8 +1,8 @@
 """
-REX ETF Weekly Report - Executive Email Digest v6
+REX ETP Weekly Report - Executive Email Digest v6
 
 Email-client-compatible HTML digest (inline styles, table layout, no JS).
-Bloomberg market data (ETF-only) + SEC filing activity.
+Bloomberg market data (ETFs + ETNs) + SEC filing activity.
 
 Sections:
   1. Header
@@ -70,6 +70,7 @@ _INCOME_CATEGORIES = {"Income - Single Stock", "Income - Index/Basket/ETF Based"
 # Category landscape: (internal_name, display_name, border_color)
 _LANDSCAPE_CATS = [
     ("Leverage & Inverse - Single Stock", "Leveraged Single Stock", "#e74c3c"),
+    ("Leverage & Inverse - Index/Basket/ETF Based", "Leveraged Index/ETF", "#d63031"),
     ("Income - Single Stock", "Income (Single Stock)", "#f39c12"),
     ("Income - Index/Basket/ETF Based", "Income (Index/ETF)", "#0984e3"),
     ("Crypto", "Crypto", "#8e44ad"),
@@ -162,13 +163,13 @@ def _gather_market_data(db=None) -> dict | None:
         if not data_available(db):
             return None
 
-        summary = get_rex_summary(db, fund_structure="ETF")
-        master = get_master_data(db)
+        summary = get_rex_summary(db, fund_structure="ETF,ETN", etn_overrides=True)
+        master = get_master_data(db, etn_overrides=True)
 
-        # Filter master to ETF-only for rex_df
+        # Filter master to ETPs (ETFs + ETNs) for rex_df
         fund_type_col = next((c for c in master.columns if c.lower().strip() == "fund_type"), None)
         if fund_type_col:
-            etf_master = master[master[fund_type_col] == "ETF"].copy()
+            etf_master = master[master[fund_type_col].isin(["ETF", "ETN"])].copy()
         else:
             etf_master = master.copy()
 
@@ -180,7 +181,7 @@ def _gather_market_data(db=None) -> dict | None:
         landscape = {}
         for cat_name, display_name, color in _LANDSCAPE_CATS:
             try:
-                cat_data = get_category_summary(db, cat_name)
+                cat_data = get_category_summary(db, cat_name, etn_overrides=True)
                 landscape[cat_name] = cat_data
             except Exception as exc:
                 log.warning("Category summary failed for %s: %s", cat_name, exc)
@@ -244,11 +245,10 @@ def _gather_filing_data(db_session, days: int = 7) -> dict:
 def _render_header(week_ending: str, data_as_of: str = "") -> str:
     subtitle = f"Week ending {_esc(week_ending)}"
     return f"""
-<tr><td style="background:{_NAVY};padding:28px 30px;">
-  <div style="color:{_WHITE};font-size:24px;font-weight:700;margin-bottom:4px;">
-    REX Weekly ETP Report
+<tr><td style="background:{_NAVY};padding:24px 30px;">
+  <div style="color:{_WHITE};font-size:22px;font-weight:700;letter-spacing:-0.5px;">
+    REX Weekly ETP Report | {_esc(week_ending)}
   </div>
-  <div style="color:rgba(255,255,255,0.7);font-size:13px;">{subtitle}</div>
 </td></tr>"""
 
 
@@ -966,10 +966,10 @@ def _render_etf_universe(master: pd.DataFrame) -> str:
 <tr><td style="padding:20px 30px 5px;">
   <div style="font-size:18px;font-weight:700;color:{_NAVY};margin:0;
     padding-bottom:8px;border-bottom:3px solid {_NAVY};">
-    ETF Universe
+    ETP Universe
   </div>
   <div style="font-size:12px;color:{_GRAY};margin-top:6px;margin-bottom:10px;">
-    Leveraged, income, crypto & thematic ETF market (deduplicated)
+    Leveraged, income, crypto &amp; thematic ETP market (deduplicated)
   </div>
   {row1}
 </td></tr>"""
@@ -980,9 +980,9 @@ def _render_dashboard_cta(dashboard_url: str) -> str:
     return f"""
 <tr><td style="padding:20px 30px;" align="center">
   <table cellpadding="0" cellspacing="0" border="0"><tr>
-    <td style="background:{_BLUE};border-radius:8px;padding:16px 40px;">
+    <td style="background:{_BLUE};border-radius:8px;padding:14px 32px;">
       <a href="{url}" style="color:{_WHITE};text-decoration:none;
-         font-size:16px;font-weight:700;">Open Dashboard</a>
+         font-size:14px;font-weight:700;">Open Dashboard</a>
     </td>
   </tr></table>
   <div style="font-size:12px;color:{_GRAY};margin-top:8px;">
@@ -1003,6 +1003,9 @@ def _render_footer(week_ending: str) -> str:
   <div style="font-size:10px;color:{_GRAY};text-align:center;margin-top:4px;">
     To unsubscribe, contact relasmar@rexfin.com
   </div>
+  <div style="font-size:9px;color:{_GRAY};text-align:center;margin-top:3px;font-style:italic;">
+    Note: ETN data reflects proprietary share/price data where available. Bloomberg-reported ETN figures may differ.
+  </div>
 </td></tr>"""
 
 
@@ -1019,6 +1022,87 @@ def _render_market_unavailable() -> str:
 # ---------------------------------------------------------------------------
 # Main builder
 # ---------------------------------------------------------------------------
+def _weekly_highlights_box(bullets: list[str]) -> str:
+    """Render a key highlights callout box for the weekly report."""
+    if not bullets:
+        return ""
+    bg = "#f4f5f6"
+    items = ""
+    for b in bullets:
+        items += (
+            f'<tr><td style="padding:3px 0;font-size:13px;color:{_NAVY};line-height:1.5;">'
+            f'<span style="color:{_NAVY};font-weight:700;margin-right:6px;">&#8226;</span>'
+            f'{_esc(b)}</td></tr>'
+        )
+    return (
+        f'<tr><td style="padding:15px 30px 10px;">'
+        f'<table width="100%" cellpadding="0" cellspacing="0" border="0" '
+        f'style="background:{bg};border-left:4px solid {_NAVY};border-radius:0 8px 8px 0;">'
+        f'<tr><td style="padding:14px 18px;">'
+        f'<table width="100%" cellpadding="0" cellspacing="0" border="0">'
+        f'<tr><td style="padding:0 0 8px;font-size:10px;font-weight:700;color:{_NAVY};'
+        f'text-transform:uppercase;letter-spacing:1px;">Key Highlights</td></tr>'
+        f'{items}'
+        f'</table></td></tr>'
+        f'</table></td></tr>'
+    )
+
+
+def _weekly_highlights(market: dict | None, filing: dict) -> list[str]:
+    """Generate 3-5 executive highlights for the weekly report."""
+    bullets = []
+
+    # 1. REX AUM + products (use pre-formatted strings)
+    if market:
+        kpis = market.get("kpis", {})
+        aum_fmt = kpis.get("total_aum_fmt", kpis.get("aum_fmt", ""))
+        products = kpis.get("num_products", kpis.get("count", 0))
+        flow_fmt = kpis.get("flow_1w_fmt", "")
+        if aum_fmt:
+            bullets.append(f"REX AUM: {aum_fmt} across {products} products ({flow_fmt} 1W net flow)")
+
+    # 2. Filing activity
+    filings = filing.get("fund_filings", 0)
+    effective = filing.get("newly_effective", 0)
+    if filings > 0:
+        bullets.append(f"{filings:,} fund filings this week, {effective:,} newly effective")
+
+    # 3. Top performing REX fund
+    if market:
+        perf = market.get("perf_metrics", {})
+        winners = perf.get("return_1w", {}).get("best5", [])
+        if winners:
+            w = winners[0]
+            bullets.append(
+                f"{w.get('ticker', '')}: {w.get('value_fmt', '')} 1W return -- top REX performer"
+            )
+
+    # 4. Largest REX flow mover
+    if market:
+        rex_df = market.get("rex_df", pd.DataFrame())
+        _flow_col = "t_w4.fund_flow_1week" if "t_w4.fund_flow_1week" in rex_df.columns else "fund_flow_1week"
+        if not rex_df.empty and _flow_col in rex_df.columns:
+            top = rex_df.loc[rex_df[_flow_col].abs().idxmax()]
+            flow_val = top.get(_flow_col, 0)
+            if abs(flow_val) > 0:
+                ticker = top.get("ticker_clean", "")
+                sign = "+" if flow_val >= 0 else ""
+                if abs(flow_val) >= 1_000:
+                    fmt = f"{sign}${flow_val / 1_000:.1f}B"
+                elif abs(flow_val) >= 1:
+                    fmt = f"{sign}${flow_val:.1f}M"
+                else:
+                    fmt = f"{sign}${flow_val:.2f}M"
+                bullets.append(f"{ticker}: {fmt} 1W flow -- top REX mover")
+
+    # 5. Pending funds
+    pending = filing.get("pending_funds", 0)
+    if pending > 0:
+        bullets.append(f"{pending:,} funds pending effectiveness across tracked trusts")
+
+    return bullets[:5]
+
+
 def build_weekly_digest_html(
     db_session,
     dashboard_url: str = "",
@@ -1051,6 +1135,9 @@ def build_weekly_digest_html(
             f'{_esc(custom_message)}</div>'
             f'</td></tr>'
         )
+
+    # Key Highlights (right after header, before filing activity)
+    sections.append(_weekly_highlights_box(_weekly_highlights(market, filing)))
 
     # 2. Filing Activity (top of email)
     sections.append(_render_filing_activity(filing))
@@ -1112,7 +1199,7 @@ def build_weekly_digest_html(
 <table width="100%" cellpadding="0" cellspacing="0" border="0"
        style="background:{_LIGHT};">
 <tr><td align="center" style="padding:20px 10px;">
-<table width="600" cellpadding="0" cellspacing="0" border="0"
+<table width="640" cellpadding="0" cellspacing="0" border="0"
        style="background:{_WHITE};border-radius:8px;overflow:hidden;
               box-shadow:0 2px 12px rgba(0,0,0,0.08);">
 {body}
@@ -1176,9 +1263,11 @@ def send_weekly_digest(
 
     html_body = build_weekly_digest_html(db_session, dashboard_url, format=format,
                                           custom_message=custom_message)
-    today = datetime.now()
-    week_ending = today.strftime("%B %d, %Y")
-    subject = f"REX Weekly ETP Report: {today.strftime('%m/%d/%Y')}"
+    # Use data date from report, not datetime.now()
+    from webapp.services.report_data import get_li_report
+    li_data = get_li_report(db_session)
+    data_date = li_data.get("data_as_of_short", datetime.now().strftime("%m/%d/%Y"))
+    subject = f"REX Weekly ETP Report: {data_date}"
 
     ok = True
     if recipients:

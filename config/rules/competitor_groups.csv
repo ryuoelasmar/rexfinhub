@@ -1,0 +1,63 @@
+group_name,rex_ticker,peer_ticker
+Single Stock: NVDA,NVDX,NVDL
+Single Stock: NVDA,NVDX,NVDS
+Single Stock: NVDA,NVDX,NVDU
+Single Stock: NVDA,NVDX,NVDD
+Single Stock: NVDA,NVDX,NVDG
+Single Stock: NVDA,NVDQ,NVDL
+Single Stock: NVDA,NVDQ,NVDS
+Single Stock: NVDA,NVDQ,NVDU
+Single Stock: NVDA,NVDQ,NVDD
+Single Stock: NVDA,NVDQ,NVDG
+Single Stock: TSLA,TSLT,TSLL
+Single Stock: TSLA,TSLT,TSLR
+Single Stock: TSLA,TSLT,TSDD
+Single Stock: TSLA,TSLZ,TSLL
+Single Stock: TSLA,TSLZ,TSLR
+Single Stock: TSLA,TSLZ,TSDD
+Single Stock: GOOGL,GOOX,GGLL
+Single Stock: GOOGL,GOOX,GOOL
+Single Stock: AAPL,AAPX,AAPB
+Single Stock: AAPL,AAPX,AAPU
+Single Stock: MSFT,MSFX,MSFU
+Single Stock: MSFT,MSFX,MSFL
+Single Stock: MSTR,MSTU,MSTX
+Single Stock: MSTR,MSTU,SMST
+Single Stock: MSTR,MSTZ,MSTX
+Single Stock: MSTR,MSTZ,SMST
+Active/Income: FEPI,FEPI,AIPI
+Active/Income: FEPI,FEPI,JEPI
+Active/Income: FEPI,FEPI,JEPQ
+Active/Income: FEPI,FEPI,GPIX
+Active/Income: FEPI,FEPI,QYLD
+Active/Income: FEPI,FEPI,SPYI
+Active/Income: FEPI,FEPI,QQQI
+Active/Income: FEPI,FEPI,IWMI
+Active/Income: CEPI,CEPI,QYLD
+Active/Income: CEPI,CEPI,JEPQ
+Active/Income: CEPI,CEPI,QQQI
+Active/Income: AIPI,AIPI,JEPI
+Active/Income: AIPI,AIPI,JEPQ
+Active/Income: AIPI,AIPI,GPIX
+Active/Income: AIPI,AIPI,SPYI
+Thematic: AI/Tech,ATCL,CAIE
+Thematic: AI/Tech,ATCL,CAIQ
+Thematic: AI/Tech,ATCL,ACYN
+Thematic: Innovation,DRNZ,ARKK
+Thematic: Innovation,DRNZ,ARKW
+Thematic: Innovation,DRNZ,KOMP
+Thematic: FANG+,FNGU,TQQQ
+Thematic: FANG+,FNGU,TECL
+Thematic: FANG+,FNGU,SOXL
+Thematic: FANG+,BULZ,TQQQ
+Thematic: FANG+,BULZ,TECL
+Thematic: Gold Miners,GDXU,NUGT
+Thematic: Gold Miners,GDXU,JNUG
+Thematic: Gold Miners,SHNY,NUGT
+Thematic: Gold Miners,SHNY,JNUG
+International: FEPI LN,FEPI LN,JEPI
+International: FEPI LN,FEPI LN,JEPQ
+International: FEGI LN,FEGI LN,JEPI
+International: FEGI LN,FEGI LN,JEPQ
+International: CEGI LN,CEGI LN,QYLD
+International: CEGI LN,CEGI LN,QQQI
