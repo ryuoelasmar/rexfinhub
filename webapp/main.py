@@ -131,14 +131,10 @@ def _prewarm_caches() -> None:
             except Exception as e:
                 log.warning("Market cache warm failed (non-fatal): %s", e)
 
-            # Screener cache
+            # Screener cache (always pass db so Render can load from DB)
             try:
-                if os.environ.get("RENDER"):
-                    from webapp.services.screener_3x_cache import warm_cache
-                    warm_cache(db=db)
-                else:
-                    from webapp.services.screener_3x_cache import warm_cache
-                    warm_cache()
+                from webapp.services.screener_3x_cache import warm_cache
+                warm_cache(db=db)
                 log.info("Screener cache warmed at startup.")
             except Exception as e:
                 log.warning("Screener cache warm failed (non-fatal): %s", e)

@@ -118,14 +118,9 @@ def main():
     except Exception as e:
         print(f"  Market sync failed (non-fatal): {e}")
 
-    # Step 3: Rescore screener
+    # Step 3: Screener already computed + saved to DB by sync_market_data()
     print("\n[3/4] Rescoring screener...")
-    try:
-        from webapp.services.screener_3x_cache import compute_and_cache
-        compute_and_cache()
-        print("  Screener rescored.")
-    except Exception as e:
-        print(f"  Screener rescore failed (non-fatal): {e}")
+    print("  Screener rescored (via market sync).")
 
     # Checkpoint WAL so upload sends complete data
     try:
