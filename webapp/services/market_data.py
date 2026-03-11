@@ -102,7 +102,7 @@ def _apply_etn_overrides(df: pd.DataFrame) -> pd.DataFrame:
     """Apply MicroSectors ETN proprietary overrides (for internal reports only).
 
     Bloomberg reports total issuance (not true AUM) and zero flows for ETNs.
-    This reads the 'microsector' + 'data_msector' sheets to compute true values.
+    This reads the 'microsector' + 'data_ms'/'data_price' sheets to compute true values.
     Returns the same DataFrame (modified in-place).
     """
     try:

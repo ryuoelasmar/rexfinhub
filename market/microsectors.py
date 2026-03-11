@@ -1,17 +1,19 @@
 """MicroSectors ETN true data overrides.
 
 Bloomberg reports total issuances (not actual AUM) and zero flows for ETNs.
-This module reads proprietary data from the 'microsector' and 'data_msector'
-sheets in bloomberg_daily_file.xlsm to compute true AUM and fund flows
-for 21 reliable MicroSectors tickers.
+This module reads proprietary data from the 'microsector', 'data_ms', and
+'data_price' sheets in bloomberg_daily_file.xlsm to compute true AUM and
+fund flows for 21 reliable MicroSectors tickers.
 
 Integration: called after w1-w4 join in ingest.py to override AUM and flow
 columns before any downstream transformations.
 
-Sheet layouts:
-  microsector   - Row 3: short tickers.  Rows 4+: Date | AUM per ticker (raw $)
-  data_msector  - Shares (cols 0-32): Row 1 BBG IDs (NaN=unreliable), Row 3 short tickers
-                  Prices (cols 34-55): Row 1 BBG IDs, data aligned by date
+Sheet layouts (current):
+  microsector  - Row 3: short tickers.  Rows 4+: Date | AUM per ticker (raw $)
+  data_ms      - Shares outstanding. Row 1: BBG IDs (NaN=unreliable), Row 3: short tickers
+  data_price   - Prices. Row 0: Dates + BBG tickers ("NRGU US Equity"), Row 1+: date + prices
+
+Legacy (pre-March 2026): data_msector combined shares (cols 0-32) and prices (cols 34+).
 """
 from __future__ import annotations
 
@@ -22,7 +24,7 @@ import pandas as pd
 
 log = logging.getLogger(__name__)
 
-# 21 reliable tickers (have BBG IDs in data_msector)
+# 21 reliable tickers (have BBG IDs in data_ms/data_msector)
 _RELIABLE_TICKERS = {
     "NRGU", "NRGD", "BNKU", "BNKD", "FNGA", "FNGD", "FNGO", "FNGS", "FNGU",
     "BULZ", "BERZ", "OILU", "OILD", "FLYU", "FLYD", "WTIU", "WTID",
@@ -42,7 +44,7 @@ _PERIOD_DAYS = {
 
 
 def read_overrides(xl: pd.ExcelFile) -> dict[str, dict]:
-    """Read microsector + data_msector sheets, return per-ticker overrides.
+    """Read microsector + data_ms/data_price sheets, return per-ticker overrides.
 
     Returns::
 
@@ -60,13 +62,21 @@ def read_overrides(xl: pd.ExcelFile) -> dict[str, dict]:
     if "microsector" not in xl.sheet_names:
         log.info("microsector sheet not found, skipping ETN overrides")
         return {}
-    if "data_msector" not in xl.sheet_names:
-        log.info("data_msector sheet not found, skipping ETN overrides")
+
+    # New layout: data_ms (shares) + data_price (prices) as separate sheets
+    # Legacy layout: data_msector (shares + prices combined)
+    has_new = "data_ms" in xl.sheet_names and "data_price" in xl.sheet_names
+    has_legacy = "data_msector" in xl.sheet_names
+    if not has_new and not has_legacy:
+        log.info("No shares/prices sheets found (need data_ms+data_price or data_msector)")
         return {}
 
     try:
         aum_daily = _read_microsector_aum(xl)
-        shares_daily, prices_daily = _read_data_msector(xl)
+        if has_new:
+            shares_daily, prices_daily = _read_shares_and_prices(xl)
+        else:
+            shares_daily, prices_daily = _read_data_msector_legacy(xl)
     except Exception as e:
         log.warning("Failed to read MicroSectors sheets: %s", e)
         return {}
@@ -83,7 +93,7 @@ def read_overrides(xl: pd.ExcelFile) -> dict[str, dict]:
                 ov["aum"] = aum_series.iloc[-1] / 1e6
                 ov.update(_monthly_aum_history(aum_series))
 
-        # Flows from data_msector shares + prices
+        # Flows from shares + prices
         if ticker in shares_daily.columns and ticker in prices_daily.columns:
             ov.update(_compute_flows(shares_daily[ticker], prices_daily[ticker]))
 
@@ -162,15 +172,68 @@ def _read_microsector_aum(xl: pd.ExcelFile) -> pd.DataFrame:
     return data
 
 
-def _read_data_msector(xl: pd.ExcelFile) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Read data_msector into separate shares and prices DataFrames.
+def _read_shares_and_prices(xl: pd.ExcelFile) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Read data_ms (shares) and data_price (prices) as separate sheets.
 
-    Only includes the 21 reliable tickers (those with BBG IDs in row 1).
+    data_ms layout:
+      Row 0: product names
+      Row 1: BBG IDs (NaN = unreliable ticker)
+      Row 2: latest values
+      Row 3: short tickers
+      Row 4+: Date | shares per ticker
+
+    data_price layout:
+      Row 0: Dates | BBG tickers ("NRGU US Equity", ...)
+      Row 1+: date | price values
     """
+    # --- Shares from data_ms ---
+    raw_s = xl.parse("data_ms", header=None)
+    shares_map = {}
+    for i in range(1, raw_s.shape[1]):
+        bbg = raw_s.iloc[1, i]
+        short = raw_s.iloc[3, i]
+        if pd.notna(bbg) and pd.notna(short) and str(short).strip() in _RELIABLE_TICKERS:
+            shares_map[i] = str(short).strip()
+
+    shares_cols = [0] + list(shares_map.keys())
+    shares = raw_s.iloc[4:, shares_cols].copy()
+    shares.columns = ["Date"] + [shares_map[i] for i in shares_map]
+    shares["Date"] = pd.to_datetime(shares["Date"], errors="coerce")
+    shares = shares.dropna(subset=["Date"])
+    shares = shares.set_index("Date").sort_index()
+    for col in shares.columns:
+        shares[col] = pd.to_numeric(shares[col], errors="coerce")
+
+    # --- Prices from data_price ---
+    raw_p = xl.parse("data_price", header=None)
+    # Row 0 = header: "Dates" + BBG tickers like "NRGU US Equity"
+    prices_map = {}
+    for i in range(1, raw_p.shape[1]):
+        hdr = raw_p.iloc[0, i]
+        if pd.notna(hdr) and "Equity" in str(hdr):
+            short = str(hdr).split()[0].strip()
+            if short in _RELIABLE_TICKERS:
+                prices_map[i] = short
+
+    prices_cols = [0] + list(prices_map.keys())
+    prices = raw_p.iloc[1:, prices_cols].copy()
+    prices.columns = ["Date"] + [prices_map[i] for i in prices_map]
+    prices["Date"] = pd.to_datetime(prices["Date"], errors="coerce")
+    prices = prices.dropna(subset=["Date"])
+    prices = prices.set_index("Date").sort_index()
+    for col in prices.columns:
+        prices[col] = pd.to_numeric(prices[col], errors="coerce")
+
+    log.info("data_ms: shares %d dates x %d tickers, data_price: %d dates x %d tickers",
+             len(shares), len(shares.columns), len(prices), len(prices.columns))
+    return shares, prices
+
+
+def _read_data_msector_legacy(xl: pd.ExcelFile) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Legacy: read combined data_msector sheet (shares cols 0-32, prices cols 34+)."""
     raw = xl.parse("data_msector", header=None)
 
     # --- Shares section (cols 0-32) ---
-    # Row 1 = BBG IDs (NaN for unreliable), Row 3 = short tickers
     shares_map = {}
     for i in range(1, min(33, raw.shape[1])):
         bbg = raw.iloc[1, i]
@@ -188,7 +251,6 @@ def _read_data_msector(xl: pd.ExcelFile) -> tuple[pd.DataFrame, pd.DataFrame]:
         shares[col] = pd.to_numeric(shares[col], errors="coerce")
 
     # --- Prices section (cols 34+) ---
-    # Col 34 = date, cols 35+ = prices with BBG IDs in row 1
     prices_map = {}
     for i in range(35, min(56, raw.shape[1])):
         bbg = raw.iloc[1, i]
