@@ -630,6 +630,7 @@ class Holding(Base):
     voting_sole: Mapped[int | None] = mapped_column(Integer)
     voting_shared: Mapped[int | None] = mapped_column(Integer)
     voting_none: Mapped[int | None] = mapped_column(Integer)
+    is_tracked: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
 
     institution: Mapped[Institution] = relationship(back_populates="holdings")
@@ -639,6 +640,8 @@ class Holding(Base):
         Index("idx_holdings_cusip", "cusip"),
         Index("idx_holdings_report_date", "report_date"),
         Index("idx_holdings_date_cusip", "report_date", "cusip"),
+        Index("idx_holdings_tracked", "is_tracked"),
+        Index("idx_holdings_tracked_date", "is_tracked", "report_date"),
     )
 
 

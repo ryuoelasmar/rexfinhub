@@ -209,7 +209,7 @@ def _safe_int(val):
 
 
 def _build_holding(
-    row, accession_map: dict, cik_to_inst_id: dict,
+    row, accession_map: dict, cik_to_inst_id: dict, cusip_set: set | None = None,
 ) -> Holding | None:
     """Convert a single INFOTABLE row to a Holding, or None if unmappable."""
     acc = str(row.get("ACCESSION_NUMBER", "")).strip()
@@ -250,6 +250,7 @@ def _build_holding(
         voting_sole=_safe_int(row.get("VOTING_AUTH_SOLE")),
         voting_shared=_safe_int(row.get("VOTING_AUTH_SHARED")),
         voting_none=_safe_int(row.get("VOTING_AUTH_NONE")),
+        is_tracked=bool(cusip_set and cusip and cusip in cusip_set),
     )
 
 
@@ -445,7 +446,7 @@ def ingest_13f_dataset(
 
         batch: list[Holding] = []
         for idx, row in info_df.iterrows():
-            holding = _build_holding(row, accession_map, cik_to_inst_id)
+            holding = _build_holding(row, accession_map, cik_to_inst_id, cusip_set)
             if holding is None:
                 continue
 
@@ -1023,7 +1024,7 @@ def ingest_13f_local(tsv_dir: str) -> dict:
                     stats["holdings_skipped"] += 1
                     continue
 
-                holding = _build_holding(row, accession_map, cik_to_inst_id)
+                holding = _build_holding(row, accession_map, cik_to_inst_id, cusip_set)
                 if holding is None:
                     continue
 
@@ -1216,6 +1217,129 @@ def data_health_report():
 
     finally:
         db.close()
+
+
+# ---------------------------------------------------------------------------
+# 8. backfill_is_tracked
+# ---------------------------------------------------------------------------
+def backfill_is_tracked() -> int:
+    """Tag existing holdings where CUSIP matches cusip_mappings.
+
+    Adds the is_tracked column via ALTER TABLE if it doesn't exist yet,
+    then sets is_tracked=1 for all holdings with a matching CUSIP.
+
+    Returns:
+        Count of holdings tagged as tracked.
+    """
+    from sqlalchemy import text, inspect as sa_inspect
+
+    db = SessionLocal()
+    try:
+        # Add column if missing (SQLite migration)
+        inspector = sa_inspect(db.bind)
+        columns = [c["name"] for c in inspector.get_columns("holdings")]
+        if "is_tracked" not in columns:
+            db.execute(text("ALTER TABLE holdings ADD COLUMN is_tracked BOOLEAN DEFAULT 0"))
+            db.commit()
+            log.info("Added is_tracked column to holdings")
+
+        # Reset all to 0, then tag matches
+        db.execute(text("UPDATE holdings SET is_tracked = 0"))
+        result = db.execute(text(
+            "UPDATE holdings SET is_tracked = 1 "
+            "WHERE cusip IN (SELECT cusip FROM cusip_mappings)"
+        ))
+        db.commit()
+
+        tagged = db.execute(
+            select(func.count(Holding.id)).where(Holding.is_tracked == True)
+        ).scalar()
+
+        # Also create indexes if missing
+        for idx_sql in [
+            "CREATE INDEX IF NOT EXISTS idx_holdings_tracked ON holdings (is_tracked)",
+            "CREATE INDEX IF NOT EXISTS idx_holdings_tracked_date ON holdings (is_tracked, report_date)",
+        ]:
+            db.execute(text(idx_sql))
+        db.commit()
+
+        log.info("Tagged %d holdings as tracked", tagged)
+        return tagged
+    finally:
+        db.close()
+
+
+# ---------------------------------------------------------------------------
+# 9. export_tracked_db  (lean DB for Render deployment)
+# ---------------------------------------------------------------------------
+def export_tracked_db(output_path: str) -> dict:
+    """Export a lean copy of the DB containing only tracked holdings.
+
+    Creates a new SQLite database at output_path with:
+    - Only holdings where is_tracked=1
+    - Only institutions that have at least one tracked holding
+    - All cusip_mappings
+    - Full schema preserved
+
+    Returns:
+        Stats dict with row counts and file size.
+    """
+    import shutil
+    import sqlite3
+    from webapp.database import DB_PATH
+
+    src_db = str(DB_PATH)
+    dst_db = output_path
+
+    log.info("Exporting tracked DB: %s -> %s", src_db, dst_db)
+
+    # Copy full DB first, then delete untracked data
+    shutil.copy2(src_db, dst_db)
+
+    conn = sqlite3.connect(dst_db)
+    try:
+        cur = conn.cursor()
+
+        # Count before
+        before_holdings = cur.execute("SELECT COUNT(*) FROM holdings").fetchone()[0]
+        before_inst = cur.execute("SELECT COUNT(*) FROM institutions").fetchone()[0]
+
+        # Delete untracked holdings
+        cur.execute("DELETE FROM holdings WHERE is_tracked = 0 OR is_tracked IS NULL")
+
+        # Delete institutions with no remaining holdings
+        cur.execute(
+            "DELETE FROM institutions WHERE id NOT IN "
+            "(SELECT DISTINCT institution_id FROM holdings)"
+        )
+
+        conn.commit()
+
+        # Count after
+        after_holdings = cur.execute("SELECT COUNT(*) FROM holdings").fetchone()[0]
+        after_inst = cur.execute("SELECT COUNT(*) FROM institutions").fetchone()[0]
+
+        # VACUUM to reclaim space
+        cur.execute("VACUUM")
+        conn.commit()
+
+        file_size = Path(dst_db).stat().st_size
+
+        stats = {
+            "before_holdings": before_holdings,
+            "after_holdings": after_holdings,
+            "before_institutions": before_inst,
+            "after_institutions": after_inst,
+            "file_size_mb": round(file_size / 1e6, 1),
+        }
+        log.info(
+            "Export complete: %d->%d holdings, %d->%d institutions, %.1f MB",
+            before_holdings, after_holdings, before_inst, after_inst,
+            stats["file_size_mb"],
+        )
+        return stats
+    finally:
+        conn.close()
 
 
 # ---------------------------------------------------------------------------

@@ -63,7 +63,7 @@ def _pct_change(current: float, prior: float) -> float | None:
 
 
 def _get_latest_report_date(db: Session, cusip: str | None = None, institution_id: int | None = None) -> date | None:
-    q = select(func.max(Holding.report_date))
+    q = select(func.max(Holding.report_date)).where(Holding.is_tracked == True)
     if cusip:
         q = q.where(Holding.cusip == cusip)
     if institution_id:
@@ -72,7 +72,7 @@ def _get_latest_report_date(db: Session, cusip: str | None = None, institution_i
 
 
 def _get_prior_report_date(db: Session, before: date, cusip: str | None = None, institution_id: int | None = None) -> date | None:
-    q = select(func.max(Holding.report_date)).where(Holding.report_date < before)
+    q = select(func.max(Holding.report_date)).where(Holding.report_date < before, Holding.is_tracked == True)
     if cusip:
         q = q.where(Holding.cusip == cusip)
     if institution_id:
@@ -136,6 +136,7 @@ def _build_position_changes(db: Session, institution_id: int, latest: date, prio
         select(Holding).where(
             Holding.institution_id == institution_id,
             Holding.report_date == latest,
+            Holding.is_tracked == True,
         )
     ).scalars().all()
     current_map = {h.cusip: h for h in current_holdings if h.cusip}
@@ -146,6 +147,7 @@ def _build_position_changes(db: Session, institution_id: int, latest: date, prio
             select(Holding).where(
                 Holding.institution_id == institution_id,
                 Holding.report_date == prior,
+                Holding.is_tracked == True,
             )
         ).scalars().all()
         prior_map = {h.cusip: h for h in prior_holdings if h.cusip}
@@ -213,14 +215,16 @@ def holdings_list(
     db: Session = Depends(get_db),
 ):
     """List institutions with their holdings summary."""
-    # Scope to latest quarter so we don't double-count across quarters
-    global_latest = db.execute(select(func.max(Holding.report_date))).scalar()
+    # Scope to latest quarter + tracked holdings only
+    global_latest = db.execute(
+        select(func.max(Holding.report_date)).where(Holding.is_tracked == True)
+    ).scalar()
 
     holdings_base = select(
         Holding.institution_id,
         func.count(distinct(Holding.cusip)).label("holding_count"),
         func.sum(Holding.value_usd).label("total_value"),
-    )
+    ).where(Holding.is_tracked == True)
     if global_latest:
         holdings_base = holdings_base.where(Holding.report_date == global_latest)
     holdings_sq = holdings_base.group_by(Holding.institution_id).subquery()
@@ -260,13 +264,15 @@ def holdings_list(
         select(func.count(Institution.id))
     ).scalar() or 0
 
-    latest_report_date = db.execute(select(func.max(Holding.report_date))).scalar()
+    latest_report_date = db.execute(
+        select(func.max(Holding.report_date)).where(Holding.is_tracked == True)
+    ).scalar()
 
     total_holdings_value = 0
     if latest_report_date:
         total_holdings_value = db.execute(
             select(func.sum(Holding.value_usd))
-            .where(Holding.report_date == latest_report_date)
+            .where(Holding.report_date == latest_report_date, Holding.is_tracked == True)
         ).scalar() or 0
 
     matched_cusips = db.execute(
@@ -400,7 +406,7 @@ def crossover_view(
 
                         if comp_cusip_list:
                             latest_date = db.execute(
-                                select(func.max(Holding.report_date))
+                                select(func.max(Holding.report_date)).where(Holding.is_tracked == True)
                             ).scalar()
 
                             if latest_date:
@@ -415,6 +421,7 @@ def crossover_view(
                                     .join(Institution, Institution.id == Holding.institution_id)
                                     .where(Holding.cusip.in_(comp_cusip_list))
                                     .where(Holding.report_date == latest_date)
+                                    .where(Holding.is_tracked == True)
                                     .group_by(Holding.institution_id, Institution.name, Institution.cik)
                                 ).all()
 
@@ -424,6 +431,7 @@ def crossover_view(
                                         select(Holding.institution_id)
                                         .where(Holding.cusip.in_(rex_cusip_list))
                                         .where(Holding.report_date == latest_date)
+                                        .where(Holding.is_tracked == True)
                                     ).scalars().all())
 
                                 comp_holder_ids = {h.institution_id for h in comp_holders}
@@ -507,7 +515,7 @@ def holdings_fund_page(
             func.sum(Holding.value_usd).label("total_value"),
             func.count(distinct(Holding.institution_id)).label("holder_count"),
         )
-        .where(Holding.cusip == cusip)
+        .where(Holding.cusip == cusip, Holding.is_tracked == True)
         .group_by(Holding.report_date)
         .order_by(Holding.report_date)
     ).all()
@@ -566,7 +574,7 @@ def institution_history_page(
             func.sum(Holding.value_usd).label("total_value"),
             func.count(distinct(Holding.cusip)).label("position_count"),
         )
-        .where(Holding.institution_id == institution.id)
+        .where(Holding.institution_id == institution.id, Holding.is_tracked == True)
         .group_by(Holding.report_date)
         .order_by(Holding.report_date)
     ).all()
@@ -623,12 +631,12 @@ def institution_detail(
 
     latest_date = db.execute(
         select(func.max(Holding.report_date))
-        .where(Holding.institution_id == institution.id)
+        .where(Holding.institution_id == institution.id, Holding.is_tracked == True)
     ).scalar()
 
     holdings_query = (
         select(Holding)
-        .where(Holding.institution_id == institution.id)
+        .where(Holding.institution_id == institution.id, Holding.is_tracked == True)
     )
     if latest_date:
         holdings_query = holdings_query.where(Holding.report_date == latest_date)
@@ -806,6 +814,7 @@ def api_institution_changes(
         select(Holding).where(
             Holding.institution_id == institution.id,
             Holding.report_date == report_date,
+            Holding.is_tracked == True,
         )
     ).scalars().all()
     current_map = {h.cusip: h for h in current if h.cusip}
@@ -816,6 +825,7 @@ def api_institution_changes(
             select(Holding).where(
                 Holding.institution_id == institution.id,
                 Holding.report_date == prior_date,
+                Holding.is_tracked == True,
             )
         ).scalars().all()
         prior_map = {h.cusip: h for h in prior_list if h.cusip}
@@ -895,7 +905,7 @@ def api_institution_trend(
             func.sum(Holding.value_usd).label("total_value"),
             func.count(distinct(Holding.cusip)).label("position_count"),
         )
-        .where(Holding.institution_id == institution.id)
+        .where(Holding.institution_id == institution.id, Holding.is_tracked == True)
         .group_by(Holding.report_date)
         .order_by(Holding.report_date)
     ).all()
@@ -929,7 +939,9 @@ def api_search_funds(
     if not mappings:
         return {"results": []}
 
-    latest_global = db.execute(select(func.max(Holding.report_date))).scalar()
+    latest_global = db.execute(
+        select(func.max(Holding.report_date)).where(Holding.is_tracked == True)
+    ).scalar()
 
     results = []
     for m in mappings:
@@ -944,6 +956,7 @@ def api_search_funds(
                 )
                 .where(Holding.cusip == m.cusip)
                 .where(Holding.report_date == latest_global)
+                .where(Holding.is_tracked == True)
             ).one_or_none()
 
         results.append({
@@ -1018,14 +1031,16 @@ def api_export_institution_holdings(
         return JSONResponse({"error": "Institution not found"}, status_code=404)
 
     latest_date = db.execute(
-        select(func.max(Holding.report_date)).where(Holding.institution_id == institution.id)
+        select(func.max(Holding.report_date))
+        .where(Holding.institution_id == institution.id, Holding.is_tracked == True)
     ).scalar()
     if not latest_date:
         return JSONResponse({"error": "No holdings data"}, status_code=404)
 
     holdings = db.execute(
         select(Holding)
-        .where(Holding.institution_id == institution.id, Holding.report_date == latest_date)
+        .where(Holding.institution_id == institution.id, Holding.report_date == latest_date,
+               Holding.is_tracked == True)
         .order_by(desc(Holding.value_usd))
     ).scalars().all()
 
@@ -1071,17 +1086,19 @@ def api_home_kpis(db: Session = Depends(get_db)):
         select(func.count(Filing.id)).where(Filing.filing_date == date.today())
     ).scalar() or 0
 
-    latest_q = db.execute(select(func.max(Holding.report_date))).scalar()
+    latest_q = db.execute(
+        select(func.max(Holding.report_date)).where(Holding.is_tracked == True)
+    ).scalar()
     institutions_count = 0
     total_13f_value = 0
     if latest_q:
         institutions_count = db.execute(
             select(func.count(distinct(Holding.institution_id)))
-            .where(Holding.report_date == latest_q)
+            .where(Holding.report_date == latest_q, Holding.is_tracked == True)
         ).scalar() or 0
         total_13f_value = db.execute(
             select(func.sum(Holding.value_usd))
-            .where(Holding.report_date == latest_q)
+            .where(Holding.report_date == latest_q, Holding.is_tracked == True)
         ).scalar() or 0
 
     pipeline_last_run = None

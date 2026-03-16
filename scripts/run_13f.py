@@ -54,6 +54,8 @@ def main():
         get_latest_available_quarter,
         enrich_cusip_mappings_from_holdings,
         data_health_report,
+        backfill_is_tracked,
+        export_tracked_db,
     )
 
     init_db()
@@ -128,9 +130,21 @@ def main():
     elif mode == "health":
         data_health_report()
 
+    elif mode == "backfill":
+        n = backfill_is_tracked()
+        print(f"Tagged {n:,} holdings as tracked")
+
+    elif mode == "deploy-db":
+        output = sys.argv[2] if len(sys.argv) > 2 else "data/etp_tracker_deploy.db"
+        stats = export_tracked_db(output)
+        print(f"Holdings: {stats['before_holdings']:,} -> {stats['after_holdings']:,}")
+        print(f"Institutions: {stats['before_institutions']:,} -> {stats['after_institutions']:,}")
+        print(f"File size: {stats['file_size_mb']} MB")
+        print(f"Output: {output}")
+
     else:
         print(f"Unknown mode: {mode}")
-        print("Valid modes: seed, bulk, incremental, auto, local, health")
+        print("Valid modes: seed, bulk, incremental, auto, local, health, backfill, deploy-db")
         sys.exit(1)
 
     elapsed = time.time() - start
