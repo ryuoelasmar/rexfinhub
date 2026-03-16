@@ -41,11 +41,37 @@ log = logging.getLogger(__name__)
 # Constants
 # ---------------------------------------------------------------------------
 BATCH_SIZE = 1000
-SEC_BULK_URL = "https://www.sec.gov/files/structureddata/data/form-13f-data-sets/13f{quarter}.zip"
+SEC_BULK_BASE = "https://www.sec.gov/files/structureddata/data/form-13f-data-sets"
 SEC_EFTS_URL = (
     "https://efts.sec.gov/LATEST/search-index"
     "?q=%2213F-HR%22&dateRange=custom&startdt={start}&enddt={end}&forms=13F-HR"
 )
+
+
+def _build_bulk_urls(quarter: str) -> list[str]:
+    """Build possible SEC bulk download URLs for a quarter.
+
+    SEC changed from '13f2025q4.zip' naming to date-range naming
+    like '01oct2025-31dec2025_form13f.zip' around late 2025.
+    Returns both formats to try (new first, then old).
+    """
+    urls = []
+    try:
+        year = int(quarter[:4])
+        q = int(quarter[-1])
+        month_ranges = {
+            1: ("01jan", "31mar"),
+            2: ("01apr", "30jun"),
+            3: ("01jul", "30sep"),
+            4: ("01oct", "31dec"),
+        }
+        start_str, end_str = month_ranges[q]
+        urls.append(f"{SEC_BULK_BASE}/{start_str}{year}-{end_str}{year}_form13f.zip")
+    except (ValueError, KeyError):
+        pass
+    # Old format as fallback
+    urls.append(f"{SEC_BULK_BASE}/13f{quarter}.zip")
+    return urls
 
 
 # ---------------------------------------------------------------------------
@@ -320,14 +346,21 @@ def ingest_13f_dataset(
     if zip_file.exists():
         log.info("Using cached ZIP: %s", zip_file)
     else:
-        url = SEC_BULK_URL.format(quarter=quarter)
-        log.info("Downloading %s ...", url)
-        try:
-            resp = _fetch(url, user_agent, timeout=120)
-            zip_file.write_bytes(resp.content)
-            log.info("Downloaded %s (%.1f MB)", zip_file.name, len(resp.content) / 1e6)
-        except requests.HTTPError as exc:
-            msg = f"Failed to download {url}: {exc}"
+        urls = _build_bulk_urls(quarter)
+        downloaded = False
+        for url in urls:
+            log.info("Trying %s ...", url)
+            try:
+                resp = _fetch(url, user_agent, timeout=120)
+                zip_file.write_bytes(resp.content)
+                log.info("Downloaded %s (%.1f MB)", zip_file.name, len(resp.content) / 1e6)
+                downloaded = True
+                break
+            except requests.HTTPError as exc:
+                log.info("  Not found: %s", exc)
+                continue
+        if not downloaded:
+            msg = f"Failed to download 13F dataset for {quarter} from any URL"
             log.error(msg)
             stats["errors"].append(msg)
             return stats
@@ -795,13 +828,14 @@ def get_latest_available_quarter() -> str | None:
     # Check current and previous 4 quarters
     for _ in range(5):
         label = f"{year}q{quarter}"
-        url = SEC_BULK_URL.format(quarter=label)
-        try:
-            resp = requests.head(url, headers={"User-Agent": "REX-ETP-FilingTracker/2.0"}, timeout=10)
-            if resp.status_code == 200:
-                return label
-        except Exception:
-            pass
+        urls = _build_bulk_urls(label)
+        for url in urls:
+            try:
+                resp = requests.head(url, headers={"User-Agent": "REX-ETP-FilingTracker/2.0"}, timeout=10)
+                if resp.status_code == 200:
+                    return label
+            except Exception:
+                pass
 
         quarter -= 1
         if quarter < 1:
