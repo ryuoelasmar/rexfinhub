@@ -206,9 +206,11 @@ async def upload_db(
     Accepts raw or gzipped (.gz) SQLite DB files.
     Streams to disk in 64KB chunks to stay under Render's 512MB RAM.
     Gzipped uploads decompress in streaming chunks (never buffers full file).
+    After replacement, re-initializes DB and re-warms caches so the app
+    continues serving without a redeploy.
     """
     import gzip as _gzip
-    from webapp.database import DB_PATH, engine
+    from webapp.database import DB_PATH, engine, init_db
 
     is_gzipped = (file.filename or "").endswith(".gz") or file.content_type == "application/gzip"
     tmp_path = str(DB_PATH) + ".uploading"
@@ -227,12 +229,13 @@ async def upload_db(
                         break
                     f.write(chunk)
                     total_in += len(chunk)
-            # Step 2: Dispose engine and remove old DB to free ~455MB
+            # Step 2: Dispose engine and remove old DB + stale WAL/SHM files
             engine.dispose()
-            try:
-                os.unlink(str(DB_PATH))
-            except OSError:
-                pass
+            for suffix in ("", "-wal", "-shm"):
+                try:
+                    os.unlink(str(DB_PATH) + suffix)
+                except OSError:
+                    pass
             # Step 3: Decompress gz -> new DB (63MB gz + 455MB out = 518MB peak)
             with _gzip.open(gz_tmp, "rb") as gz_in:
                 with open(tmp_path, "wb") as f_out:
@@ -255,11 +258,25 @@ async def upload_db(
                     f.write(chunk)
                     total_out += len(chunk)
             total_in = total_out
-            # Dispose existing connections so the file isn't locked
+            # Dispose existing connections and clean up stale WAL/SHM files
             engine.dispose()
+            for suffix in ("-wal", "-shm"):
+                try:
+                    os.unlink(str(DB_PATH) + suffix)
+                except OSError:
+                    pass
 
         # Move new DB into place
         shutil.move(tmp_path, str(DB_PATH))
+
+        # Re-initialize: migrate schema + re-warm caches
+        init_db()
+        try:
+            from webapp.main import _prewarm_caches
+            _prewarm_caches()
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning("Cache re-warm after DB upload failed (non-fatal): %s", e)
 
         in_mb = total_in / 1_000_000
         out_mb = total_out / 1_000_000
