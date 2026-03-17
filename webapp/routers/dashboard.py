@@ -13,6 +13,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from webapp.dependencies import get_db
+from webapp.models import Filing
 from webapp.fund_filters import MUTUAL_FUND_EXCLUSIONS
 from webapp.models import Trust, FundStatus, Filing, FundExtraction
 
@@ -327,3 +328,74 @@ def dashboard(
         "status_labels": _STATUS_LABELS,
         "new_filings_7d": new_filings_7d,
     })
+
+
+@router.get("/api/v1/home-kpis")
+def api_home_kpis(db: Session = Depends(get_db)):
+    """Aggregate KPIs for the home page. Lives here (not holdings.py) so it
+    works on Render even without ENABLE_13F."""
+    import logging
+    log = logging.getLogger(__name__)
+
+    rex_aum = None
+    rex_aum_change_pct = None
+    weekly_flows = None
+    try:
+        from webapp.services.market_data import get_rex_summary
+        summary = get_rex_summary(db, fund_structure="ETF")
+        if summary:
+            kpis = summary.get("kpis", {})
+            rex_aum = kpis.get("total_aum_fmt", "--")
+            rex_aum_change_pct = kpis.get("aum_mom_pct", 0)
+            weekly_flows = kpis.get("flow_1w_fmt", "--")
+    except Exception:
+        log.debug("Market data unavailable for home KPIs")
+
+    todays_filings = 0
+    try:
+        todays_filings = db.execute(
+            select(func.count(Filing.id)).where(Filing.filing_date == date.today())
+        ).scalar() or 0
+    except Exception:
+        pass
+
+    institutions_count = 0
+    total_13f_value = 0
+    try:
+        from webapp.models import Holding
+        from sqlalchemy import distinct
+        latest_q = db.execute(
+            select(func.max(Holding.report_date)).where(Holding.is_tracked == True)
+        ).scalar()
+        if latest_q:
+            institutions_count = db.execute(
+                select(func.count(distinct(Holding.institution_id)))
+                .where(Holding.report_date == latest_q, Holding.is_tracked == True)
+            ).scalar() or 0
+            total_13f_value = db.execute(
+                select(func.sum(Holding.value_usd))
+                .where(Holding.report_date == latest_q, Holding.is_tracked == True)
+            ).scalar() or 0
+    except Exception:
+        pass
+
+    pipeline_last_run = None
+    try:
+        import json
+        from pathlib import Path
+        summary_path = Path("outputs/_run_summary.json")
+        if summary_path.exists():
+            data = json.loads(summary_path.read_text(encoding="utf-8"))
+            pipeline_last_run = data.get("finished_at") or data.get("started_at")
+    except Exception:
+        pass
+
+    return {
+        "rex_aum": rex_aum,
+        "rex_aum_change_pct": rex_aum_change_pct,
+        "weekly_flows": weekly_flows,
+        "todays_filings": todays_filings,
+        "institutions_count": institutions_count,
+        "total_13f_value": round(total_13f_value, 0) if total_13f_value else 0,
+        "pipeline_last_run": pipeline_last_run,
+    }
