@@ -27,7 +27,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy import func, select, desc, distinct
 from sqlalchemy.orm import Session
 
-from webapp.dependencies import get_db
+from webapp.dependencies import get_holdings_db
 from webapp.models import Institution, Holding, CusipMapping, FundStatus, Filing, Trust
 
 log = logging.getLogger(__name__)
@@ -212,7 +212,7 @@ def holdings_list(
     page: int = Query(default=1, ge=1),
     per_page: int = Query(default=50, ge=10, le=200),
     sort: str = "aum",
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_holdings_db),
 ):
     """List institutions with their holdings summary."""
     # Scope to latest quarter + tracked holdings only
@@ -302,7 +302,7 @@ def holdings_list(
 def crossover_view(
     request: Request,
     rex_ticker: str = Query(default=""),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_holdings_db),
 ):
     """Institutional crossover analysis: find prospects holding competitors but not REX."""
     rex_products = []
@@ -477,7 +477,7 @@ def crossover_view(
 def holdings_fund_page(
     ticker: str,
     request: Request,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_holdings_db),
 ):
     """Fund-level institutional holdings page."""
     ticker = ticker.upper()
@@ -520,7 +520,7 @@ def holdings_fund_page(
         .order_by(Holding.report_date)
     ).all()
 
-    # Look up fund series_id for back-link
+    # Look up fund series_id for back-link (FundStatus accessed via ATTACH)
     fund_series_id = None
     fund_record = db.execute(
         select(FundStatus).where(func.upper(FundStatus.ticker) == ticker)
@@ -556,7 +556,7 @@ def holdings_fund_page(
 def institution_history_page(
     cik: str,
     request: Request,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_holdings_db),
 ):
     """Institution history page with QoQ position changes."""
     institution = db.execute(
@@ -619,7 +619,7 @@ def institution_history_page(
 def institution_detail(
     cik: str,
     request: Request,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_holdings_db),
 ):
     """Institution detail page with all holdings."""
     institution = db.execute(
@@ -653,7 +653,7 @@ def institution_detail(
             ).scalars().all()
             cusip_map = {m.cusip: m for m in mappings}
 
-    # Pre-fetch REX trust IDs for highlighting
+    # Pre-fetch REX trust IDs for highlighting (Trust accessed via ATTACH)
     trust_ids = {m.trust_id for m in cusip_map.values() if m.trust_id}
     rex_trust_ids: set[int] = set()
     if trust_ids:
@@ -703,7 +703,7 @@ def institution_detail(
 @router.get("/api/v1/holdings/by-fund")
 def api_holdings_by_fund(
     ticker: str = Query(..., min_length=1),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_holdings_db),
 ):
     """Get institutional holders for a specific fund ticker."""
     ticker = ticker.upper()
@@ -787,7 +787,7 @@ def api_holdings_by_fund(
 def api_institution_changes(
     cik: str,
     quarter: str = Query(default=""),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_holdings_db),
 ):
     """Get position changes for an institution between quarters."""
     institution = db.execute(
@@ -890,7 +890,7 @@ def api_institution_changes(
 @router.get("/api/v1/holdings/{cik}/trend")
 def api_institution_trend(
     cik: str,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_holdings_db),
 ):
     """Get quarterly trend for an institution."""
     institution = db.execute(
@@ -927,7 +927,7 @@ def api_institution_trend(
 @router.get("/api/v1/holdings/search-funds")
 def api_search_funds(
     q: str = Query(..., min_length=1),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_holdings_db),
 ):
     """Search CusipMappings and return holder stats."""
     mappings = db.execute(
@@ -974,7 +974,7 @@ def api_search_funds(
 @router.get("/api/v1/holdings/fund/{ticker}/export")
 def api_export_fund_holders(
     ticker: str,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_holdings_db),
 ):
     """Export fund holders as CSV."""
     import io
@@ -1018,7 +1018,7 @@ def api_export_fund_holders(
 @router.get("/api/v1/holdings/{cik}/export")
 def api_export_institution_holdings(
     cik: str,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_holdings_db),
 ):
     """Export institution holdings as CSV."""
     import io
@@ -1066,7 +1066,7 @@ def api_export_institution_holdings(
 
 
 @router.get("/api/v1/home-kpis")
-def api_home_kpis(db: Session = Depends(get_db)):
+def api_home_kpis(db: Session = Depends(get_holdings_db)):
     """Aggregate KPIs for the home page."""
     rex_aum = None
     rex_aum_change_pct = None
@@ -1082,24 +1082,31 @@ def api_home_kpis(db: Session = Depends(get_db)):
     except Exception:
         log.debug("Market data unavailable for home KPIs")
 
-    todays_filings = db.execute(
-        select(func.count(Filing.id)).where(Filing.filing_date == date.today())
-    ).scalar() or 0
+    todays_filings = 0
+    try:
+        todays_filings = db.execute(
+            select(func.count(Filing.id)).where(Filing.filing_date == date.today())
+        ).scalar() or 0
+    except Exception:
+        pass
 
-    latest_q = db.execute(
-        select(func.max(Holding.report_date)).where(Holding.is_tracked == True)
-    ).scalar()
     institutions_count = 0
     total_13f_value = 0
-    if latest_q:
-        institutions_count = db.execute(
-            select(func.count(distinct(Holding.institution_id)))
-            .where(Holding.report_date == latest_q, Holding.is_tracked == True)
-        ).scalar() or 0
-        total_13f_value = db.execute(
-            select(func.sum(Holding.value_usd))
-            .where(Holding.report_date == latest_q, Holding.is_tracked == True)
-        ).scalar() or 0
+    try:
+        latest_q = db.execute(
+            select(func.max(Holding.report_date)).where(Holding.is_tracked == True)
+        ).scalar()
+        if latest_q:
+            institutions_count = db.execute(
+                select(func.count(distinct(Holding.institution_id)))
+                .where(Holding.report_date == latest_q, Holding.is_tracked == True)
+            ).scalar() or 0
+            total_13f_value = db.execute(
+                select(func.sum(Holding.value_usd))
+                .where(Holding.report_date == latest_q, Holding.is_tracked == True)
+            ).scalar() or 0
+    except Exception:
+        log.debug("13F holdings data unavailable for home KPIs")
 
     pipeline_last_run = None
     try:
