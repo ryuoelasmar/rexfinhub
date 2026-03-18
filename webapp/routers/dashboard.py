@@ -403,28 +403,44 @@ def api_home_kpis(db: Session = Depends(get_db)):
 
 @router.get("/api/v1/ticker-strip")
 def api_ticker_strip(db: Session = Depends(get_db)):
-    """Ticker strip data for scrolling bar — top REX products with AUM."""
+    """Ticker strip data — top REX products with AUM and weekly return."""
+    from webapp.models import MktMasterData
     products = []
     try:
-        from webapp.services.market_data import get_rex_summary
-        summary = get_rex_summary(db, fund_structure="ETF")
-        if summary and "suites" in summary:
-            for suite in summary["suites"][:12]:
-                products.append({
-                    "ticker": suite.get("ticker", ""),
-                    "value": suite.get("aum_fmt", "--"),
-                    "change_pct": suite.get("flow_1w_pct", 0),
-                })
+        rows = db.execute(
+            select(
+                MktMasterData.ticker,
+                MktMasterData.aum,
+                MktMasterData.total_return_1week,
+                MktMasterData.rex_suite,
+            )
+            .where(MktMasterData.is_rex == True)
+            .order_by(MktMasterData.aum.desc())
+            .limit(12)
+        ).all()
+        for ticker, aum, ret_1w, suite in rows:
+            tk = (ticker or "").replace(" US", "")
+            aum_val = float(str(aum).replace(",", "").replace("$", "")) if aum else 0
+            ret = float(ret_1w) if ret_1w else 0
+            if aum_val >= 100:
+                aum_str = f"${aum_val/1000:.1f}B" if aum_val >= 1000 else f"${aum_val:.0f}M"
+            else:
+                aum_str = f"${aum_val:.0f}M"
+            products.append({
+                "ticker": tk,
+                "value": aum_str,
+                "change_pct": round(ret, 2),
+                "suite": suite or "",
+            })
     except Exception:
         pass
 
     if not products:
-        # Fallback with static data
         products = [
-            {"ticker": "REX", "value": "$3.8B AUM", "change_pct": 6.4},
-            {"ticker": "FEPI", "value": "Income ETF", "change_pct": 12.5},
-            {"ticker": "FNGS", "value": "FANG+ ETN", "change_pct": 3.1},
-            {"ticker": "SOXL", "value": "Semi 3X", "change_pct": -2.1},
+            {"ticker": "GDXU", "value": "$2.1B", "change_pct": -23.8, "suite": "MicroSectors"},
+            {"ticker": "BULZ", "value": "$1.8B", "change_pct": -5.3, "suite": "MicroSectors"},
+            {"ticker": "FEPI", "value": "$598M", "change_pct": 0.1, "suite": "Income"},
+            {"ticker": "NVDX", "value": "$516M", "change_pct": 0.2, "suite": "T-REX"},
         ]
 
     return {"products": products}

@@ -1543,3 +1543,35 @@ body, .sticky-nav, table, th, td, .kpi, .trust-card, .trust-block,
   .search-palette { margin: 0 12px; }
   .search-palette-overlay { padding-top: 10vh; }
 }
+
+/* ===== TICKER BAR ===== */
+.ticker-strip {
+  background: var(--navy-light);
+  height: 30px;
+  overflow: hidden;
+  position: relative;
+}
+.ticker-track {
+  display: flex;
+  align-items: center;
+  height: 100%;
+  white-space: nowrap;
+}
+@keyframes tickerScroll {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+.ticker-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 24px;
+  font-size: 12px;
+  color: rgba(255,255,255,0.6);
+  border-right: 1px solid rgba(255,255,255,0.06);
+  height: 30px;
+}
+.ticker-sym { font-weight: 700; color: white; font-family: var(--font-mono); font-size: 12px; }
+.ticker-val { color: rgba(255,255,255,0.4); font-size: 11px; }
+.ticker-track:hover { animation-play-state: paused; }
+[data-theme="dark"] .ticker-strip { background: #080c10; }
