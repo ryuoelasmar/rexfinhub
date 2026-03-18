@@ -37,6 +37,7 @@ AVXX US,Equity,Single Stock,Long,2.0,AVAV US
 AXUP US,Equity,Single Stock,Long,2.0,AXON US
 BABX US,Equity,Single Stock,Long,2.0,BABA US
 BAIG US,Equity,Single Stock,Long,2.0,BBAI US
+BBUP US,Equity,Single Stock,Long,2.0,BBAI US
 BDDXF US,Commodity,Index/Basket/ETF Based,Long,2.0,
 BEG US,Equity,Single Stock,Long,2.0,BE US
 BEGS US,Stacked Returns,Miscellaneous,Long,,Basket
@@ -165,6 +166,7 @@ FAS US,Equity,Index/Basket/ETF Based,Long,3.0,
 FAZ US,Equity,Index/Basket/ETF Based,Short,3.0,
 FBL US,Equity,Single Stock,Long,2.0,META US
 FDRX US,Equity,Index/Basket/ETF Based,Long,2.0,FDRTR Index
+FIGO US,Equity,Single Stock,Long,2.0,FIG US
 FIGG US,Equity,Single Stock,Long,2.0,FIG US
 FLYT US,Equity,Single Stock,Long,2.0,FLY US
 FNGG US,Equity,Index/Basket/ETF Based,Long,2.0,
@@ -309,6 +311,7 @@ ORLG US,Equity,Single Stock,Long,2.0,ORLY US
 ORR US,Equity,Index/Basket/ETF Based,Short,,
 OSCG US,Equity,Single Stock,Long,2.0,OSCR US
 OSCX US,Equity,Single Stock,Long,2.0,OSCR
+PAAU US,Equity,Single Stock,Long,2.0,PAAS US
 PALD US,Equity,Single Stock,Short,1.0,PANW US
 PALU US,Equity,Single Stock,Long,2.0,PANW US
 PANG US,Equity,Single Stock,Long,2.0,PANW US
@@ -410,6 +413,7 @@ SMST US,Equity,Single Stock,Short,1.5,MSTR US
 SMU US,Equity,Single Stock,Long,2.0,SMR US
 SMUP US,Equity,Single Stock,Long,2.0,SMR US
 SNAG US,Equity,Single Stock,Long,2.0,SNAP US
+SNDU US,Equity,Single Stock,Long,2.0,SNDK US
 SNOU US,Equity,Single Stock,Long,2.0,SNOW US
 SNPX US,Equity,Single Stock,Long,2.0,SNPS US
 SOFX US,Equity,Single Stock,Long,2.0,SOFI US
@@ -420,6 +424,7 @@ SOXL US,Equity,Index/Basket/ETF Based,Long,3.0,
 SOXS US,Equity,Index/Basket/ETF Based,Short,3.0,
 SPDN US,Equity,Index/Basket/ETF Based,Short,1.0,
 SPOG US,Equity,Single Stock,Long,2.0,SPOT US
+SPOU US,Equity,Single Stock,Long,2.0,SPOT US
 SPUU US,Equity,Index/Basket/ETF Based,Long,2.0,
 SPXL US,Equity,Index/Basket/ETF Based,Long,3.0,
 SPXS US,Equity,Index/Basket/ETF Based,Short,3.0,
