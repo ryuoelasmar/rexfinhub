@@ -2,9 +2,9 @@
 {% block title %}REX Financial Intelligence Hub{% endblock %}
 {% block content %}
 <div class="home-hero">
-  <h1 class="home-title">REX Financial Intelligence Hub</h1>
+  <h1 class="home-title" style="font-size: 3rem; font-weight: 800;">REX Financial Intelligence Hub</h1>
   <p class="home-tagline">
-    REX's central intelligence platform — market positioning, SEC filing activity, and product analytics across the full ETP universe.
+    Market positioning, SEC filing intelligence, institutional ownership, and structured product analytics — one platform, updated daily.
   </p>
   <div class="hero-kpi-strip">
     <div class="hero-kpi-box" id="kpi-aum">
@@ -28,8 +28,13 @@
 </div>
 
 <div class="home-section">
-  <div class="home-section-title">Market Intelligence</div>
+  <div class="home-section-title">Market</div>
   <div class="home-grid">
+    <a href="/market/monitor" class="home-card home-card--market">
+      <div class="home-card-tag">Live</div>
+      <div class="home-card-title">Market Monitor</div>
+      <div class="home-card-desc">Live prices for S&P 500, Nasdaq, Gold, Bitcoin, NVIDIA, Tesla. Auto-refreshes every 60s.</div>
+    </a>
     <a href="/market/rex" class="home-card home-card--market">
       <div class="home-card-tag">Market</div>
       <div class="home-card-title">REX View</div>
@@ -64,39 +69,49 @@
 </div>
 
 <div class="home-section">
-  <div class="home-section-title">SEC Filings</div>
+  <div class="home-section-title">Filings</div>
   <div class="home-grid">
     <a href="/dashboard" class="home-card home-card--filing">
       <div class="home-card-tag">Filings</div>
       <div class="home-card-title">Trust Dashboard</div>
-      <div class="home-card-desc">Monitor SEC filings across 194 trusts. Track 485BPOS, 485BXT, and 497 forms.</div>
-    </a>
-    <a href="/funds/" class="home-card home-card--filing">
-      <div class="home-card-tag">Filings</div>
-      <div class="home-card-title">Fund Lookup</div>
-      <div class="home-card-desc">Search 7,000+ ETF funds by ticker, name, or trust. Filter by status.</div>
+      <div class="home-card-desc">Monitor SEC filings across 2,475 trusts. Track 485BPOS, 485BXT, and 497 forms.</div>
     </a>
     <a href="/filings/" class="home-card home-card--filing">
       <div class="home-card-tag">Filings</div>
       <div class="home-card-title">Filing Explorer</div>
       <div class="home-card-desc">Search and browse all SEC filings with date, form type, and text filters.</div>
     </a>
-    <a href="/holdings/" class="home-card home-card--filing">
-      <div class="home-card-tag">13F</div>
-      <div class="home-card-title">Institutional Holdings</div>
-      <div class="home-card-desc">Track institutional ownership via 13F-HR filings. Search by institution or fund ticker.</div>
+    <a href="/screener/" class="home-card home-card--filing">
+      <div class="home-card-tag">Filings</div>
+      <div class="home-card-title">Filing Landscape</div>
+      <div class="home-card-desc">3x/4x/5x filing matrix across all issuers. REX exclusives, gaps, and scorecard.</div>
     </a>
+    <a href="/funds/" class="home-card home-card--filing">
+      <div class="home-card-tag">Filings</div>
+      <div class="home-card-title">Fund Lookup</div>
+      <div class="home-card-desc">Search 72,000+ funds by ticker, name, or trust. Filter by status.</div>
+    </a>
+    <a href="/screener/3x-analysis" class="home-card home-card--filing">
+      <div class="home-card-tag">Analysis</div>
+      <div class="home-card-title">3x / 4x Analysis</div>
+      <div class="home-card-desc">Bloomberg-powered filing recommendations for leveraged product launches.</div>
+    </a>
+    <a href="/screener/evaluate" class="home-card home-card--filing">
+      <div class="home-card-tag">Tool</div>
+      <div class="home-card-title">Candidate Evaluator</div>
+      <div class="home-card-desc">Score specific tickers for product launch viability.</div>
+    </a>
+    <div class="home-card home-card--filing" style="opacity: 0.5; pointer-events: none; border-top-color: var(--red);">
+      <div class="home-card-tag" style="color: var(--red);">Coming Soon</div>
+      <div class="home-card-title">Fund Withdrawals</div>
+      <div class="home-card-desc">Track SEC fund withdrawal filings and deregistration activity.</div>
+    </div>
   </div>
 </div>
 
-<div class="home-section">
-  <div class="home-section-title">Product Development</div>
+<div class="home-section" style="display:none;">
+  <div class="home-section-title">Screener &amp; Analysis</div>
   <div class="home-grid">
-    <a href="/screener/" class="home-card home-card--product">
-      <div class="home-card-tag">Product</div>
-      <div class="home-card-title">Competitive Landscape</div>
-      <div class="home-card-desc">3x/4x/5x filing matrix across all issuers. REX exclusives, gaps, and scorecard.</div>
-    </a>
     <a href="/screener/3x-analysis" class="home-card home-card--product">
       <div class="home-card-tag">Product</div>
       <div class="home-card-title">3x/4x Analysis</div>
@@ -111,19 +126,65 @@
 </div>
 
 <div class="home-section">
-  <div class="home-section-title">Admin &amp; Data</div>
+  <div class="home-section-title">Ownership</div>
   <div class="home-grid">
-    <a href="/downloads/" class="home-card home-card--ops">
-      <div class="home-card-tag">Ops</div>
-      <div class="home-card-title">Data Downloads</div>
-      <div class="home-card-desc">Export fund status, filing history, and pipeline CSVs for any trust.</div>
+    <a href="/holdings/" class="home-card home-card--filing">
+      <div class="home-card-tag">Dashboard</div>
+      <div class="home-card-title">Institutional Holdings</div>
+      <div class="home-card-desc">10,535 institutions, $8T in holdings. Search and sort by AUM, positions, filing date.</div>
     </a>
-    <a href="/digest/subscribe" class="home-card home-card--ops">
-      <div class="home-card-tag">Ops</div>
-      <div class="home-card-title">Email Digest</div>
-      <div class="home-card-desc">Subscribe to daily filing digest emails for the REX team.</div>
+    <a href="/intel/" class="home-card home-card--filing">
+      <div class="home-card-tag">Dashboard</div>
+      <div class="home-card-title">Ownership Hub</div>
+      <div class="home-card-desc">$289B market AUM. AUM by vertical, top issuers, product breakdown. Q4 2025 data.</div>
     </a>
+    <a href="/intel/rex" class="home-card home-card--filing">
+      <div class="home-card-tag">Analysis</div>
+      <div class="home-card-title">REX Quarter Report</div>
+      <div class="home-card-desc">$452M REX AUM held by 120 institutions. Who's buying, who's new this quarter.</div>
+    </a>
+    <a href="/intel/rex/sales" class="home-card home-card--filing">
+      <div class="home-card-tag">Tool</div>
+      <div class="home-card-title">Sales Intelligence</div>
+      <div class="home-card-desc">Product momentum, top gainers/decliners, concentration risk by state.</div>
+    </a>
+    <div class="home-card home-card--filing" style="opacity: 0.5; pointer-events: none; border-top-color: var(--red);">
+      <div class="home-card-tag" style="color: var(--red);">Coming Soon</div>
+      <div class="home-card-title">Competitor Analysis</div>
+      <div class="home-card-desc">Institutions holding Direxion/ProShares but not REX — prospect pipeline.</div>
+    </div>
   </div>
+</div>
+
+<div class="home-section">
+  <div class="home-section-title">Structured Notes</div>
+  <div class="home-grid">
+    <a href="/notes/" class="home-card home-card--product">
+      <div class="home-card-tag">Dashboard</div>
+      <div class="home-card-title">Market Overview</div>
+      <div class="home-card-desc">594,171 products from 19 issuers. Issuance volume, market share, product types since 1994.</div>
+    </a>
+    <a href="/notes/issuers" class="home-card home-card--product">
+      <div class="home-card-tag">Dashboard</div>
+      <div class="home-card-title">Issuer Dashboard</div>
+      <div class="home-card-desc">JPMorgan 107K, UBS 98K, Goldman 60K — product counts and market share.</div>
+    </a>
+    <a href="/notes/search" class="home-card home-card--product">
+      <div class="home-card-tag">Tool</div>
+      <div class="home-card-title">Product Search</div>
+      <div class="home-card-desc">Filter by issuer, type, underlier. View coupon, barrier, maturity, CUSIP, SEC filing link.</div>
+    </a>
+    <div class="home-card home-card--product" style="opacity: 0.5; pointer-events: none; border-top-color: var(--red);">
+      <div class="home-card-tag" style="color: var(--red);">Coming Soon</div>
+      <div class="home-card-title">Underlier Trends</div>
+      <div class="home-card-desc">Trending underliers, popular structures, and pricing pattern analysis.</div>
+    </div>
+  </div>
+</div>
+
+<div style="text-align: center; margin: 2rem 0 0; font-size: 0.8125rem; color: var(--text-muted);">
+  <a href="/downloads/" style="color: var(--text-muted); text-decoration: none; margin: 0 1rem;">Data Downloads</a>
+  <a href="/digest/subscribe" style="color: var(--text-muted); text-decoration: none; margin: 0 1rem;">Email Digest</a>
 </div>
 
 <div class="home-contact">

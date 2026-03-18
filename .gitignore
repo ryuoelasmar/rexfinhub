@@ -74,3 +74,4 @@ dmypy.json
 
 # Orchestrator worktrees
 .worktrees/
+.claude/worktrees/

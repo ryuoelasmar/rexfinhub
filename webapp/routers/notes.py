@@ -77,9 +77,10 @@ def _load_stats() -> dict:
         rows = db.execute("""
             SELECT p.product_name, p.parent_issuer, p.product_type,
                    p.underlier_tickers, p.coupon_rate, p.barrier_level,
-                   f.filing_date
+                   f.filing_date, f.accession_number, i.cik
             FROM products p
             JOIN filings f ON p.filing_id = f.id
+            JOIN issuers i ON f.issuer_id = i.id
             ORDER BY f.filing_date DESC
             LIMIT 15
         """).fetchall()
@@ -91,6 +92,7 @@ def _load_stats() -> dict:
             "coupon": f"{r[4]*100:.1f}%" if r[4] else "--",
             "barrier": f"{r[5]*100:.0f}%" if r[5] else "--",
             "date": r[6],
+            "filing_url": f"https://www.sec.gov/Archives/edgar/data/{r[8]}/{r[7].replace('-', '')}" if r[7] and r[8] else None,
         } for r in rows]
 
         stats["available"] = True
@@ -135,9 +137,11 @@ def notes_search(request: Request, issuer: str = "", type: str = "", underlier: 
             query = """
                 SELECT p.product_name, p.parent_issuer, p.product_type,
                        p.underlier_tickers, p.coupon_rate, p.barrier_level,
-                       p.maturity_date, f.filing_date, p.cusip
+                       p.maturity_date, f.filing_date, p.cusip,
+                       f.accession_number, i.cik
                 FROM products p
                 JOIN filings f ON p.filing_id = f.id
+                JOIN issuers i ON f.issuer_id = i.id
                 WHERE 1=1
             """
             params = []
@@ -163,6 +167,8 @@ def notes_search(request: Request, issuer: str = "", type: str = "", underlier: 
                 "maturity": r[6] or "--",
                 "filed": r[7],
                 "cusip": r[8] or "--",
+                "sec_url": f"https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK={r[10]}&type=424B2&dateb=&owner=include&count=10&search_text=&action=getcompany" if r[10] else None,
+                "filing_url": f"https://www.sec.gov/Archives/edgar/data/{r[10]}/{r[9].replace('-', '')}" if r[9] and r[10] else None,
             } for r in rows]
             db.close()
         except Exception as e:

@@ -42,11 +42,13 @@
     <div class="nav-dropdown">
       <a href="/market/rex" class="nav-dropdown-trigger {% if '/market' in request.url.path %}active{% endif %}">Market <span class="nav-caret">&#9662;</span></a>
       <div class="nav-dropdown-menu">
+        <div style="padding: 4px 16px 2px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: rgba(255,255,255,0.35); pointer-events: none;">Dashboards</div>
         <a href="/market/monitor">Monitor</a>
         <a href="/market/rex">REX View</a>
         <a href="/market/category">Category</a>
         <a href="/market/issuer">Issuer Analysis</a>
         <a href="/market/underlier">Underlier</a>
+        <div style="padding: 4px 16px 2px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: rgba(255,255,255,0.35); pointer-events: none;">Tools</div>
         <a href="/market/compare">Compare</a>
         <a href="/market/calendar">Calendar</a>
       </div>
@@ -55,42 +57,51 @@
     <div class="nav-dropdown">
       <a href="/dashboard" class="nav-dropdown-trigger {% if '/dashboard' in request.url.path or '/funds' in request.url.path or '/filings' in request.url.path or '/universe' in request.url.path or '/screener' in request.url.path or '/analytics' in request.url.path %}active{% endif %}">Filings <span class="nav-caret">&#9662;</span></a>
       <div class="nav-dropdown-menu">
+        <div style="padding: 4px 16px 2px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: rgba(255,255,255,0.35); pointer-events: none;">Dashboards</div>
         <a href="/dashboard">Trust Dashboard</a>
         <a href="/universe/">Trust Universe</a>
+        <div style="padding: 4px 16px 2px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: rgba(255,255,255,0.35); pointer-events: none;">Search</div>
         <a href="/funds/">Fund Lookup</a>
         <a href="/filings/">Filing Explorer</a>
+        <div style="padding: 4px 16px 2px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: rgba(255,255,255,0.35); pointer-events: none;">Analysis</div>
         <a href="/screener/">Filing Landscape</a>
         <a href="/screener/3x-analysis">3x / 4x Analysis</a>
         <a href="/screener/evaluate">Candidate Evaluator</a>
         <a href="/analytics">Analytics</a>
+        <div style="border-top: 1px solid rgba(255,255,255,0.1); margin: 4px 12px;"></div>
+        <a href="#" style="color: var(--red); opacity: 0.7; pointer-events: none;">** Fund Withdrawals</a>
       </div>
     </div>
     <!-- PILLAR 3: Ownership Intelligence -->
     <div class="nav-dropdown">
       <a href="/holdings/" class="nav-dropdown-trigger {% if '/holdings' in request.url.path or '/intel' in request.url.path %}active{% endif %}">Ownership <span class="nav-caret">&#9662;</span></a>
       <div class="nav-dropdown-menu">
+        <div style="padding: 4px 16px 2px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: rgba(255,255,255,0.35); pointer-events: none;">Dashboards</div>
         <a href="/holdings/">Institutional Holdings</a>
-        <a href="/holdings/crossover">Competitor Crossover</a>
         <a href="/intel/">Ownership Hub</a>
+        <div style="padding: 4px 16px 2px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: rgba(255,255,255,0.35); pointer-events: none;">Analysis</div>
         <a href="/intel/rex">REX Quarter Report</a>
-        <a href="/intel/rex/filers">REX Filers</a>
         <a href="/intel/rex/sales">Sales Intelligence</a>
-        <a href="/intel/competitors">Competitors</a>
-        <a href="/intel/competitors/new-filers">New Filers</a>
-        <a href="/intel/products">Products</a>
-        <a href="/intel/country">Country Intel</a>
-        <a href="/intel/trends">Trends</a>
+        <div style="border-top: 1px solid rgba(255,255,255,0.1); margin: 4px 12px;"></div>
+        <a href="#" style="color: var(--red); opacity: 0.7; pointer-events: none;">** Competitor Analysis</a>
+        <a href="#" style="color: var(--red); opacity: 0.7; pointer-events: none;">** REX Filers</a>
+        <a href="#" style="color: var(--red); opacity: 0.7; pointer-events: none;">** New Filers</a>
+        <a href="#" style="color: var(--red); opacity: 0.7; pointer-events: none;">** Country Intel</a>
+        <a href="#" style="color: var(--red); opacity: 0.7; pointer-events: none;">** Trends</a>
       </div>
     </div>
     <!-- PILLAR 4: Structured Notes -->
     <div class="nav-dropdown">
       <a href="/notes/" class="nav-dropdown-trigger {% if '/notes' in request.url.path %}active{% endif %}">Structured Notes <span class="nav-caret">&#9662;</span></a>
       <div class="nav-dropdown-menu">
+        <div style="padding: 4px 16px 2px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: rgba(255,255,255,0.35); pointer-events: none;">Dashboards</div>
         <a href="/notes/">Market Overview</a>
         <a href="/notes/issuers">Issuer Dashboard</a>
+        <div style="padding: 4px 16px 2px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: rgba(255,255,255,0.35); pointer-events: none;">Search</div>
         <a href="/notes/search">Product Search</a>
-        <a href="#" style="color: var(--gray-400); pointer-events: none;">Underlier Trends</a>
-        <a href="#" style="color: var(--gray-400); pointer-events: none;">Pricing Analysis</a>
+        <div style="border-top: 1px solid rgba(255,255,255,0.1); margin: 4px 12px;"></div>
+        <a href="#" style="color: var(--red); opacity: 0.7; pointer-events: none;">** Underlier Trends</a>
+        <a href="#" style="color: var(--red); opacity: 0.7; pointer-events: none;">** Pricing Analysis</a>
       </div>
     </div>
     <a href="/downloads/" {% if '/downloads' in request.url.path %}class="active"{% endif %}>Exports</a>
@@ -152,12 +163,12 @@
     <div>
       <div class="footer-heading">Navigation</div>
       <ul class="footer-links">
-        <li><a href="/market/rex">Market Intelligence</a></li>
-        <li><a href="/dashboard">Trust Dashboard</a></li>
-        <li><a href="/funds/">Fund Lookup</a></li>
-        <li><a href="/screener/">Filing Screener</a></li>
-        <li><a href="/holdings/">13F Holders</a></li>
-        <li><a href="/universe/">Trust Universe</a></li>
+        <li><a href="/market/monitor">Market Monitor</a></li>
+        <li><a href="/market/rex">Market — REX View</a></li>
+        <li><a href="/dashboard">Filings — Dashboard</a></li>
+        <li><a href="/screener/">Filings — Landscape</a></li>
+        <li><a href="/holdings/">Ownership — Holdings</a></li>
+        <li><a href="/notes/">Structured Notes — Overview</a></li>
         <li><a href="/downloads/">Exports</a></li>
       </ul>
     </div>
