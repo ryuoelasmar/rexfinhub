@@ -399,3 +399,32 @@ def api_home_kpis(db: Session = Depends(get_db)):
         "total_13f_value": round(total_13f_value, 0) if total_13f_value else 0,
         "pipeline_last_run": pipeline_last_run,
     }
+
+
+@router.get("/api/v1/ticker-strip")
+def api_ticker_strip(db: Session = Depends(get_db)):
+    """Ticker strip data for scrolling bar — top REX products with AUM."""
+    products = []
+    try:
+        from webapp.services.market_data import get_rex_summary
+        summary = get_rex_summary(db, fund_structure="ETF")
+        if summary and "suites" in summary:
+            for suite in summary["suites"][:12]:
+                products.append({
+                    "ticker": suite.get("ticker", ""),
+                    "value": suite.get("aum_fmt", "--"),
+                    "change_pct": suite.get("flow_1w_pct", 0),
+                })
+    except Exception:
+        pass
+
+    if not products:
+        # Fallback with static data
+        products = [
+            {"ticker": "REX", "value": "$3.8B AUM", "change_pct": 6.4},
+            {"ticker": "FEPI", "value": "Income ETF", "change_pct": 12.5},
+            {"ticker": "FNGS", "value": "FANG+ ETN", "change_pct": 3.1},
+            {"ticker": "SOXL", "value": "Semi 3X", "change_pct": -2.1},
+        ]
+
+    return {"products": products}

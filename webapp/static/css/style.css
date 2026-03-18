@@ -1543,3 +1543,49 @@ body, .sticky-nav, table, th, td, .kpi, .trust-card, .trust-block,
   .search-palette { margin: 0 12px; }
   .search-palette-overlay { padding-top: 10vh; }
 }
+
+/* ===== TICKER BAR ===== */
+.ticker-strip {
+  background: var(--navy-light);
+  height: 32px;
+  overflow: hidden;
+  position: relative;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+.ticker-track {
+  display: flex;
+  align-items: center;
+  height: 100%;
+  white-space: nowrap;
+  gap: 0;
+}
+.ticker-track.ticker-animate {
+  animation: ticker-scroll linear infinite;
+}
+@keyframes ticker-scroll {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+.ticker-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 20px;
+  font-size: 12px;
+  color: rgba(255,255,255,0.7);
+  border-right: 1px solid rgba(255,255,255,0.08);
+}
+.ticker-symbol {
+  font-weight: 700;
+  color: white;
+  font-family: var(--font-mono);
+}
+.ticker-value {
+  color: rgba(255,255,255,0.5);
+  font-size: 11px;
+}
+.ticker-change {
+  font-weight: 600;
+  font-size: 11px;
+}
+[data-theme="dark"] .ticker-strip { background: #0a0f14; }
