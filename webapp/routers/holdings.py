@@ -481,8 +481,12 @@ def holdings_fund_page(
 ):
     """Fund-level institutional holdings page."""
     ticker = ticker.upper()
+    # Match both "SOXL" and "SOXL US" (Bloomberg format)
     mapping = db.execute(
-        select(CusipMapping).where(func.upper(CusipMapping.ticker) == ticker)
+        select(CusipMapping).where(
+            (func.upper(CusipMapping.ticker) == ticker) |
+            (func.upper(CusipMapping.ticker) == ticker + " US")
+        )
     ).scalar_one_or_none()
 
     if not mapping or not mapping.cusip:
@@ -708,7 +712,10 @@ def api_holdings_by_fund(
     """Get institutional holders for a specific fund ticker."""
     ticker = ticker.upper()
     mapping = db.execute(
-        select(CusipMapping).where(func.upper(CusipMapping.ticker) == ticker)
+        select(CusipMapping).where(
+            (func.upper(CusipMapping.ticker) == ticker) |
+            (func.upper(CusipMapping.ticker) == ticker + " US")
+        )
     ).scalar_one_or_none()
 
     if not mapping or not mapping.cusip:
@@ -982,7 +989,10 @@ def api_export_fund_holders(
 
     ticker = ticker.upper()
     mapping = db.execute(
-        select(CusipMapping).where(func.upper(CusipMapping.ticker) == ticker)
+        select(CusipMapping).where(
+            (func.upper(CusipMapping.ticker) == ticker) |
+            (func.upper(CusipMapping.ticker) == ticker + " US")
+        )
     ).scalar_one_or_none()
     if not mapping or not mapping.cusip:
         return JSONResponse({"error": f"No CUSIP mapping for {ticker}"}, status_code=404)

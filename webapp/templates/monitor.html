@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}Market Monitor — REX Financial Intelligence Hub{% endblock %}
+
+{% block content %}
+<div class="container">
+  <div class="header">
+    <div class="breadcrumb"><a href="/">Home</a> <span class="sep">/</span> <a href="/market/rex">Market</a> <span class="sep">/</span> Monitor</div>
+    <h1>Market Monitor</h1>
+    <div class="date">Live data &middot; Updated <span id="last-updated">{{ last_updated }}</span> &middot; <span style="color: var(--green); font-size: 11px;">&#9679;</span> Auto-refreshes every 60s</div>
+  </div>
+
+  <div id="monitor-content">
+  {% for category, items in categories.items() %}
+  <div class="section-header" style="margin-top: 28px;">
+    <h2>{{ category }}</h2>
+    <span class="badge">{{ items|length }}</span>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; margin-bottom: 20px;">
+    {% for item in items %}
+    <div class="kpi" style="text-align: left; padding: 14px 18px;">
+      <div style="display: flex; justify-content: space-between; align-items: baseline;">
+        <div style="font-size: 11px; font-weight: 600; color: var(--gray-500); text-transform: uppercase; letter-spacing: 0.04em;">{{ item.name }}</div>
+        <div style="font-size: 10px; color: var(--gray-400); font-family: var(--font-mono);">{{ item.ticker }}</div>
+      </div>
+      <div style="display: flex; align-items: baseline; gap: 8px; margin-top: 6px;">
+        <div style="font-size: 20px; font-weight: 700; font-family: var(--font-mono);">{{ item.price }}</div>
+      </div>
+      <div style="display: flex; gap: 8px; align-items: baseline; margin-top: 4px;">
+        <span style="font-size: 13px; font-weight: 600; {% if item.is_positive %}color: var(--green);{% elif item.is_negative %}color: var(--red);{% else %}color: var(--gray-400);{% endif %}">
+          {{ item.change_pct }}
+        </span>
+        <span style="font-size: 11px; color: var(--gray-400);">
+          {{ item.change }}
+        </span>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endfor %}
+  </div>
+</div>
+
+<script>
+// Auto-refresh every 60 seconds
+setInterval(function() {
+  fetch('/api/v1/monitor')
+    .then(r => r.json())
+    .then(data => {
+      document.getElementById('last-updated').textContent = data.last_updated;
+      // Rebuild cards
+      let html = '';
+      for (const [category, items] of Object.entries(data.categories)) {
+        html += `<div class="section-header" style="margin-top: 28px;">
+          <h2>${category}</h2>
+          <span class="badge">${items.length}</span>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; margin-bottom: 20px;">`;
+        for (const item of items) {
+          const color = item.is_positive ? 'var(--green)' : item.is_negative ? 'var(--red)' : 'var(--gray-400)';
+          html += `<div class="kpi" style="text-align: left; padding: 14px 18px;">
+            <div style="display: flex; justify-content: space-between; align-items: baseline;">
+              <div style="font-size: 11px; font-weight: 600; color: var(--gray-500); text-transform: uppercase; letter-spacing: 0.04em;">${item.name}</div>
+              <div style="font-size: 10px; color: var(--gray-400); font-family: var(--font-mono);">${item.ticker}</div>
+            </div>
+            <div style="display: flex; align-items: baseline; gap: 8px; margin-top: 6px;">
+              <div style="font-size: 20px; font-weight: 700; font-family: var(--font-mono);">${item.price}</div>
+            </div>
+            <div style="display: flex; gap: 8px; align-items: baseline; margin-top: 4px;">
+              <span style="font-size: 13px; font-weight: 600; color: ${color};">${item.change_pct}</span>
+              <span style="font-size: 11px; color: var(--gray-400);">${item.change}</span>
+            </div>
+          </div>`;
+        }
+        html += '</div>';
+      }
+      document.getElementById('monitor-content').innerHTML = html;
+    })
+    .catch(e => console.log('Refresh failed:', e));
+}, 60000);
+</script>
+{% endblock %}

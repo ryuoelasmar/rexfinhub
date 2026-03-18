@@ -234,6 +234,8 @@ def create_app() -> FastAPI:
     app.include_router(screener.router)
     app.include_router(market.router)
     app.include_router(market_advanced_router)
+    from webapp.routers import monitor
+    app.include_router(monitor.router)
     app.include_router(filings.router, prefix="/filings")
     app.include_router(universe.router)
 
