@@ -36,6 +36,8 @@ _LIGHT = "#f8f9fa"
 _BORDER = "#dee2e6"
 _WHITE = "#ffffff"
 _TEAL = "#00897B"
+_REX_ROW_BG = "#e8f5e9"
+_HIGHLIGHT_BG = "#f4f5f6"
 
 
 def _fmt_aum(val: float) -> str:
@@ -216,7 +218,7 @@ def _dual_kpi_box(market_row: list, rex_row: list | None = None) -> str:
         rows += (
             f'<tr><td colspan="{len(market_row)}" style="padding:0;">'
             f'<div style="border-top:1px solid {_BORDER};"></div></td></tr>'
-            f'<tr style="background:#e8f5e9;">{rex}</tr>'
+            f'<tr style="background:{_REX_ROW_BG};">{rex}</tr>'
         )
     return (
         f'<tr><td style="padding:10px 30px 5px;">'
@@ -753,7 +755,7 @@ def _daily_highlights_box(bullets: list[str]) -> str:
     """Render a key highlights callout box for the daily report."""
     if not bullets:
         return ""
-    bg = "#f4f5f6"
+    bg = _HIGHLIGHT_BG
     items = ""
     for b in bullets:
         items += (
@@ -863,7 +865,7 @@ def _render_daily_html(data: dict, dashboard_url: str = "", custom_message: str 
     if custom_message:
         msg_html = (
             f'<tr><td style="padding:12px 30px 0;">'
-            f'<div style="padding:10px 14px;background:#eef3f8;border-left:3px solid {_accent};'
+            f'<div style="padding:10px 14px;background:#eef3f8;border-left:3px solid {_BLUE};'
             f'border-radius:4px;font-size:13px;color:{_NAVY};">'
             f'{_esc(custom_message)}</div>'
             f'</td></tr>'
@@ -959,7 +961,7 @@ def _render_daily_html(data: dict, dashboard_url: str = "", custom_message: str 
         _row_rex = (
             f"padding:8px 10px;border-bottom:1px solid {_BORDER};"
             f"font-size:12px;color:{_NAVY};"
-            f"background:#eef3f8;"
+            f"background:{_REX_ROW_BG};"
         )
         filing_items = []
         for fg in filing_groups[:8]:
@@ -1012,7 +1014,7 @@ def _render_daily_html(data: dict, dashboard_url: str = "", custom_message: str 
                     f'<div style="font-weight:600;margin-bottom:2px;">'
                     f'{trust_label} <span style="font-weight:400;color:{_GRAY};font-size:10px;">{form}</span>'
                     f'{cat_tags}</div>'
-                    f'<div style="font-size:11px;color:#555;">{summary}</div>'
+                    f'<div style="font-size:11px;color:{_GRAY};">{summary}</div>'
                     f'</td></tr>'
                 )
             else:
@@ -1217,7 +1219,7 @@ def _render_daily_html(data: dict, dashboard_url: str = "", custom_message: str 
 <tr><td align="center" style="padding:20px 10px;">
 <table width="640" cellpadding="0" cellspacing="0" border="0"
        style="background:{_WHITE};border-radius:8px;overflow:hidden;
-              box-shadow:0 2px 12px rgba(0,0,0,0.08);">
+              box-shadow:0 2px 12px rgba(0,0,0,0.08);max-width:640px;table-layout:fixed;">
 {body}
 </table>
 </td></tr></table>
@@ -1676,7 +1678,7 @@ def _render_morning_brief_html(data: dict, dashboard_url: str = "") -> str:
                 f"font-size:12px;color:{_NAVY};"
             )
             if is_rex:
-                _row_style += "background:#eef3f8;"
+                _row_style += f"background:{_REX_ROW_BG};"
 
             filing_items.append(
                 f'<tr><td style="{_row_style}">'
@@ -1848,7 +1850,7 @@ def _render_morning_brief_html(data: dict, dashboard_url: str = "") -> str:
 <tr><td align="center" style="padding:20px 10px;">
 <table width="640" cellpadding="0" cellspacing="0" border="0"
        style="background:{_WHITE};border-radius:8px;overflow:hidden;
-              box-shadow:0 2px 12px rgba(0,0,0,0.08);">
+              box-shadow:0 2px 12px rgba(0,0,0,0.08);max-width:640px;table-layout:fixed;">
 {body}
 </table>
 </td></tr></table>

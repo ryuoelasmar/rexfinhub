@@ -30,6 +30,7 @@ import pandas as pd
 
 from etp_tracker.email_alerts import (
     _NAVY, _GREEN, _ORANGE, _RED, _BLUE, _GRAY, _LIGHT, _BORDER, _WHITE,
+    _REX_ROW_BG, _HIGHLIGHT_BG,
     _esc, _load_recipients, _load_private_recipients, _get_smtp_config,
 )
 
@@ -675,7 +676,7 @@ def _render_landscape_header() -> str:
     return f"""
 <tr><td style="padding:20px 30px 5px;">
   <div style="font-size:18px;font-weight:700;color:{_NAVY};margin:0;
-    padding-bottom:8px;border-bottom:3px solid {_NAVY};">
+    padding-bottom:8px;border-bottom:2px solid {_NAVY};">
     Market Landscape
   </div>
   <div style="font-size:12px;color:{_GRAY};margin-top:6px;">
@@ -866,7 +867,7 @@ def _render_category_card(
     return f"""
 <tr><td style="padding:12px 30px 5px;">
   <div style="font-size:15px;font-weight:700;color:{_NAVY};margin:0 0 8px 0;
-    padding-bottom:6px;border-bottom:3px solid {border_color};">
+    padding-bottom:6px;border-bottom:2px solid {border_color};">
     {_esc(display_name)}
   </div>
   {kpi_html}
@@ -969,7 +970,7 @@ def _dual_kpi_box(market_row: list, rex_row: list | None = None) -> str:
         rows += (
             f'<tr><td colspan="{len(market_row)}" style="padding:0;">'
             f'<div style="border-top:1px solid {_BORDER};"></div></td></tr>'
-            f'<tr style="background:#e8f5e9;">{rex}</tr>'
+            f'<tr style="background:{_REX_ROW_BG};">{rex}</tr>'
         )
     return (
         f'<tr><td style="padding:10px 30px 5px;">'
@@ -1118,7 +1119,7 @@ def _render_etf_universe(master: pd.DataFrame) -> str:
     return f"""
 <tr><td style="padding:20px 30px 5px;">
   <div style="font-size:18px;font-weight:700;color:{_NAVY};margin:0;
-    padding-bottom:8px;border-bottom:3px solid {_NAVY};">
+    padding-bottom:8px;border-bottom:2px solid {_NAVY};">
     ETP Universe
   </div>
   <div style="font-size:12px;color:{_GRAY};margin-top:6px;margin-bottom:10px;">
@@ -1179,7 +1180,7 @@ def _weekly_highlights_box(bullets: list[str]) -> str:
     """Render a key highlights callout box for the weekly report."""
     if not bullets:
         return ""
-    bg = "#f4f5f6"
+    bg = _HIGHLIGHT_BG
     items = ""
     for b in bullets:
         items += (
@@ -1283,7 +1284,7 @@ def build_weekly_digest_html(
     if custom_message:
         sections.append(
             f'<tr><td style="padding:12px 30px 0;">'
-            f'<div style="padding:10px 14px;background:#eef3f8;border-left:3px solid {_BLUE};'
+            f'<div style="padding:10px 14px;background:#eef3f8;border-left:4px solid {_BLUE};'
             f'border-radius:4px;font-size:13px;color:{_NAVY};">'
             f'{_esc(custom_message)}</div>'
             f'</td></tr>'
@@ -1357,7 +1358,7 @@ def build_weekly_digest_html(
 <tr><td align="center" style="padding:20px 10px;">
 <table width="640" cellpadding="0" cellspacing="0" border="0"
        style="background:{_WHITE};border-radius:8px;overflow:hidden;
-              box-shadow:0 2px 12px rgba(0,0,0,0.08);">
+              box-shadow:0 2px 12px rgba(0,0,0,0.08);max-width:640px;table-layout:fixed;">
 {body}
 </table>
 </td></tr></table>

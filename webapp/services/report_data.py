@@ -66,11 +66,13 @@ def _get_cache(db: Session | None = None) -> dict[str, Any]:
 def _fmt_currency(val: float) -> str:
     if val is None or (isinstance(val, float) and math.isnan(val)) or val == 0:
         return "--"
-    if abs(val) >= 1_000:
-        return f"${val / 1_000:,.1f}B"
-    if abs(val) >= 1:
-        return f"${val:,.1f}M"
-    return f"${val:.2f}M"
+    sign = "-" if val < 0 else ""
+    av = abs(val)
+    if av >= 1_000:
+        return f"{sign}${av / 1_000:,.1f}B"
+    if av >= 1:
+        return f"{sign}${av:,.1f}M"
+    return f"{sign}${av:.2f}M"
 
 
 def _fmt_flow(val: float) -> str:
