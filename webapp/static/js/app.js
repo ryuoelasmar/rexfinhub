@@ -63,11 +63,22 @@
       navLinks.classList.toggle('open');
     });
 
-    // Close menu when a direct link (not mega-trigger) is clicked
-    navLinks.querySelectorAll('a:not(.mega-trigger)').forEach(function(link) {
+    // Close menu when a direct link (not dropdown trigger) is clicked
+    navLinks.querySelectorAll('a:not(.nav-dropdown-trigger)').forEach(function(link) {
       link.addEventListener('click', function() {
         hamburger.classList.remove('open');
         navLinks.classList.remove('open');
+      });
+    });
+
+    // Mobile: tap dropdown trigger to toggle submenu
+    navLinks.querySelectorAll('.nav-dropdown-trigger').forEach(function(trigger) {
+      trigger.addEventListener('click', function(e) {
+        if (window.innerWidth <= 768) {
+          e.preventDefault();
+          var dd = trigger.closest('.nav-dropdown');
+          dd.classList.toggle('nav-dd-open');
+        }
       });
     });
   });
@@ -442,44 +453,3 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   });
 })();
-
-// ---------------------------------------------------------------------------
-// Mega Menu
-// ---------------------------------------------------------------------------
-function toggleMega(trigger) {
-  var panel = trigger.nextElementSibling;
-  var backdrop = document.getElementById('megaBackdrop');
-  var isOpen = panel.classList.contains('open');
-
-  // Close all panels first
-  closeAllMega();
-
-  if (!isOpen) {
-    panel.classList.add('open');
-    trigger.classList.add('open');
-    backdrop.classList.add('open');
-  }
-}
-
-function closeAllMega() {
-  document.querySelectorAll('.mega-panel.open').forEach(function(p) { p.classList.remove('open'); });
-  document.querySelectorAll('.mega-trigger.open').forEach(function(t) { t.classList.remove('open'); });
-  var backdrop = document.getElementById('megaBackdrop');
-  if (backdrop) backdrop.classList.remove('open');
-}
-
-// Close on ESC (only if search palette is not open)
-document.addEventListener('keydown', function(e) {
-  if (e.key === 'Escape') {
-    var searchPalette = document.getElementById('searchPalette');
-    if (searchPalette && searchPalette.style.display !== 'none') return;
-    closeAllMega();
-  }
-});
-
-// Close on click outside
-document.addEventListener('click', function(e) {
-  if (!e.target.closest('.mega-dropdown') && !e.target.closest('.mega-backdrop')) {
-    closeAllMega();
-  }
-});

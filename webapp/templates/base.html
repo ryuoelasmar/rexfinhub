@@ -28,7 +28,6 @@
 </div>
 
 <nav class="sticky-nav">
-  <div class="mega-backdrop" id="megaBackdrop" onclick="closeAllMega()"></div>
   <a href="/" class="brand" style="text-decoration:none">REX Financial</a>
   <button class="nav-search-btn" id="navSearchBtn" aria-label="Search" title="Search (Ctrl+K)">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
@@ -40,215 +39,69 @@
   <div class="nav-links" id="navLinks">
     <a href="/" {% if request.url.path == '/' %}class="active"{% endif %}>Home</a>
     <!-- PILLAR 1: Market Intelligence -->
-    <div class="mega-dropdown">
-      <a class="mega-trigger {% if '/market' in request.url.path %}active{% endif %}" onclick="toggleMega(this)">
-        Market <span class="caret">&#9662;</span>
-      </a>
-      <div class="mega-panel">
-        <div>
-          <div class="mega-col-header">Overview</div>
-          <a href="/market/rex" class="mega-link {% if request.url.path == '/market/rex' %}current{% endif %}">
-            REX View
-            <span class="mega-label">Suite AUM, flows, competitive positioning</span>
-          </a>
-          <a href="/market/category" class="mega-link {% if request.url.path == '/market/category' %}current{% endif %}">
-            Category
-            <span class="mega-label">AUM across 8 ETP categories</span>
-          </a>
-          <a href="/market/issuer" class="mega-link {% if request.url.path == '/market/issuer' %}current{% endif %}">
-            Issuer Analysis
-            <span class="mega-label">Rank issuers by market share</span>
-          </a>
-          <a href="/market/underlier" class="mega-link {% if request.url.path == '/market/underlier' %}current{% endif %}">
-            Underlier
-            <span class="mega-label">ETP landscape by underlying asset</span>
-          </a>
-        </div>
-        <div>
-          <div class="mega-col-header">Tools</div>
-          <a href="/market/compare" class="mega-link {% if request.url.path == '/market/compare' %}current{% endif %}">
-            Compare
-            <span class="mega-label">Side-by-side product comparison</span>
-          </a>
-          <a href="/market/calendar" class="mega-link {% if request.url.path == '/market/calendar' %}current{% endif %}">
-            Calendar
-            <span class="mega-label">Launch dates and effective dates</span>
-          </a>
-          <a href="/market/treemap" class="mega-link {% if request.url.path == '/market/treemap' %}current{% endif %}">
-            Treemap
-            <span class="mega-label">Visual AUM breakdown</span>
-          </a>
-          <a href="/market/share" class="mega-link {% if request.url.path == '/market/share' %}current{% endif %}">
-            Share Timeline
-            <span class="mega-label">Market share over time</span>
-          </a>
-        </div>
-        <div>
-          <div class="mega-col-header">Coming Soon</div>
-          <a href="#" class="mega-link coming-soon">
-            Market Monitor
-            <span class="mega-label">Live prices, auto-refresh</span>
-          </a>
-        </div>
+    <div class="nav-dropdown">
+      <a href="/market/rex" class="nav-dropdown-trigger {% if '/market' in request.url.path %}active{% endif %}">Market <span class="nav-caret">&#9662;</span></a>
+      <div class="nav-dropdown-menu">
+        <div style="padding: 4px 16px 2px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: rgba(255,255,255,0.35); pointer-events: none;">Dashboards</div>
+        <a href="/market/rex">REX View</a>
+        <a href="/market/category">Category</a>
+        <a href="/market/issuer">Issuer Analysis</a>
+        <a href="/market/underlier">Underlier</a>
+        <div style="padding: 4px 16px 2px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: rgba(255,255,255,0.35); pointer-events: none;">Tools</div>
+        <a href="/market/compare">Compare</a>
+        <a href="/market/calendar">Calendar</a>
+        <div style="border-top: 1px solid rgba(255,255,255,0.1); margin: 4px 12px;"></div>
+        <a href="#" style="color: var(--red); opacity: 0.7; pointer-events: none;">** Market Monitor</a>
       </div>
     </div>
     <!-- PILLAR 2: Filing Intelligence -->
-    <div class="mega-dropdown">
-      <a class="mega-trigger {% if '/dashboard' in request.url.path or '/funds' in request.url.path or '/filings' in request.url.path or '/universe' in request.url.path or '/screener' in request.url.path or '/analytics' in request.url.path %}active{% endif %}" onclick="toggleMega(this)">
-        Filings <span class="caret">&#9662;</span>
-      </a>
-      <div class="mega-panel">
-        <div>
-          <div class="mega-col-header">Dashboards</div>
-          <a href="/dashboard" class="mega-link {% if request.url.path == '/dashboard' %}current{% endif %}">
-            Filing Activity
-            <span class="mega-label">Daily filings across 2,475 trusts</span>
-          </a>
-          <a href="/universe/" class="mega-link {% if '/universe' in request.url.path %}current{% endif %}">
-            Trust Universe
-            <span class="mega-label">Browse all monitored trusts</span>
-          </a>
-          <a href="/funds/" class="mega-link {% if '/funds' in request.url.path %}current{% endif %}">
-            Fund Lookup
-            <span class="mega-label">Search 72K+ funds by ticker</span>
-          </a>
-          <a href="/filings/" class="mega-link {% if '/filings' in request.url.path %}current{% endif %}">
-            Filing Explorer
-            <span class="mega-label">Search filings by date, form, trust</span>
-          </a>
-        </div>
-        <div>
-          <div class="mega-col-header">Competitive Analysis</div>
-          <a href="/screener/" class="mega-link {% if request.url.path == '/screener/' %}current{% endif %}">
-            Filing Landscape
-            <span class="mega-label">3x/4x/5x competitive matrix</span>
-          </a>
-          <a href="/screener/3x-analysis" class="mega-link {% if request.url.path == '/screener/3x-analysis' %}current{% endif %}">
-            Bloomberg Scoring
-            <span class="mega-label">Demand-tiered recommendations</span>
-          </a>
-          <a href="/screener/4x" class="mega-link {% if request.url.path == '/screener/4x' %}current{% endif %}">
-            4x Candidates
-            <span class="mega-label">4x product opportunities</span>
-          </a>
-          <a href="/screener/evaluate" class="mega-link {% if request.url.path == '/screener/evaluate' %}current{% endif %}">
-            Candidate Evaluator
-            <span class="mega-label">Score a specific ticker</span>
-          </a>
-        </div>
-        <div>
-          <div class="mega-col-header">Coming Soon</div>
-          <a href="#" class="mega-link coming-soon">
-            Fund Withdrawals
-            <span class="mega-label">Track deregistration filings</span>
-          </a>
-          <a href="#" class="mega-link coming-soon">
-            Analytics
-            <span class="mega-label">Filing trend analysis</span>
-          </a>
-        </div>
+    <div class="nav-dropdown">
+      <a href="/dashboard" class="nav-dropdown-trigger {% if '/dashboard' in request.url.path or '/funds' in request.url.path or '/filings' in request.url.path or '/universe' in request.url.path or '/screener' in request.url.path or '/analytics' in request.url.path %}active{% endif %}">Filings <span class="nav-caret">&#9662;</span></a>
+      <div class="nav-dropdown-menu">
+        <div style="padding: 4px 16px 2px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: rgba(255,255,255,0.35); pointer-events: none;">Overview</div>
+        <a href="/dashboard">Daily Activity &amp; Filings</a>
+        <div style="padding: 4px 16px 2px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: rgba(255,255,255,0.35); pointer-events: none;">Search</div>
+        <a href="/funds/">Search by Fund / Ticker</a>
+        <a href="/filings/">Search by Filing / Date</a>
+        <div style="padding: 4px 16px 2px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: rgba(255,255,255,0.35); pointer-events: none;">Competitive Analysis</div>
+        <a href="/screener/">Who Filed What (3x/4x/5x Matrix)</a>
+        <a href="/screener/3x-analysis">Bloomberg Scoring &amp; Recommendations</a>
+        <a href="/screener/evaluate">Evaluate a Specific Ticker</a>
+        <div style="border-top: 1px solid rgba(255,255,255,0.1); margin: 4px 12px;"></div>
+        <a href="#" style="color: var(--red); opacity: 0.7; pointer-events: none;">** Fund Withdrawals</a>
+        <a href="#" style="color: var(--red); opacity: 0.7; pointer-events: none;">** Analytics</a>
       </div>
     </div>
     <!-- PILLAR 3: Ownership Intelligence -->
-    <div class="mega-dropdown">
-      <a class="mega-trigger {% if '/holdings' in request.url.path or '/intel' in request.url.path %}active{% endif %}" onclick="toggleMega(this)">
-        Ownership <span class="caret">&#9662;</span>
-      </a>
-      <div class="mega-panel">
-        <div>
-          <div class="mega-col-header">Overview</div>
-          <a href="/intel/" class="mega-link {% if request.url.path == '/intel/' %}current{% endif %}">
-            Market Overview
-            <span class="mega-label">$289B ETP ownership landscape</span>
-          </a>
-          <a href="/holdings/" class="mega-link {% if request.url.path == '/holdings/' %}current{% endif %}">
-            Browse Institutions
-            <span class="mega-label">10,535 institutions by AUM</span>
-          </a>
-          <a href="/holdings/crossover" class="mega-link {% if request.url.path == '/holdings/crossover' %}current{% endif %}">
-            Competitor Crossover
-            <span class="mega-label">Who holds competitors but not REX</span>
-          </a>
-        </div>
-        <div>
-          <div class="mega-col-header">REX-Specific</div>
-          <a href="/intel/rex" class="mega-link {% if request.url.path == '/intel/rex' %}current{% endif %}">
-            REX Quarter Report
-            <span class="mega-label">$452M REX AUM, 120 institutions</span>
-          </a>
-          <a href="/intel/rex/sales" class="mega-link {% if request.url.path == '/intel/rex/sales' %}current{% endif %}">
-            Sales Intelligence
-            <span class="mega-label">Top movers, concentration, geography</span>
-          </a>
-          <a href="/intel/rex/filers" class="mega-link {% if request.url.path == '/intel/rex/filers' %}current{% endif %}">
-            REX Filers
-            <span class="mega-label">Institution-level REX holdings</span>
-          </a>
-          <a href="/intel/rex/performance" class="mega-link {% if request.url.path == '/intel/rex/performance' %}current{% endif %}">
-            REX Performance
-            <span class="mega-label">QoQ ownership trends</span>
-          </a>
-        </div>
-        <div>
-          <div class="mega-col-header">More</div>
-          <a href="#" class="mega-link coming-soon">
-            Competitors
-            <span class="mega-label">Competitor holder analysis</span>
-          </a>
-          <a href="#" class="mega-link coming-soon">
-            New Filers
-            <span class="mega-label">First-time positions this quarter</span>
-          </a>
-          <a href="#" class="mega-link coming-soon">
-            Products
-            <span class="mega-label">Product-level ownership data</span>
-          </a>
-          <a href="#" class="mega-link coming-soon">
-            Country Intel
-            <span class="mega-label">Geographic ownership breakdown</span>
-          </a>
-          <a href="#" class="mega-link coming-soon">
-            Trends
-            <span class="mega-label">Ownership trend analysis</span>
-          </a>
-        </div>
+    <div class="nav-dropdown">
+      <a href="/holdings/" class="nav-dropdown-trigger {% if '/holdings' in request.url.path or '/intel' in request.url.path %}active{% endif %}">Ownership <span class="nav-caret">&#9662;</span></a>
+      <div class="nav-dropdown-menu">
+        <div style="padding: 4px 16px 2px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: rgba(255,255,255,0.35); pointer-events: none;">Overview</div>
+        <a href="/intel/">Who Owns the ETP Market ($289B)</a>
+        <a href="/holdings/">Browse All 10,535 Institutions</a>
+        <div style="padding: 4px 16px 2px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: rgba(255,255,255,0.35); pointer-events: none;">REX-Specific</div>
+        <a href="/intel/rex">Who Holds REX Products ($452M)</a>
+        <a href="/intel/rex/sales">Top Movers &amp; Sales Targets</a>
+        <div style="border-top: 1px solid rgba(255,255,255,0.1); margin: 4px 12px;"></div>
+        <a href="#" style="color: var(--red); opacity: 0.7; pointer-events: none;">** Competitor Analysis</a>
+        <a href="#" style="color: var(--red); opacity: 0.7; pointer-events: none;">** REX Filers</a>
+        <a href="#" style="color: var(--red); opacity: 0.7; pointer-events: none;">** New Filers</a>
+        <a href="#" style="color: var(--red); opacity: 0.7; pointer-events: none;">** Country Intel</a>
+        <a href="#" style="color: var(--red); opacity: 0.7; pointer-events: none;">** Trends</a>
       </div>
     </div>
     <!-- PILLAR 4: Structured Notes -->
-    <div class="mega-dropdown">
-      <a class="mega-trigger {% if '/notes' in request.url.path %}active{% endif %}" onclick="toggleMega(this)">
-        Structured Notes <span class="caret">&#9662;</span>
-      </a>
-      <div class="mega-panel">
-        <div>
-          <div class="mega-col-header">Overview</div>
-          <a href="/notes/" class="mega-link {% if request.url.path == '/notes/' %}current{% endif %}">
-            Market Overview
-            <span class="mega-label">594K products, 19 issuers since 1994</span>
-          </a>
-          <a href="/notes/issuers" class="mega-link {% if request.url.path == '/notes/issuers' %}current{% endif %}">
-            Issuer Dashboard
-            <span class="mega-label">Market share by issuer</span>
-          </a>
-        </div>
-        <div>
-          <div class="mega-col-header">Search</div>
-          <a href="/notes/search" class="mega-link {% if request.url.path == '/notes/search' %}current{% endif %}">
-            Product Search
-            <span class="mega-label">Filter by issuer, type, underlier</span>
-          </a>
-        </div>
-        <div>
-          <div class="mega-col-header">Coming Soon</div>
-          <a href="#" class="mega-link coming-soon">
-            Underlier Trends
-            <span class="mega-label">Trending underliers and structures</span>
-          </a>
-          <a href="#" class="mega-link coming-soon">
-            Pricing Analysis
-            <span class="mega-label">Coupon, barrier, maturity analytics</span>
-          </a>
-        </div>
+    <div class="nav-dropdown">
+      <a href="/notes/" class="nav-dropdown-trigger {% if '/notes' in request.url.path %}active{% endif %}">Structured Notes <span class="nav-caret">&#9662;</span></a>
+      <div class="nav-dropdown-menu">
+        <div style="padding: 4px 16px 2px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: rgba(255,255,255,0.35); pointer-events: none;">Overview</div>
+        <a href="/notes/">594K Products — Market Overview</a>
+        <a href="/notes/issuers">19 Issuers — Market Share</a>
+        <div style="padding: 4px 16px 2px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: rgba(255,255,255,0.35); pointer-events: none;">Search</div>
+        <a href="/notes/search">Find Products by Issuer / Underlier</a>
+        <div style="border-top: 1px solid rgba(255,255,255,0.1); margin: 4px 12px;"></div>
+        <a href="#" style="color: var(--red); opacity: 0.7; pointer-events: none;">** Underlier Trends</a>
+        <a href="#" style="color: var(--red); opacity: 0.7; pointer-events: none;">** Pricing Analysis</a>
       </div>
     </div>
     <a href="/downloads/" {% if '/downloads' in request.url.path %}class="active"{% endif %}>Exports</a>
@@ -276,7 +129,6 @@
     </div>
   </div>
 </nav>
-<div class="ticker-strip"><div class="ticker-track" id="tickerTrack"></div></div>
 
 <div class="container">
   {% block content %}{% endblock %}
@@ -285,70 +137,49 @@
 <button class="back-top" id="backTop" onclick="window.scrollTo({top:0,behavior:'smooth'})">&#9650;</button>
 
 <style>
-.site-footer { background: var(--navy); color: rgba(255,255,255,0.6); padding: 2.5rem 0 1rem; margin-top: 3rem; }
-.footer-grid { max-width: 1200px; margin: 0 auto; padding: 0 1.5rem; display: grid; grid-template-columns: 2fr repeat(4, 1fr); gap: 2rem; }
-.footer-brand-title { font-size: 1rem; font-weight: 700; color: white; margin-bottom: 0.5rem; }
-.footer-brand-desc { font-size: 0.8125rem; line-height: 1.6; margin-bottom: 1rem; }
-.footer-heading { font-size: 0.6875rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: rgba(255,255,255,0.35); margin-bottom: 0.75rem; }
-.footer-links { list-style: none; padding: 0; margin: 0; }
-.footer-links li { margin-bottom: 0.375rem; }
-.footer-links a { font-size: 0.8125rem; color: rgba(255,255,255,0.6); text-decoration: none; transition: color 0.15s; }
-.footer-links a:hover { color: white; }
-.footer-source { font-size: 0.75rem; margin-bottom: 0.25rem; }
-.footer-bottom { max-width: 1200px; margin: 1.5rem auto 0; padding: 0.75rem 1.5rem 0; border-top: 1px solid rgba(255,255,255,0.1); font-size: 0.6875rem; color: rgba(255,255,255,0.3); text-align: center; }
+.site-footer { background: var(--surface-0); border-top: 1px solid var(--border); padding: 2rem 0 1.5rem; margin-top: 3rem; }
+.footer-grid { max-width: 1200px; margin: 0 auto; padding: 0 1.5rem; display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 2rem; }
+.footer-brand-title { font-size: 0.9375rem; font-weight: 600; color: var(--text-primary); margin-bottom: 0.375rem; }
+.footer-brand-desc { font-size: 0.8125rem; color: var(--text-muted); line-height: 1.5; }
+.footer-heading { font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary); margin-bottom: 0.625rem; }
+.footer-links { columns: 2; column-gap: 1rem; list-style: none; padding: 0; margin: 0; }
+.footer-links li { break-inside: avoid; margin-bottom: 0.375rem; }
+.footer-links a { font-size: 0.8125rem; color: var(--text-muted); text-decoration: none; transition: color 0.15s; }
+.footer-links a:hover { color: var(--teal); }
+.footer-source { font-size: 0.8125rem; color: var(--text-muted); margin-bottom: 0.25rem; }
+.footer-pipeline { font-size: 0.75rem; color: var(--text-muted); margin-top: 0.5rem; opacity: 0.7; }
+.footer-bottom { max-width: 1200px; margin: 1rem auto 0; padding: 0.75rem 1.5rem 0; border-top: 1px solid var(--border); font-size: 0.75rem; color: var(--text-muted); text-align: center; }
 @media (max-width: 768px) {
-  .footer-grid { grid-template-columns: 1fr 1fr; gap: 1.25rem; }
+  .footer-grid { grid-template-columns: 1fr; gap: 1.25rem; }
+  .footer-links { columns: 2; }
 }
 </style>
 <footer class="site-footer">
   <div class="footer-grid">
     <div>
       <div class="footer-brand-title">REX Financial Intelligence Hub</div>
-      <div class="footer-brand-desc">Market positioning, SEC filing intelligence, institutional ownership, and structured product analytics.</div>
-      <div class="footer-source">Data: SEC EDGAR &middot; Bloomberg Terminal</div>
-      <div class="footer-source">Contact: <a href="mailto:relasmar@rexfin.com" style="color:rgba(255,255,255,0.6)">relasmar@rexfin.com</a></div>
+      <div class="footer-brand-desc">Central intelligence platform for REX Financial.</div>
     </div>
     <div>
-      <div class="footer-heading">Market</div>
+      <div class="footer-heading">Navigation</div>
       <ul class="footer-links">
-        <li><a href="/market/rex">REX View</a></li>
-        <li><a href="/market/category">Category</a></li>
-        <li><a href="/market/issuer">Issuer Analysis</a></li>
-        <li><a href="/market/compare">Compare</a></li>
-        <li><a href="/market/calendar">Calendar</a></li>
-      </ul>
-    </div>
-    <div>
-      <div class="footer-heading">Filings</div>
-      <ul class="footer-links">
-        <li><a href="/dashboard">Filing Activity</a></li>
-        <li><a href="/funds/">Fund Lookup</a></li>
-        <li><a href="/filings/">Filing Explorer</a></li>
-        <li><a href="/screener/">Competitive Landscape</a></li>
-        <li><a href="/screener/evaluate">Evaluator</a></li>
-      </ul>
-    </div>
-    <div>
-      <div class="footer-heading">Ownership</div>
-      <ul class="footer-links">
-        <li><a href="/intel/">Market Overview</a></li>
-        <li><a href="/holdings/">Institutions</a></li>
-        <li><a href="/intel/rex">REX Report</a></li>
-        <li><a href="/intel/rex/sales">Sales Intel</a></li>
+        <li><a href="/market/monitor">Market Monitor</a></li>
+        <li><a href="/market/rex">Market — REX View</a></li>
+        <li><a href="/dashboard">Filings — Dashboard</a></li>
+        <li><a href="/screener/">Filings — Landscape</a></li>
+        <li><a href="/holdings/">Ownership — Holdings</a></li>
+        <li><a href="/notes/">Structured Notes — Overview</a></li>
         <li><a href="/downloads/">Exports</a></li>
       </ul>
     </div>
     <div>
-      <div class="footer-heading">Structured Notes</div>
-      <ul class="footer-links">
-        <li><a href="/notes/">Market Overview</a></li>
-        <li><a href="/notes/issuers">Issuer Dashboard</a></li>
-        <li><a href="/notes/search">Product Search</a></li>
-      </ul>
+      <div class="footer-heading">Data Sources</div>
+      <div class="footer-source">SEC EDGAR</div>
+      <div class="footer-source">Bloomberg Terminal</div>
     </div>
   </div>
   <div class="footer-bottom">
-    &copy; 2026 REX Financial LLC &middot; For internal use only &middot; v2.0
+    &copy; 2026 REX Financial LLC. For internal use only.
     {% block footer_extra %}{% endblock %}
   </div>
 </footer>
@@ -425,7 +256,6 @@
 <script src="/static/js/table-sort.js"></script>
 <script src="/static/js/app.js"></script>
 <script src="/static/js/loading-bar.js"></script>
-<script src="/static/js/ticker.js"></script>
 {% block scripts %}{% endblock %}
 </body>
 </html>
