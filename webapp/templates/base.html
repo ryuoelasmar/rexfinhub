@@ -285,49 +285,70 @@
 <button class="back-top" id="backTop" onclick="window.scrollTo({top:0,behavior:'smooth'})">&#9650;</button>
 
 <style>
-.site-footer { background: var(--surface-0); border-top: 1px solid var(--border); padding: 2rem 0 1.5rem; margin-top: 3rem; }
-.footer-grid { max-width: 1200px; margin: 0 auto; padding: 0 1.5rem; display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 2rem; }
-.footer-brand-title { font-size: 0.9375rem; font-weight: 600; color: var(--text-primary); margin-bottom: 0.375rem; }
-.footer-brand-desc { font-size: 0.8125rem; color: var(--text-muted); line-height: 1.5; }
-.footer-heading { font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary); margin-bottom: 0.625rem; }
-.footer-links { columns: 2; column-gap: 1rem; list-style: none; padding: 0; margin: 0; }
-.footer-links li { break-inside: avoid; margin-bottom: 0.375rem; }
-.footer-links a { font-size: 0.8125rem; color: var(--text-muted); text-decoration: none; transition: color 0.15s; }
-.footer-links a:hover { color: var(--teal); }
-.footer-source { font-size: 0.8125rem; color: var(--text-muted); margin-bottom: 0.25rem; }
-.footer-pipeline { font-size: 0.75rem; color: var(--text-muted); margin-top: 0.5rem; opacity: 0.7; }
-.footer-bottom { max-width: 1200px; margin: 1rem auto 0; padding: 0.75rem 1.5rem 0; border-top: 1px solid var(--border); font-size: 0.75rem; color: var(--text-muted); text-align: center; }
+.site-footer { background: var(--navy); color: rgba(255,255,255,0.6); padding: 2.5rem 0 1rem; margin-top: 3rem; }
+.footer-grid { max-width: 1200px; margin: 0 auto; padding: 0 1.5rem; display: grid; grid-template-columns: 2fr repeat(4, 1fr); gap: 2rem; }
+.footer-brand-title { font-size: 1rem; font-weight: 700; color: white; margin-bottom: 0.5rem; }
+.footer-brand-desc { font-size: 0.8125rem; line-height: 1.6; margin-bottom: 1rem; }
+.footer-heading { font-size: 0.6875rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: rgba(255,255,255,0.35); margin-bottom: 0.75rem; }
+.footer-links { list-style: none; padding: 0; margin: 0; }
+.footer-links li { margin-bottom: 0.375rem; }
+.footer-links a { font-size: 0.8125rem; color: rgba(255,255,255,0.6); text-decoration: none; transition: color 0.15s; }
+.footer-links a:hover { color: white; }
+.footer-source { font-size: 0.75rem; margin-bottom: 0.25rem; }
+.footer-bottom { max-width: 1200px; margin: 1.5rem auto 0; padding: 0.75rem 1.5rem 0; border-top: 1px solid rgba(255,255,255,0.1); font-size: 0.6875rem; color: rgba(255,255,255,0.3); text-align: center; }
 @media (max-width: 768px) {
-  .footer-grid { grid-template-columns: 1fr; gap: 1.25rem; }
-  .footer-links { columns: 2; }
+  .footer-grid { grid-template-columns: 1fr 1fr; gap: 1.25rem; }
 }
 </style>
 <footer class="site-footer">
   <div class="footer-grid">
     <div>
       <div class="footer-brand-title">REX Financial Intelligence Hub</div>
-      <div class="footer-brand-desc">Central intelligence platform for REX Financial.</div>
+      <div class="footer-brand-desc">Market positioning, SEC filing intelligence, institutional ownership, and structured product analytics.</div>
+      <div class="footer-source">Data: SEC EDGAR &middot; Bloomberg Terminal</div>
+      <div class="footer-source">Contact: <a href="mailto:relasmar@rexfin.com" style="color:rgba(255,255,255,0.6)">relasmar@rexfin.com</a></div>
     </div>
     <div>
-      <div class="footer-heading">Navigation</div>
+      <div class="footer-heading">Market</div>
       <ul class="footer-links">
-        <li><a href="/market/monitor">Market Monitor</a></li>
-        <li><a href="/market/rex">Market — REX View</a></li>
-        <li><a href="/dashboard">Filings — Dashboard</a></li>
-        <li><a href="/screener/">Filings — Landscape</a></li>
-        <li><a href="/holdings/">Ownership — Holdings</a></li>
-        <li><a href="/notes/">Structured Notes — Overview</a></li>
+        <li><a href="/market/rex">REX View</a></li>
+        <li><a href="/market/category">Category</a></li>
+        <li><a href="/market/issuer">Issuer Analysis</a></li>
+        <li><a href="/market/compare">Compare</a></li>
+        <li><a href="/market/calendar">Calendar</a></li>
+      </ul>
+    </div>
+    <div>
+      <div class="footer-heading">Filings</div>
+      <ul class="footer-links">
+        <li><a href="/dashboard">Filing Activity</a></li>
+        <li><a href="/funds/">Fund Lookup</a></li>
+        <li><a href="/filings/">Filing Explorer</a></li>
+        <li><a href="/screener/">Competitive Landscape</a></li>
+        <li><a href="/screener/evaluate">Evaluator</a></li>
+      </ul>
+    </div>
+    <div>
+      <div class="footer-heading">Ownership</div>
+      <ul class="footer-links">
+        <li><a href="/intel/">Market Overview</a></li>
+        <li><a href="/holdings/">Institutions</a></li>
+        <li><a href="/intel/rex">REX Report</a></li>
+        <li><a href="/intel/rex/sales">Sales Intel</a></li>
         <li><a href="/downloads/">Exports</a></li>
       </ul>
     </div>
     <div>
-      <div class="footer-heading">Data Sources</div>
-      <div class="footer-source">SEC EDGAR</div>
-      <div class="footer-source">Bloomberg Terminal</div>
+      <div class="footer-heading">Structured Notes</div>
+      <ul class="footer-links">
+        <li><a href="/notes/">Market Overview</a></li>
+        <li><a href="/notes/issuers">Issuer Dashboard</a></li>
+        <li><a href="/notes/search">Product Search</a></li>
+      </ul>
     </div>
   </div>
   <div class="footer-bottom">
-    &copy; 2026 REX Financial LLC. For internal use only.
+    &copy; 2026 REX Financial LLC &middot; For internal use only &middot; v2.0
     {% block footer_extra %}{% endblock %}
   </div>
 </footer>
