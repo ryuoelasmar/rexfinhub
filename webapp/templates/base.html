@@ -78,13 +78,13 @@
                 <div class="mega-link-desc">Performance by index and stock</div>
               </div>
             </a>
-            <a href="/market/share" class="mega-link {% if request.url.path == '/market/share' %}active{% endif %}">
+            <div class="mega-link coming-soon">
               <div class="mega-link-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></div>
               <div class="mega-link-text">
-                <div class="mega-link-title">Market Share</div>
+                <div class="mega-link-title">Market Share <span class="coming-soon-badge">Soon</span></div>
                 <div class="mega-link-desc">Share timeline + treemap</div>
               </div>
-            </a>
+            </div>
           </div>
           <div class="mega-column">
             <div class="mega-section-label">Tools</div>
@@ -324,20 +324,20 @@
               </div>
             </a>
             <div class="mega-section-label" style="margin-top: 1rem;">Analysis</div>
-            <a href="/notes/underliers" class="mega-link {% if request.url.path == '/notes/underliers' %}active{% endif %}">
+            <div class="mega-link coming-soon">
               <div class="mega-link-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg></div>
               <div class="mega-link-text">
-                <div class="mega-link-title">Underlier Analysis</div>
+                <div class="mega-link-title">Underlier Analysis <span class="coming-soon-badge">Soon</span></div>
                 <div class="mega-link-desc">Most popular underliers in structured notes</div>
               </div>
-            </a>
-            <a href="/notes/autocallables" class="mega-link {% if request.url.path == '/notes/autocallables' %}active{% endif %}">
+            </div>
+            <div class="mega-link coming-soon">
               <div class="mega-link-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></div>
               <div class="mega-link-text">
-                <div class="mega-link-title">Autocallable Intel</div>
+                <div class="mega-link-title">Autocallable Intel <span class="coming-soon-badge">Soon</span></div>
                 <div class="mega-link-desc">Scatter: barrier vs coupon, zone coloring</div>
               </div>
-            </a>
+            </div>
           </div>
           <div class="mega-column">
             <div class="mega-section-label">Tools</div>
@@ -405,7 +405,7 @@
   .footer-links { columns: 2; }
 }
 </style>
-<footer class="site-footer">
+<footer class="site-footer" style="background:#0f1923;color:rgba(255,255,255,0.7);">
   <div class="footer-grid">
     <div>
       <div class="footer-brand-title">REX Financial Intelligence Hub</div>
