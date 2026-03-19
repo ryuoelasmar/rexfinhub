@@ -128,7 +128,7 @@
                 <div class="mega-link-desc">Today's SEC filings across 2,475 trusts</div>
               </div>
             </a>
-            <div class="mega-section-label" style="margin-top: 1rem;">Search</div>
+            <div class="mega-section-label">Search</div>
             <a href="/funds/" class="mega-link {% if request.url.path == '/funds/' %}active{% endif %}">
               <div class="mega-link-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg></div>
               <div class="mega-link-text">
@@ -217,7 +217,7 @@
                 <div class="mega-link-desc">120 institutions, $452M in REX products</div>
               </div>
             </a>
-            <div class="mega-section-label" style="margin-top: 1rem;">Search</div>
+            <div class="mega-section-label">Search</div>
             <a href="/holdings/" class="mega-link {% if request.url.path == '/holdings/' %}active{% endif %}">
               <div class="mega-link-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
               <div class="mega-link-text">
@@ -323,7 +323,7 @@
                 <div class="mega-link-desc">Filter by issuer, type, underlier, coupon</div>
               </div>
             </a>
-            <div class="mega-section-label" style="margin-top: 1rem;">Analysis</div>
+            <div class="mega-section-label">Analysis</div>
             <div class="mega-link coming-soon">
               <div class="mega-link-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg></div>
               <div class="mega-link-text">
@@ -387,32 +387,15 @@
 
 <button class="back-top" id="backTop" onclick="window.scrollTo({top:0,behavior:'smooth'})">&#9650;</button>
 
-<style>
-.site-footer { background: var(--surface-0); border-top: 1px solid var(--border); padding: 2rem 0 1.5rem; margin-top: 3rem; }
-.footer-grid { max-width: 1200px; margin: 0 auto; padding: 0 1.5rem; display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 2rem; }
-.footer-brand-title { font-size: 0.9375rem; font-weight: 600; color: var(--text-primary); margin-bottom: 0.375rem; }
-.footer-brand-desc { font-size: 0.8125rem; color: var(--text-muted); line-height: 1.5; }
-.footer-heading { font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary); margin-bottom: 0.625rem; }
-.footer-links { columns: 2; column-gap: 1rem; list-style: none; padding: 0; margin: 0; }
-.footer-links li { break-inside: avoid; margin-bottom: 0.375rem; }
-.footer-links a { font-size: 0.8125rem; color: var(--text-muted); text-decoration: none; transition: color 0.15s; }
-.footer-links a:hover { color: var(--teal); }
-.footer-source { font-size: 0.8125rem; color: var(--text-muted); margin-bottom: 0.25rem; }
-.footer-pipeline { font-size: 0.75rem; color: var(--text-muted); margin-top: 0.5rem; opacity: 0.7; }
-.footer-bottom { max-width: 1200px; margin: 1rem auto 0; padding: 0.75rem 1.5rem 0; border-top: 1px solid var(--border); font-size: 0.75rem; color: var(--text-muted); text-align: center; }
-@media (max-width: 768px) {
-  .footer-grid { grid-template-columns: 1fr; gap: 1.25rem; }
-  .footer-links { columns: 2; }
-}
-</style>
-<footer class="site-footer" style="background:#0f1923;color:rgba(255,255,255,0.7);">
+<!-- Footer styles are in style.css -->
+<footer class="site-footer">
   <div class="footer-grid">
     <div>
-      <div class="footer-heading" style="color:#fff;font-size:14px;text-transform:none;letter-spacing:0;">REX Financial Intelligence Hub</div>
-      <div style="font-size:12px;color:rgba(255,255,255,0.45);line-height:1.5;margin-top:8px;">SEC filings, market intelligence, ownership analytics, and structured product data — one platform, updated daily.</div>
-      <div style="margin-top:16px;font-size:11px;color:rgba(255,255,255,0.35);">
-        <div>Data: SEC EDGAR · Bloomberg</div>
-        <div style="margin-top:4px;">Last sync: {{ last_sync_date or 'N/A' }}</div>
+      <div class="footer-brand-name">REX Financial Intelligence Hub</div>
+      <div class="footer-brand-tagline">ETP market intelligence, SEC filing analytics, and institutional ownership tracking.</div>
+      <div class="footer-sources">
+        <div class="footer-source-label">Data Sources</div>
+        <div class="footer-source-text">SEC EDGAR &middot; Bloomberg Terminal</div>
       </div>
     </div>
     <div>
