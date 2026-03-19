@@ -282,7 +282,7 @@ def home_page(request: Request, db: Session = Depends(get_db)):
 
 
 @router.get("/dashboard")
-def dashboard(
+def dashboard(  # v2 — trust search uses full list
     request: Request,
     added: str = "",
     days: int = 7,
@@ -442,9 +442,11 @@ def dashboard(
     competitor_filings = db.execute(text("""
         SELECT t.name as trust_name, t.id as trust_id,
                COUNT(*) as filing_count,
-               GROUP_CONCAT(DISTINCT f.form) as form_types
+               GROUP_CONCAT(DISTINCT f.form) as form_types,
+               GROUP_CONCAT(DISTINCT fe.series_name) as fund_names
         FROM filings f
         JOIN trusts t ON f.trust_id = t.id
+        LEFT JOIN fund_extractions fe ON fe.filing_id = f.id
         WHERE f.filing_date >= :week_ago
         AND t.name NOT LIKE '%REX%'
         AND t.name NOT LIKE '%T-REX%'
@@ -457,7 +459,7 @@ def dashboard(
 
     return templates.TemplateResponse("dashboard.html", {
         "request": request,
-        "trusts": trust_list,
+        "trusts": all_trusts,
         "total_funds": total_funds,
         "total_effective": total_effective,
         "total_pending": total_pending,
@@ -469,21 +471,12 @@ def dashboard(
         "form_type": form_type,
         "filing_trust_id": filing_trust_id,
         "filing_trusts": filing_trusts,
-        "entity_type": entity_type,
-        "type_counts": type_counts,
-        "type_labels": _TYPE_LABELS,
         "page": page,
         "per_page": per_page,
         "total_filings": total_filings,
         "total_pages": total_pages,
         "base_qs": base_qs,
-        "trust_filter": trust_filter,
-        "trust_page": trust_page,
-        "total_trust_count": total_trust_count,
-        "total_trust_pages": total_trust_pages,
-        "trust_base_qs": trust_base_qs,
         "status_counts": status_counts,
-        "status_labels": _STATUS_LABELS,
         "new_filings_7d": new_filings_7d,
         "todays_filings": todays_filings,
         "todays_trust_count": todays_trust_count,
