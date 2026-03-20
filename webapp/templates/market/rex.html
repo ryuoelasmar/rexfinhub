@@ -4,12 +4,17 @@
 {% block title %}REX View — REX Financial Intelligence Hub{% endblock %}
 
 {% block market_content %}
+<div class="market-breadcrumb">
+  <a href="/">Home</a><span class="sep">/</span>
+  <a href="/market/rex">Market</a><span class="sep">/</span>
+  <span>REX View</span>
+</div>
 {% if summary %}
 
 {# -- Filter Bar -- #}
 <div class="filter-bar" style="display:flex; gap:12px; margin-bottom:20px; align-items:center; flex-wrap:wrap;">
   <div style="display:flex; gap:8px; align-items:center;">
-    <span style="font-size:0.72rem; color:var(--gray-500); font-weight:600; text-transform:uppercase;">Structure:</span>
+    <span class="filter-bar-label">Structure:</span>
     {% set fs_list = fund_structure.split(',') if fund_structure and fund_structure != 'all' else [] %}
     <button class="pill {% if 'ETF' in fs_list and 'ETN' not in fs_list %}active{% elif not fs_list %}{% endif %}"
             onclick="toggleFundStructure('ETF')">ETF</button>
@@ -20,7 +25,7 @@
   </div>
   {% if categories is defined %}
   <div style="display:flex; gap:8px; align-items:center;">
-    <span style="font-size:0.72rem; color:var(--gray-500); font-weight:600; text-transform:uppercase;">Category:</span>
+    <span class="filter-bar-label">Category:</span>
     <select onchange="window.location='?fund_structure={{ fund_structure|default('ETF')|urlencode }}&category='+encodeURIComponent(this.value)"
             class="select-sm" style="font-size:0.82rem; padding:4px 8px;">
       <option value="All" {% if not category or category == 'All' %}selected{% endif %}>All Categories</option>
@@ -36,7 +41,7 @@
 
 {# -- ETN AUM Disclaimer -- #}
 {% if fund_structure and 'ETN' in fund_structure %}
-<div style="font-size:0.72rem; color:var(--gray-500); margin-bottom:12px; font-style:italic;">
+<div class="etn-disclaimer">
   Note: Bloomberg AUM for ETNs may not reflect outstanding shares.
 </div>
 {% endif %}
@@ -60,7 +65,7 @@
 
 {# -- KPI Hero Row (2 wide cards with sparklines) -- #}
 {% if data_as_of %}
-<div style="font-size:0.78rem; color:var(--gray-500); margin-bottom:8px; font-weight:500;">
+<div class="data-as-of">
   Bloomberg data as of <strong>{{ data_as_of }}</strong>
 </div>
 {% endif %}
@@ -227,7 +232,7 @@
     <tr class="suite-parent-row" id="suite{{ loop.index }}Parent" data-sub-id="suite{{ loop.index }}" onclick="toggleSuiteProducts('suite{{ loop.index }}')" style="cursor:pointer;">
       <td>
         <span style="font-weight:500; color:var(--blue);" title="{{ suite.name }}">
-          <span class="expand-icon" id="suite{{ loop.index }}Icon" style="font-size:0.7rem; margin-right:4px;">&#9654;</span>
+          <span class="collapse-arrow collapsed" id="suite{{ loop.index }}Icon"></span>
           {{ suite.rex_name if suite.rex_name else suite.short_name }}
         </span>
       </td>
@@ -397,10 +402,10 @@ function toggleSuiteProducts(id) {
   if (!row) return;
   if (row.style.display === 'none') {
     row.style.display = '';
-    if (icon) icon.innerHTML = '&#9660;';
+    if (icon) icon.classList.remove('collapsed');
   } else {
     row.style.display = 'none';
-    if (icon) icon.innerHTML = '&#9654;';
+    if (icon) icon.classList.add('collapsed');
   }
 }
 

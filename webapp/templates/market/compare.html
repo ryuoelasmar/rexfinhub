@@ -4,6 +4,11 @@
 {% block title %}Fund Comparison — REX Financial Intelligence Hub{% endblock %}
 
 {% block market_content %}
+<div class="market-breadcrumb">
+  <a href="/">Home</a><span class="sep">/</span>
+  <a href="/market/rex">Market</a><span class="sep">/</span>
+  <span>Fund Comparison</span>
+</div>
 <h2 class="section-title">Fund Comparison</h2>
 
 <form class="timeline-controls" method="get" action="/market/compare" id="compareForm">
@@ -17,7 +22,7 @@
 {% if totalrealreturns_url is defined and totalrealreturns_url %}
 <div style="margin-bottom:20px;">
   <a href="{{ totalrealreturns_url }}" target="_blank" rel="noopener"
-     class="btn" style="background:#059669; color:white; display:inline-flex; align-items:center; gap:6px;">
+     class="btn compare-btn-external">
     View Total Return Comparison &#8599;
   </a>
   <span style="font-size:0.75rem; color:#94A3B8; margin-left:8px;">

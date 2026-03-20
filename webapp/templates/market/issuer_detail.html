@@ -4,6 +4,12 @@
 {% block title %}{{ issuer }} — Issuer Detail — REX Financial Intelligence Hub{% endblock %}
 
 {% block market_content %}
+<div class="market-breadcrumb">
+  <a href="/">Home</a><span class="sep">/</span>
+  <a href="/market/rex">Market</a><span class="sep">/</span>
+  <a href="/market/issuer">Issuers</a><span class="sep">/</span>
+  <span>{{ issuer }}</span>
+</div>
 {% if not available %}
 <div class="alert alert-info">Market data not yet available. Run the daily pipeline to sync Bloomberg data.</div>
 {% elif error %}
@@ -19,17 +25,17 @@
     {% if issuer_data.is_rex %}<span style="color:#1E40AF; font-size:0.75rem; font-weight:700; background:#EFF6FF; padding:2px 10px; border-radius:20px;">REX ISSUER</span>{% endif %}
   </div>
   <div style="margin-left:auto; display:flex; gap:20px; flex-wrap:wrap;">
-    <div style="text-align:center;">
-      <div style="font-size:1.4rem; font-weight:800; color:#0F172A;">{{ issuer_data.total_aum_fmt }}</div>
-      <div style="font-size:0.7rem; color:#94A3B8; text-transform:uppercase;">Total AUM</div>
+    <div class="issuer-detail-stat">
+      <div class="issuer-detail-stat-value">{{ issuer_data.total_aum_fmt }}</div>
+      <div class="issuer-detail-stat-label">Total AUM</div>
     </div>
-    <div style="text-align:center;">
-      <div style="font-size:1.4rem; font-weight:800; color:#0F172A;">{{ issuer_data.num_products }}</div>
-      <div style="font-size:0.7rem; color:#94A3B8; text-transform:uppercase;">Products</div>
+    <div class="issuer-detail-stat">
+      <div class="issuer-detail-stat-value">{{ issuer_data.num_products }}</div>
+      <div class="issuer-detail-stat-label">Products</div>
     </div>
-    <div style="text-align:center;">
-      <div style="font-size:1.4rem; font-weight:800; color:#0F172A;">{{ issuer_data.num_categories }}</div>
-      <div style="font-size:0.7rem; color:#94A3B8; text-transform:uppercase;">Categories</div>
+    <div class="issuer-detail-stat">
+      <div class="issuer-detail-stat-value">{{ issuer_data.num_categories }}</div>
+      <div class="issuer-detail-stat-label">Categories</div>
     </div>
   </div>
 </div>
@@ -38,7 +44,7 @@
   <!-- AUM Trend -->
   {% if aum_trend["labels"] %}
   <div class="chart-box">
-    <div class="chart-title" style="font-size:0.9rem; font-weight:600; color:#475569; margin-bottom:12px;">AUM Trend — Last 12 Months</div>
+    <div class="chart-title">AUM Trend — Last 12 Months</div>
     <canvas id="issuerTrendChart" height="180"></canvas>
   </div>
   {% endif %}
@@ -46,7 +52,7 @@
   <!-- Categories breakdown -->
   {% if categories %}
   <div class="chart-box">
-    <div class="chart-title" style="font-size:0.9rem; font-weight:600; color:#475569; margin-bottom:12px;">AUM by Category</div>
+    <div class="chart-title">AUM by Category</div>
     <table class="data-table" style="font-size:0.82rem;">
       <thead><tr><th>Category</th><th>AUM</th></tr></thead>
       <tbody>

@@ -4,6 +4,11 @@
 {% block title %}Issuer Analysis — REX Financial Intelligence Hub{% endblock %}
 
 {% block market_content %}
+<div class="market-breadcrumb">
+  <a href="/">Home</a><span class="sep">/</span>
+  <a href="/market/rex">Market</a><span class="sep">/</span>
+  <span>Issuer Analysis</span>
+</div>
 {# Filter Bar: Category + Fund Structure #}
 <div style="display:flex; align-items:center; gap:16px; margin-bottom:20px; flex-wrap:wrap;">
   <div class="category-selector" style="margin-bottom:0;">
@@ -16,7 +21,7 @@
     </select>
   </div>
   <div style="display:flex; gap:6px; align-items:center;">
-    <span style="font-size:0.75rem; color:#94A3B8; font-weight:600; text-transform:uppercase;">Structure:</span>
+    <span class="filter-bar-label">Structure:</span>
     <a href="?cat={{ category|default('All')|urlencode }}&fund_structure=ETF"
        class="pill {% if fund_structure == 'ETF' %}active{% endif %}">ETF</a>
     <a href="?cat={{ category|default('All')|urlencode }}&fund_structure=ETN"

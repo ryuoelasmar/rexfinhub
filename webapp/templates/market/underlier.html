@@ -4,6 +4,11 @@
 {% block title %}Underlier Deep-Dive — REX Financial Intelligence Hub{% endblock %}
 
 {% block market_content %}
+<div class="market-breadcrumb">
+  <a href="/">Home</a><span class="sep">/</span>
+  <a href="/market/rex">Market</a><span class="sep">/</span>
+  <span>Underlier Deep-Dive</span>
+</div>
 {% if summary %}
 
 {# Type toggle #}
@@ -15,6 +20,7 @@
 <div class="underlier-split">
   {# Left panel — underlier list #}
   <div class="underlier-list">
+    <input type="text" class="underlier-search" id="underlierSearch" placeholder="Search underliers..." oninput="filterUnderlierList(this.value)">
     {% if summary.underliers %}
     {% for ul in summary.underliers %}
     <button class="underlier-btn {{ 'active' if selected_underlier == ul.name else '' }}"
@@ -107,6 +113,15 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 });
 {% endif %}
+
+function filterUnderlierList(q) {
+  q = (q || '').toLowerCase();
+  var btns = document.querySelectorAll('.underlier-btn');
+  btns.forEach(function(btn) {
+    var name = btn.textContent.toLowerCase();
+    btn.style.display = (!q || name.indexOf(q) >= 0) ? '' : 'none';
+  });
+}
 
 function selectUnderlier(name) {
   var type = '{{ underlier_type|default("income") }}';
