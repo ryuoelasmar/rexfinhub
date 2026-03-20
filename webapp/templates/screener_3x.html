@@ -3,7 +3,7 @@
 
 {% block head %}
 <style>
-/* ===== Screener: 3x Analysis — STYLE_GUIDE overrides ===== */
+/* ===== Screener: LI Filing Candidates — STYLE_GUIDE overrides ===== */
 
 /* Remove zebra striping */
 .screener-wrap tbody tr:nth-child(even) { background: transparent; }
@@ -85,6 +85,36 @@
 .sg-methodology { font-size: 13px; color: #374151; line-height: 1.7; padding: 16px; }
 .sg-methodology p + p { margin-top: 8px; }
 .sg-methodology b { color: #0f172a; }
+
+/* Info box — verdict block style (for 4x section) */
+.sg-info {
+  background: #ffffff; border: 1px solid #e5e7eb; border-left: 2px solid #2563eb;
+  border-radius: 0 6px 6px 0; padding: 16px 20px; margin-bottom: 24px;
+}
+.sg-info h2 { font-size: 16px; font-weight: 600; color: #0f172a; margin: 0 0 4px; }
+.sg-info p { font-size: 14px; color: #374151; line-height: 1.6; margin: 0; }
+
+/* Criteria footnote */
+.sg-footnote { font-size: 11px; color: #94a3b8; margin-top: 12px; }
+.sg-footnote b { color: #64748b; }
+
+/* Show all toggle */
+.sg-toggle-row { display: flex; justify-content: center; margin-top: 12px; }
+.sg-toggle-btn {
+  padding: 6px 16px; background: #f3f4f6; color: #374151; border: 1px solid #e5e7eb;
+  border-radius: 4px; font-size: 13px; font-weight: 500; cursor: pointer;
+  font-family: inherit; transition: all 0.15s ease;
+}
+.sg-toggle-btn:hover { background: #e5e7eb; color: #0f172a; }
+
+/* ===== Leverage Toggle ===== */
+.lev-toggle {
+  padding: 6px 16px; border: 1px solid #e5e7eb; border-radius: 4px;
+  font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit;
+  background: #f3f4f6; color: #374151; transition: all 0.15s ease;
+}
+.lev-toggle:hover { background: #e5e7eb; color: #0f172a; }
+.lev-toggle.active { background: #0f172a; color: #ffffff; border-color: #0f172a; }
 </style>
 {% endblock %}
 
@@ -137,7 +167,19 @@
 </div>
 {% else %}
 
-<!-- ==================== KPI ROW 1: 3x MARKET ==================== -->
+<!-- ==================== LEVERAGE TOGGLE ==================== -->
+<div style="display:flex; gap:8px; margin-bottom:24px;">
+  <button class="lev-toggle active" onclick="showLeverage('3x')">3x Candidates</button>
+  <button class="lev-toggle" onclick="showLeverage('4x')">4x Candidates</button>
+  <button class="lev-toggle" onclick="showLeverage('2x')">2x Market</button>
+</div>
+
+<!-- ================================================================ -->
+<!-- ==================== 3x SECTION ================================ -->
+<!-- ================================================================ -->
+<div id="lev-3x">
+
+<!-- KPI ROW 1: 3x MARKET -->
 <div class="kpi-row">
   <div class="kpi kpi-filing">
     <div class="num">
@@ -163,7 +205,7 @@
   </div>
 </div>
 
-<!-- ==================== KPI ROW 2: 2x MARKET CONTEXT ==================== -->
+<!-- KPI ROW 2: 2x MARKET CONTEXT -->
 <div class="kpi-row">
   <div class="kpi kpi-market">
     <div class="num">
@@ -189,7 +231,7 @@
   </div>
 </div>
 
-<!-- ==================== KEY FINDINGS ==================== -->
+<!-- KEY FINDINGS -->
 <ul class="sg-findings">
   {% if snapshot.single_stock_count == 0 %}
   <li><strong>Zero 3x single-stock ETFs exist today.</strong> Every filing is first-mover advantage.</li>
@@ -199,7 +241,7 @@
   <li>Tier 1 combined 2x AUM: <b>${{ "{:,.0f}".format(tiers.tier_1|sum(attribute='aum_2x')) }}M</b> in proven demand.</li>
   {% endif %}
   {% if four_x_count %}
-  <li><b>{{ four_x_count }}</b> low-volatility 2x successes identified for <a href="/screener/4x" style="color:#2563eb; font-weight:500;">4x filing</a>.</li>
+  <li><b>{{ four_x_count }}</b> low-volatility 2x successes identified for <a href="javascript:void(0)" onclick="showLeverage('4x')" style="color:#2563eb; font-weight:500;">4x filing</a>.</li>
   {% endif %}
   {% if snapshot.top_issuers %}
   <li>Top 3x issuer: {{ snapshot.top_issuers[0].issuer }} (${{ "{:,.0f}".format(snapshot.top_issuers[0].aum) }}M AUM, {{ snapshot.top_issuers[0].count }} products).</li>
@@ -214,7 +256,7 @@
   <span><span class="sg-legend-dot" style="background:#9ca3af;"></span> &lt;40 Monitor</span>
 </div>
 
-<!-- ==================== TIER 1: FILE IMMEDIATELY ==================== -->
+<!-- TIER 1: FILE IMMEDIATELY -->
 <div class="screener-wrap">
 {% if tiers.tier_1 %}
 <div class="sg-section sg-section-green">
@@ -275,7 +317,7 @@
 </div>
 {% endif %}
 
-<!-- ==================== TIER 2: FILE SOON ==================== -->
+<!-- TIER 2: FILE SOON -->
 {% if tiers.tier_2 %}
 <div class="sg-section sg-section-blue" style="margin-top:32px;">
   <h2 style="color:#2563eb;">Tier 2 - File Soon</h2>
@@ -335,7 +377,7 @@
 </div>
 {% endif %}
 
-<!-- ==================== TIER 3: MONITOR (COLLAPSED) ==================== -->
+<!-- TIER 3: MONITOR (COLLAPSED) -->
 {% if tiers.tier_3 %}
 <div class="sg-accordion" style="margin-top:32px;">
   <div class="sg-accordion-hd" onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'block' ? 'none' : 'block';" style="border-left:2px solid #d97706;">
@@ -400,7 +442,7 @@
 {% endif %}
 </div>{# end .screener-wrap #}
 
-<!-- ==================== METHODOLOGY (COLLAPSED) ==================== -->
+<!-- METHODOLOGY (COLLAPSED) -->
 <div class="sg-accordion" style="margin-top:32px;">
   <div class="sg-accordion-hd" onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'block' ? 'none' : 'block';">
     <h3>Methodology</h3>
@@ -424,5 +466,229 @@
   </div>
 </div>
 
+</div>{# end #lev-3x #}
+
+<!-- ================================================================ -->
+<!-- ==================== 4x SECTION ================================ -->
+<!-- ================================================================ -->
+<div id="lev-4x" style="display:none;">
+
+<!-- Info box -->
+<div class="sg-info">
+  <h2>4x Leverage Candidates</h2>
+  <p>4x leverage amplifies daily moves by 4. Candidates below are existing 2x successes with daily volatility under 20%, keeping 4x fund daily swings manageable. Sorted by existing 2x AUM (proven demand).</p>
+</div>
+
+<!-- KPI Row -->
+<div class="kpi-row">
+  <div class="kpi kpi-filing">
+    <div class="num">{{ four_x|default([])|length }}</div>
+    <div class="label">Total Candidates</div>
+  </div>
+  <div class="kpi kpi-filing">
+    <div class="num">{{ "%.1f"|format(avg_daily_vol|default(0)) }}%</div>
+    <div class="label">Avg Daily Vol</div>
+  </div>
+  <div class="kpi kpi-filing">
+    <div class="num">
+      {% set total_4x_aum = four_x|default([])|sum(attribute='aum_2x') %}
+      {% if total_4x_aum >= 1000 %}${{ "%.1f"|format(total_4x_aum / 1000) }}B
+      {% else %}${{ "{:,.0f}".format(total_4x_aum) }}M{% endif %}
+    </div>
+    <div class="label">Combined 2x AUM</div>
+  </div>
+</div>
+
+<!-- 4x Candidates Table -->
+<div class="sg-section" style="border-left: 3px solid #059669;">
+  <h2>4x Candidates</h2>
+  <span class="sg-badge">{{ four_x|default([])|length }} stocks</span>
+</div>
+<p class="sg-desc">
+  Stocks with existing 2x products and daily volatility &lt; 20%. Sorted by 2x AUM descending.
+</p>
+<div class="screener-wrap">
+<div class="table-scroll-wrap">
+<table id="fourXTable">
+  <thead>
+    <tr>
+      <th style="width:35px;">#</th>
+      <th onclick="sortTable('fourXTable',1)">Stock</th>
+      <th onclick="sortTable('fourXTable',2)">Sector</th>
+      <th onclick="sortTable('fourXTable',3)" style="text-align:right;">2x AUM</th>
+      <th onclick="sortTable('fourXTable',4)" style="text-align:right;">Vol 30D</th>
+      <th onclick="sortTable('fourXTable',5)" style="text-align:right;">Daily Vol</th>
+      <th onclick="sortTable('fourXTable',6)" style="text-align:center;">2x Cnt</th>
+      <th onclick="sortTable('fourXTable',7)">REX 2x</th>
+      <th onclick="sortTable('fourXTable',8)">REX 4x</th>
+      <th onclick="sortTable('fourXTable',9)">Risk</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for c in four_x|default([]) %}
+    <tr{% if loop.index > 20 %} class="fourx-overflow" style="display:none;"{% endif %}>
+      <td style="color:#94a3b8; font-size:12px;">{{ loop.index }}</td>
+      <td class="ticker-col"><a href="/screener/stock/{{ c.ticker }} US">{{ c.ticker }}</a></td>
+      <td style="font-size:12px;">{{ c.sector or '-' }}</td>
+      <td style="text-align:right; font-size:12px; font-variant-numeric:tabular-nums;">
+        {% if c.aum_2x >= 1000 %}${{ "%.1f"|format(c.aum_2x / 1000) }}B
+        {% elif c.aum_2x > 0 %}${{ "{:,.0f}".format(c.aum_2x) }}M
+        {% else %}-{% endif %}
+      </td>
+      <td style="text-align:right; font-size:12px; font-variant-numeric:tabular-nums;">{{ "%.1f"|format(c.vol_30d) }}%</td>
+      <td style="text-align:right; font-size:12px; font-variant-numeric:tabular-nums;">{{ "%.1f"|format(c.daily_vol) }}%</td>
+      <td style="text-align:center;">{{ c.count_2x }}</td>
+      <td><span class="rex-{{ c.rex_2x|lower|replace(' ', '') }}">{{ c.rex_2x }}</span></td>
+      <td><span class="rex-{{ c.rex_4x|lower|replace(' ', '') }}">{{ c.rex_4x }}</span></td>
+      <td><span class="risk-{{ c.risk|lower }}">{{ c.risk }}</span></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+</div>
+
+{% if four_x|default([])|length > 20 %}
+<div class="sg-toggle-row">
+  <button class="sg-toggle-btn" id="toggleFourX" onclick="toggleFourXRows()">Show all {{ four_x|length }} rows</button>
+</div>
 {% endif %}
+
+<p class="sg-footnote">
+  <b>Criteria:</b> Existing 2x products | Daily volatility &lt; 20% | Capped at 100 names | Sorted by 2x AUM descending.
+</p>
+
+</div>{# end #lev-4x #}
+
+<!-- ================================================================ -->
+<!-- ==================== 2x SECTION ================================ -->
+<!-- ================================================================ -->
+<div id="lev-2x" style="display:none;">
+
+<!-- Info box -->
+<div class="sg-info">
+  <h2>2x Single-Stock Market</h2>
+  <p>Existing 2x single-stock leveraged products sorted by AUM. These are the baseline -- proven demand that validates 3x and 4x filing opportunities.</p>
+</div>
+
+<!-- KPI Row -->
+<div class="kpi-row">
+  <div class="kpi kpi-market">
+    <div class="num">
+      {% if snapshot.total_2x_aum >= 1000 %}${{ "%.1f"|format(snapshot.total_2x_aum / 1000) }}B
+      {% else %}${{ "{:,.0f}".format(snapshot.total_2x_aum) }}M{% endif %}
+    </div>
+    <div class="label">Total 2x AUM</div>
+  </div>
+  <div class="kpi kpi-market">
+    <div class="num">{{ snapshot.total_2x_count }}</div>
+    <div class="label">2x Products</div>
+  </div>
+  <div class="kpi kpi-market">
+    <div class="num">{{ snapshot.ss_2x_count }}</div>
+    <div class="label">2x Single Stock</div>
+  </div>
+  <div class="kpi kpi-market">
+    <div class="num">
+      {% if snapshot.rex_2x_aum >= 1000 %}${{ "%.1f"|format(snapshot.rex_2x_aum / 1000) }}B
+      {% else %}${{ "{:,.0f}".format(snapshot.rex_2x_aum) }}M{% endif %}
+    </div>
+    <div class="label">REX 2x AUM</div>
+  </div>
+</div>
+
+<!-- 2x Products Table -->
+<div class="sg-section sg-section-blue">
+  <h2>Top 2x Single-Stock Products</h2>
+  <span class="sg-badge sg-badge-blue">{{ top_2x|default([])|length }} products</span>
+</div>
+<p class="sg-desc">
+  Existing 2x single-stock leveraged ETFs sorted by AUM descending. Proven demand for each underlier.
+</p>
+<div class="screener-wrap">
+<div class="table-scroll-wrap">
+<table id="twoXTable">
+  <thead>
+    <tr>
+      <th style="width:35px;">#</th>
+      <th onclick="sortTable('twoXTable',1)">Ticker</th>
+      <th onclick="sortTable('twoXTable',2)">Fund Name</th>
+      <th onclick="sortTable('twoXTable',3)">Underlier</th>
+      <th onclick="sortTable('twoXTable',4)">Issuer</th>
+      <th onclick="sortTable('twoXTable',5)">Direction</th>
+      <th onclick="sortTable('twoXTable',6)" style="text-align:right;">AUM ($M)</th>
+      <th onclick="sortTable('twoXTable',7)" style="text-align:right;">Flow 1M ($M)</th>
+      <th onclick="sortTable('twoXTable',8)">REX 2x</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for p in top_2x|default([]) %}
+    <tr{% if loop.index > 30 %} class="twox-overflow" style="display:none;"{% endif %}>
+      <td style="color:#94a3b8; font-size:12px;">{{ loop.index }}</td>
+      <td class="ticker-col"><b>{{ p.ticker }}</b></td>
+      <td style="font-size:12px; max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ p.fund_name }}</td>
+      <td class="ticker-col"><a href="/screener/stock/{{ p.underlier }}">{{ p.underlier|replace(' US', '') }}</a></td>
+      <td style="font-size:12px;">{{ p.issuer or '-' }}</td>
+      <td style="font-size:12px;">{{ p.direction or '-' }}</td>
+      <td style="text-align:right; font-size:12px; font-variant-numeric:tabular-nums;">
+        {% if p.aum >= 1000 %}${{ "%.1f"|format(p.aum / 1000) }}B
+        {% elif p.aum > 0 %}${{ "{:,.0f}".format(p.aum) }}M
+        {% else %}-{% endif %}
+      </td>
+      <td style="text-align:right; font-size:12px; font-variant-numeric:tabular-nums;">
+        {% if p.flow_1m > 0 %}<span style="color:#059669;">+{{ "{:,.0f}".format(p.flow_1m) }}</span>
+        {% elif p.flow_1m < 0 %}<span style="color:#dc2626;">{{ "{:,.0f}".format(p.flow_1m) }}</span>
+        {% else %}-{% endif %}
+      </td>
+      <td><span class="rex-{{ p.rex_2x|default('No')|lower|replace(' ', '') }}">{{ p.rex_2x|default('No') }}</span></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+</div>
+
+{% if top_2x|default([])|length > 30 %}
+<div class="sg-toggle-row">
+  <button class="sg-toggle-btn" id="toggleTwoX" onclick="toggleTwoXRows()">Show all {{ top_2x|length }} rows</button>
+</div>
+{% endif %}
+
+<p class="sg-footnote">
+  <b>Source:</b> Bloomberg | 2x single-stock leveraged ETFs with AUM &gt; 0 | Sorted by AUM descending.
+</p>
+
+</div>{# end #lev-2x #}
+
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+function showLeverage(lev) {
+  ['2x', '3x', '4x'].forEach(function(l) {
+    var el = document.getElementById('lev-' + l);
+    if (el) el.style.display = l === lev ? 'block' : 'none';
+  });
+  document.querySelectorAll('.lev-toggle').forEach(function(btn) {
+    btn.classList.toggle('active', btn.textContent.toLowerCase().indexOf(lev) !== -1);
+  });
+}
+
+function toggleFourXRows() {
+  var rows = document.querySelectorAll('.fourx-overflow');
+  var btn = document.getElementById('toggleFourX');
+  var showing = rows[0] && rows[0].style.display !== 'none';
+  rows.forEach(function(r) { r.style.display = showing ? 'none' : ''; });
+  btn.textContent = showing ? 'Show all {{ four_x|default([])|length }} rows' : 'Show top 20 only';
+}
+
+function toggleTwoXRows() {
+  var rows = document.querySelectorAll('.twox-overflow');
+  var btn = document.getElementById('toggleTwoX');
+  var showing = rows[0] && rows[0].style.display !== 'none';
+  rows.forEach(function(r) { r.style.display = showing ? 'none' : ''; });
+  btn.textContent = showing ? 'Show all {{ top_2x|default([])|length }} rows' : 'Show top 30 only';
+}
+</script>
 {% endblock %}

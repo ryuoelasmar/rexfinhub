@@ -154,7 +154,7 @@ def screener_landing(
 
 @router.get("/3x-analysis")
 def screener_3x_recommendations(request: Request):
-    """3x Filing Recommendations - Bloomberg-powered analysis."""
+    """LI Filing Candidates - unified 2x/3x/4x leverage analysis."""
     analysis = _get_3x_data()
 
     if analysis is None:
@@ -165,48 +165,35 @@ def screener_3x_recommendations(request: Request):
             "cache_warming": _cache_warming(),
         })
 
+    four_x = analysis.get("four_x", [])
+    avg_daily_vol = 0
+    if four_x:
+        avg_daily_vol = sum(c.get("daily_vol", 0) for c in four_x) / len(four_x)
+
     return templates.TemplateResponse("screener_3x.html", {
         "request": request,
         "tab": "recommendations",
         "data_available": True,
         "snapshot": analysis["snapshot"],
         "tiers": analysis["tiers"],
-        "four_x_count": len(analysis.get("four_x", [])),
+        "four_x": four_x,
+        "four_x_count": len(four_x),
+        "avg_daily_vol": avg_daily_vol,
+        "top_2x": analysis.get("top_2x", []),
         "data_date": analysis.get("data_date"),
         "computed_at": analysis.get("computed_at"),
     })
 
 
 # ---------------------------------------------------------------------------
-# 4x Candidates
+# 4x Candidates (redirect to unified page)
 # ---------------------------------------------------------------------------
 
 @router.get("/4x")
 def screener_4x_candidates(request: Request):
-    """4x Filing Candidates."""
-    analysis = _get_3x_data()
-
-    if analysis is None:
-        return templates.TemplateResponse("screener_4x.html", {
-            "request": request,
-            "tab": "4x",
-            "data_available": _data_available(),
-            "cache_warming": _cache_warming(),
-        })
-
-    four_x = analysis.get("four_x", [])
-    avg_daily_vol = 0
-    if four_x:
-        avg_daily_vol = sum(c.get("daily_vol", 0) for c in four_x) / len(four_x)
-
-    return templates.TemplateResponse("screener_4x.html", {
-        "request": request,
-        "tab": "4x",
-        "data_available": True,
-        "four_x": four_x,
-        "avg_daily_vol": avg_daily_vol,
-        "data_date": analysis.get("data_date"),
-    })
+    """Redirect old 4x page to unified LI Filing Candidates."""
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(url="/screener/3x-analysis", status_code=301)
 
 
 # ---------------------------------------------------------------------------
