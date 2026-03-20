@@ -122,7 +122,10 @@
 /* ===== RESET & BASE ===== */
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
+html { overflow-x: hidden; }
+
 body {
+  overflow-x: hidden;
   font-family: var(--font-sans);
   color: var(--gray-900);
   background: var(--gray-50);
