@@ -282,7 +282,7 @@ def home_page(request: Request, db: Session = Depends(get_db)):
 
 
 @router.get("/dashboard")
-def dashboard(  # v2 — trust search uses full list
+def dashboard(
     request: Request,
     added: str = "",
     days: int = 7,

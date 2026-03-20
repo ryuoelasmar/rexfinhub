@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Leverage Screener - REX Financial{% endblock %}
+{% block title %}L&I Filing Landscape - REX Financial{% endblock %}
 
 {% block head %}
 <style>
@@ -44,9 +44,9 @@
   border-radius: 100px; font-size: 12px; font-weight: 600; font-family: var(--font-mono);
 }
 
-/* Scorecard REX row */
-.scorecard-rex { background: #ecfdf5; }
-.scorecard-rex:hover { background: #d1fae5 !important; }
+/* Scorecard REX row — subtler highlight */
+.scorecard-rex { background: #f8fafc; }
+.scorecard-rex:hover { background: #f1f5f9 !important; }
 
 /* Accordion */
 .sg-accordion { border: 1px solid #e5e7eb; border-radius: 6px; overflow: hidden; margin-top: 32px; background: #ffffff; }
@@ -61,42 +61,56 @@
 {% endblock %}
 
 {% block content %}
-<div class="header">
-  <div class="breadcrumb">
-    <a href="/">Home</a><span class="sep">/</span>
-    <a href="/screener/">Filings</a><span class="sep">/</span>
-    <span>Leverage Screener</span>
+<!-- Header Row: title left, KPIs right -->
+<div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:24px;">
+  <div>
+    <div class="breadcrumb">
+      <a href="/">Home</a><span class="sep">/</span>
+      <a href="/dashboard">Filings</a><span class="sep">/</span>
+      <span>L&I Filing Landscape</span>
+    </div>
+    <h1 style="font-size:20px; font-weight:600; color:#0f172a; margin:8px 0 4px;">L&I Filing Landscape</h1>
+    <div style="font-size:13px; color:#94a3b8;">3x / 4x / 5x SEC Filing Matrix | Source: EDGAR | {{ generated_at }}</div>
   </div>
-  <h1 style="font-size:20px; font-weight:600; color:#0f172a;">Leverage Screener</h1>
-  <div class="date">3x / 4x / 5x SEC Filing Matrix | Source: EDGAR | {{ generated_at }}</div>
+  <div style="display:flex; align-items:center; gap:0;">
+    <div style="padding:0 20px; border-right:1px solid #e5e7eb; text-align:center;">
+      <div style="font-size:24px; font-weight:700; color:#0f172a; font-variant-numeric:tabular-nums;">{{ kpis.count_3x }}</div>
+      <div style="font-size:10px; text-transform:uppercase; letter-spacing:0.04em; color:#94a3b8;">3X NAMES</div>
+    </div>
+    <div style="padding:0 20px; border-right:1px solid #e5e7eb; text-align:center;">
+      <div style="font-size:24px; font-weight:700; color:#0f172a; font-variant-numeric:tabular-nums;">{{ kpis.count_4x }}</div>
+      <div style="font-size:10px; text-transform:uppercase; letter-spacing:0.04em; color:#94a3b8;">4X NAMES</div>
+    </div>
+    <div style="padding:0 20px; border-right:1px solid #e5e7eb; text-align:center;">
+      <div style="font-size:24px; font-weight:700; color:#0f172a; font-variant-numeric:tabular-nums;">{{ kpis.count_5x }}</div>
+      <div style="font-size:10px; text-transform:uppercase; letter-spacing:0.04em; color:#94a3b8;">5X NAMES</div>
+    </div>
+    <div style="padding:0 20px; border-right:1px solid #e5e7eb; text-align:center;">
+      <div style="font-size:24px; font-weight:700; color:#0f172a; font-variant-numeric:tabular-nums;">{{ kpis.rex_exclusive }}</div>
+      <div style="font-size:10px; text-transform:uppercase; letter-spacing:0.04em; color:#94a3b8;">REX EXCLUSIVE</div>
+    </div>
+    <div style="padding:0 20px; text-align:center;">
+      <div style="font-size:24px; font-weight:700; color:#0f172a; font-variant-numeric:tabular-nums;">{{ kpis.total_names }}</div>
+      <div style="font-size:10px; text-transform:uppercase; letter-spacing:0.04em; color:#94a3b8;">UNIQUE NAMES</div>
+    </div>
+  </div>
+</div>
+
+<!-- Quick Links Bar -->
+<div style="display:flex; gap:16px; margin-bottom:24px; font-size:13px;">
+  <a href="/dashboard" style="color:#2563eb; text-decoration:none; font-weight:500;">Filing Activity</a>
+  <span style="color:#e5e7eb;">|</span>
+  <a href="/screener/" style="color:#2563eb; text-decoration:none; font-weight:500;">L&I Filing Landscape</a>
+  <span style="color:#e5e7eb;">|</span>
+  <a href="/screener/3x-analysis" style="color:#2563eb; text-decoration:none; font-weight:500;">LI Filing Candidates</a>
+  <span style="color:#e5e7eb;">|</span>
+  <a href="/screener/evaluate" style="color:#2563eb; text-decoration:none; font-weight:500;">LI Stock Evaluator</a>
+  <span style="color:#e5e7eb;">|</span>
+  <a href="/filings/" style="color:#2563eb; text-decoration:none; font-weight:500;">Fund/Filing Explorer</a>
 </div>
 
 <!-- Tab bar -->
 {% include "_screener_subnav.html" %}
-
-<!-- ==================== KPI ROW ==================== -->
-<div class="kpi-row">
-  <div class="kpi kpi-filing">
-    <div class="num">{{ kpis.count_3x }}</div>
-    <div class="label">3x Names</div>
-  </div>
-  <div class="kpi kpi-filing">
-    <div class="num">{{ kpis.count_4x }}</div>
-    <div class="label">4x Names</div>
-  </div>
-  <div class="kpi kpi-filing">
-    <div class="num">{{ kpis.count_5x }}</div>
-    <div class="label">5x Names</div>
-  </div>
-  <div class="kpi kpi-filing">
-    <div class="num" style="color:#059669;">{{ kpis.rex_exclusive }}</div>
-    <div class="label">REX Exclusive</div>
-  </div>
-  <div class="kpi kpi-filing">
-    <div class="num">{{ kpis.total_names }}</div>
-    <div class="label">Unique Names</div>
-  </div>
-</div>
 
 <!-- ==================== FILTERS ==================== -->
 <div class="sg-filter-bar">
@@ -136,7 +150,7 @@
     <tr>
       <th style="min-width:160px;" onclick="sortTable('matrix{{ lev }}',0)">Underlier</th>
       {% for iss in issuers %}
-      <th style="text-align:center; min-width:80px;{% if iss in ('T-REX', 'REX') %} background:#ecfdf5; color:#059669;{% endif %}" onclick="sortTable('matrix{{ lev }}',{{ loop.index }})">{{ iss }}</th>
+      <th style="text-align:center; min-width:80px;{% if iss in ('T-REX', 'REX') %} font-weight:700;{% endif %}" onclick="sortTable('matrix{{ lev }}',{{ loop.index }})">{{ iss }}</th>
       {% endfor %}
     </tr>
   </thead>

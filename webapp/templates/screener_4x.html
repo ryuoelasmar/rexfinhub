@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Leverage Screener - REX Financial{% endblock %}
+{% block title %}LI Filing Candidates - REX Financial{% endblock %}
 
 {% block head %}
 <style>
@@ -61,13 +61,26 @@
 <div class="header">
   <div class="breadcrumb">
     <a href="/">Home</a><span class="sep">/</span>
-    <a href="/screener/">Filings</a><span class="sep">/</span>
-    <span>Leverage Screener</span>
+    <a href="/dashboard">Filings</a><span class="sep">/</span>
+    <span>LI Filing Candidates</span>
   </div>
-  <h1 style="font-size:20px; font-weight:600; color:#0f172a;">Leverage Screener</h1>
+  <h1 style="font-size:20px; font-weight:600; color:#0f172a;">LI Filing Candidates</h1>
   <div class="date">
     {% if data_date %}Data as of {{ data_date }}{% endif %}
   </div>
+</div>
+
+<!-- Quick Links Bar -->
+<div style="display:flex; gap:16px; margin-bottom:24px; font-size:13px;">
+  <a href="/dashboard" style="color:#2563eb; text-decoration:none; font-weight:500;">Filing Activity</a>
+  <span style="color:#e5e7eb;">|</span>
+  <a href="/screener/" style="color:#2563eb; text-decoration:none; font-weight:500;">L&I Filing Landscape</a>
+  <span style="color:#e5e7eb;">|</span>
+  <a href="/screener/3x-analysis" style="color:#2563eb; text-decoration:none; font-weight:500;">LI Filing Candidates</a>
+  <span style="color:#e5e7eb;">|</span>
+  <a href="/screener/evaluate" style="color:#2563eb; text-decoration:none; font-weight:500;">LI Stock Evaluator</a>
+  <span style="color:#e5e7eb;">|</span>
+  <a href="/filings/" style="color:#2563eb; text-decoration:none; font-weight:500;">Fund/Filing Explorer</a>
 </div>
 
 <!-- Tab bar -->

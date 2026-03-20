@@ -116,15 +116,15 @@
 
 <!-- 2. Quick Links Bar -->
 <div style="display:flex; gap:16px; margin-bottom:24px; font-size:13px;">
-  <a href="/screener/" style="color:#2563eb; text-decoration:none; font-weight:500;">Filing Landscape</a>
+  <a href="/dashboard" style="color:#2563eb; text-decoration:none; font-weight:500;">Filing Activity</a>
   <span style="color:#e5e7eb;">|</span>
-  <a href="/screener/3x-analysis" style="color:#2563eb; text-decoration:none; font-weight:500;">Bloomberg Scoring</a>
+  <a href="/screener/" style="color:#2563eb; text-decoration:none; font-weight:500;">L&I Filing Landscape</a>
   <span style="color:#e5e7eb;">|</span>
-  <a href="/screener/evaluate" style="color:#2563eb; text-decoration:none; font-weight:500;">Evaluate Ticker</a>
+  <a href="/screener/3x-analysis" style="color:#2563eb; text-decoration:none; font-weight:500;">LI Filing Candidates</a>
   <span style="color:#e5e7eb;">|</span>
-  <a href="/filings/" style="color:#2563eb; text-decoration:none; font-weight:500;">Search All Filings</a>
+  <a href="/screener/evaluate" style="color:#2563eb; text-decoration:none; font-weight:500;">LI Stock Evaluator</a>
   <span style="color:#e5e7eb;">|</span>
-  <a href="/funds/" style="color:#2563eb; text-decoration:none; font-weight:500;">Search Funds</a>
+  <a href="/filings/" style="color:#2563eb; text-decoration:none; font-weight:500;">Fund/Filing Explorer</a>
 </div>
 
 {% if added %}
@@ -196,7 +196,7 @@
         {% for row in recent_filings %}
         {% set f = row.Filing %}
         <tr>
-          <td>{{ f.filing_date or '' }}</td>
+          <td class="date-col">{{ f.filing_date or '' }}</td>
           <td>
             {% set form_lower = f.form|lower|replace(' ', '')|replace('-', '') %}
             {% if '485bpos' in form_lower %}

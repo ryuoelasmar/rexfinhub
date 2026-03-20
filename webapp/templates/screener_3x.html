@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Leverage Screener - REX Financial{% endblock %}
+{% block title %}LI Filing Candidates - REX Financial{% endblock %}
 
 {% block head %}
 <style>
@@ -48,9 +48,9 @@
 }
 .sg-findings li + li { margin-top: 4px; }
 
-/* Score bar (keep existing colored bars) */
+/* Score bar — subtler fill */
 .score-bar { display: inline-block; width: 60px; height: 6px; background: #e5e7eb; border-radius: 3px; vertical-align: middle; margin-left: 4px; }
-.score-fill { height: 100%; border-radius: 3px; }
+.score-fill { height: 100%; border-radius: 3px; opacity: 0.7; }
 
 /* Accordion for Tier 3 / Methodology */
 .sg-accordion { border: 1px solid #e5e7eb; border-radius: 6px; overflow: hidden; margin-top: 32px; background: #ffffff; }
@@ -92,12 +92,12 @@
 <div class="header">
   <div class="breadcrumb">
     <a href="/">Home</a><span class="sep">/</span>
-    <a href="/screener/">Filings</a><span class="sep">/</span>
-    <span>Leverage Screener</span>
+    <a href="/dashboard">Filings</a><span class="sep">/</span>
+    <span>LI Filing Candidates</span>
   </div>
   <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:12px;">
     <div>
-      <h1 style="font-size:20px; font-weight:600; color:#0f172a;">Leverage Screener</h1>
+      <h1 style="font-size:20px; font-weight:600; color:#0f172a;">LI Filing Candidates</h1>
       <div class="date">
         {% if data_date %}Data as of {{ data_date }}{% endif %}
         {% if computed_at %} | Analysis computed {{ computed_at }}{% endif %}
@@ -107,6 +107,19 @@
     <a href="/screener/report" class="sg-btn-pdf">Download PDF</a>
     {% endif %}
   </div>
+</div>
+
+<!-- Quick Links Bar -->
+<div style="display:flex; gap:16px; margin-bottom:24px; font-size:13px;">
+  <a href="/dashboard" style="color:#2563eb; text-decoration:none; font-weight:500;">Filing Activity</a>
+  <span style="color:#e5e7eb;">|</span>
+  <a href="/screener/" style="color:#2563eb; text-decoration:none; font-weight:500;">L&I Filing Landscape</a>
+  <span style="color:#e5e7eb;">|</span>
+  <a href="/screener/3x-analysis" style="color:#2563eb; text-decoration:none; font-weight:500;">LI Filing Candidates</a>
+  <span style="color:#e5e7eb;">|</span>
+  <a href="/screener/evaluate" style="color:#2563eb; text-decoration:none; font-weight:500;">LI Stock Evaluator</a>
+  <span style="color:#e5e7eb;">|</span>
+  <a href="/filings/" style="color:#2563eb; text-decoration:none; font-weight:500;">Fund/Filing Explorer</a>
 </div>
 
 <!-- Tab bar -->
@@ -142,7 +155,7 @@
     <div class="label">3x Single Stock</div>
   </div>
   <div class="kpi kpi-filing">
-    <div class="num" style="color:#059669;">
+    <div class="num">
       {% if snapshot.rex_aum >= 1000 %}${{ "%.1f"|format(snapshot.rex_aum / 1000) }}B
       {% else %}${{ "{:,.0f}".format(snapshot.rex_aum) }}M{% endif %}
     </div>
@@ -168,7 +181,7 @@
     <div class="label">2x Single Stock</div>
   </div>
   <div class="kpi kpi-market">
-    <div class="num" style="color:#059669;">
+    <div class="num">
       {% if snapshot.rex_2x_aum >= 1000 %}${{ "%.1f"|format(snapshot.rex_2x_aum / 1000) }}B
       {% else %}${{ "{:,.0f}".format(snapshot.rex_2x_aum) }}M{% endif %}
     </div>
