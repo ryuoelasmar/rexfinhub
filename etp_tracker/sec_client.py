@@ -117,7 +117,21 @@ class SECClient:
                     should_refresh = True
         if should_refresh:
             time.sleep(self.pause)
-            r = self.session.get(url, timeout=self.timeout)
+            # Use If-Modified-Since to skip unchanged submissions (304 = no change)
+            headers = {}
+            if cache_path.exists():
+                try:
+                    import email.utils, os
+                    mtime = os.path.getmtime(cache_path)
+                    headers["If-Modified-Since"] = email.utils.formatdate(mtime, usegmt=True)
+                except Exception:
+                    pass
+            r = self.session.get(url, timeout=self.timeout, headers=headers)
+            if r.status_code == 304 and cache_path.exists():
+                # Not modified — use cache, update mtime so we don't re-check for 6 hours
+                try: os.utime(cache_path)
+                except Exception: pass
+                return json.loads(cache_path.read_text(encoding="utf-8"))
             r.raise_for_status()
             data = r.json()
             try: cache_path.write_text(json.dumps(data), encoding="utf-8")
