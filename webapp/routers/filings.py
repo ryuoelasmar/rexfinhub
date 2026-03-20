@@ -96,7 +96,7 @@ def _handle_funds_mode(
     ).join(Trust, Trust.id == FundStatus.trust_id)
 
     # Exclude blank/placeholder fund names
-    query = query.where(FundStatus.fund_name.notin(["", "-", " "]))
+    query = query.where(FundStatus.fund_name.notin_(["", "-", " "]))
 
     # Exclude mutual fund share classes
     for pattern in MUTUAL_FUND_EXCLUSIONS:
