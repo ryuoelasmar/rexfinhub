@@ -1,32 +1,48 @@
 {% extends "base.html" %}
 {% block title %}Filing Explorer — REX Financial Intelligence Hub{% endblock %}
 
+{% block head %}
+<style>
+  #fundsTable tbody tr:last-child,
+  #filingsTable tbody tr:last-child { border-bottom: none !important; }
+</style>
+{% endblock %}
+
 {% block content %}
 {# ── Breadcrumb ── #}
-<div class="breadcrumb" style="margin-bottom:16px; padding-top:24px;">
-  <a href="/">Home</a>
-  <span class="sep">/</span>
-  <a href="/filings/">Filings</a>
-  <span class="sep">/</span>
-  Filing Explorer
+<div style="margin-bottom:16px; padding-top:24px; font-size:13px;">
+  <a href="/" style="color:#64748b; text-decoration:none;">Home</a>
+  <span style="margin:0 4px; color:#94a3b8;">/</span>
+  <a href="/filings/" style="color:#64748b; text-decoration:none;">Filings</a>
+  <span style="margin:0 4px; color:#94a3b8;">/</span>
+  <span style="color:#0f172a;">Filing Explorer</span>
 </div>
 
-{# ── Header Row: Title left, KPIs right ── #}
+{# ── Header Row: Title left, Inline KPIs right ── #}
 <div style="display:flex; align-items:baseline; justify-content:space-between; margin-bottom:24px;">
-  <h1 style="font-size:20px; font-weight:600; color:#0f172a;">Filing Explorer</h1>
-  <div style="display:flex; align-items:center; gap:16px; font-size:13px; color:#64748b;">
-    <span><span style="font-weight:700; color:#0f172a; font-variant-numeric:tabular-nums;">{{ "{:,}".format(fund_count) }}</span> funds</span>
-    <div style="width:1px; height:16px; background:#e5e7eb;"></div>
-    <span><span style="font-weight:700; color:#0f172a; font-variant-numeric:tabular-nums;">{{ "{:,}".format(filing_count) }}</span> filings</span>
-    <div style="width:1px; height:16px; background:#e5e7eb;"></div>
-    <span><span style="font-weight:700; color:#0f172a; font-variant-numeric:tabular-nums;">{{ "{:,}".format(trust_count) }}</span> trusts</span>
+  <h1 style="font-size:20px; font-weight:600; color:#0f172a; margin:0;">Filing Explorer</h1>
+  <div style="display:flex; align-items:center; gap:24px;">
+    <div style="text-align:center;">
+      <div style="font-size:24px; font-weight:700; color:#0f172a; font-variant-numeric:tabular-nums; line-height:1.2;">{{ "{:,}".format(fund_count) }}</div>
+      <div style="font-size:10px; font-weight:500; text-transform:uppercase; color:#94a3b8; letter-spacing:0.04em;">Funds</div>
+    </div>
+    <div style="width:1px; height:32px; background:#e5e7eb;"></div>
+    <div style="text-align:center;">
+      <div style="font-size:24px; font-weight:700; color:#0f172a; font-variant-numeric:tabular-nums; line-height:1.2;">{{ "{:,}".format(filing_count) }}</div>
+      <div style="font-size:10px; font-weight:500; text-transform:uppercase; color:#94a3b8; letter-spacing:0.04em;">Filings</div>
+    </div>
+    <div style="width:1px; height:32px; background:#e5e7eb;"></div>
+    <div style="text-align:center;">
+      <div style="font-size:24px; font-weight:700; color:#0f172a; font-variant-numeric:tabular-nums; line-height:1.2;">{{ "{:,}".format(trust_count) }}</div>
+      <div style="font-size:10px; font-weight:500; text-transform:uppercase; color:#94a3b8; letter-spacing:0.04em;">Trusts</div>
+    </div>
   </div>
 </div>
 
 {# ── Mode Toggle Tabs ── #}
 <div style="display:flex; border-bottom:1px solid #e5e7eb; margin-bottom:24px;">
-  <a href="/filings/?mode=funds" style="padding:10px 20px 12px; font-size:14px; font-weight:{% if mode == 'funds' %}600{% else %}500{% endif %}; text-decoration:none; border-bottom:2px solid {% if mode == 'funds' %}#2563eb{% else %}transparent{% endif %}; color:{% if mode == 'funds' %}#0f172a{% else %}#64748b{% endif %}; margin-bottom:-1px;">Funds</a>
-  <a href="/filings/?mode=filings" style="padding:10px 20px 12px; font-size:14px; font-weight:{% if mode == 'filings' %}600{% else %}500{% endif %}; text-decoration:none; border-bottom:2px solid {% if mode == 'filings' %}#2563eb{% else %}transparent{% endif %}; color:{% if mode == 'filings' %}#0f172a{% else %}#64748b{% endif %}; margin-bottom:-1px;">Filings</a>
+  <a href="/filings/?mode=funds" style="padding:10px 20px 12px; font-size:14px; font-weight:500; text-decoration:none; border-bottom:2px solid {% if mode == 'funds' %}#2563eb{% else %}transparent{% endif %}; color:{% if mode == 'funds' %}#0f172a{% else %}#64748b{% endif %}; margin-bottom:-1px;">Funds</a>
+  <a href="/filings/?mode=filings" style="padding:10px 20px 12px; font-size:14px; font-weight:500; text-decoration:none; border-bottom:2px solid {% if mode == 'filings' %}#2563eb{% else %}transparent{% endif %}; color:{% if mode == 'filings' %}#0f172a{% else %}#64748b{% endif %}; margin-bottom:-1px;">Filings</a>
 </div>
 
 {% if mode == 'funds' %}
@@ -37,7 +53,7 @@
 {# Filter bar #}
 <form method="get" action="/filings/" style="margin-bottom:16px;">
   <input type="hidden" name="mode" value="funds">
-  <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+  <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; background:#ffffff; border:1px solid #e5e7eb; border-radius:6px; padding:12px 16px;">
     <input type="text" name="q" value="{{ q }}" placeholder="Search by fund name or ticker..."
            style="flex:1; min-width:240px; padding:8px 12px; font-size:13px; font-family:inherit; border:1px solid #e5e7eb; border-radius:4px; outline:none; color:#0f172a; background:#ffffff;">
     <select name="status" style="padding:8px 32px 8px 12px; font-size:13px; font-family:inherit; border:1px solid #e5e7eb; border-radius:4px; background:#ffffff; appearance:none; color:#0f172a; cursor:pointer; outline:none;">
@@ -52,7 +68,7 @@
       <option value="{{ t.id }}" {% if trust_id == t.id %}selected{% endif %}>{{ t.name }}</option>
       {% endfor %}
     </select>
-    <button type="submit" style="padding:8px 20px; font-size:13px; font-weight:600; font-family:inherit; border:none; border-radius:4px; cursor:pointer; white-space:nowrap; background:#2563eb; color:#ffffff;">Filter</button>
+    <button type="submit" style="padding:8px 20px; font-size:13px; font-weight:500; font-family:inherit; border:none; border-radius:6px; cursor:pointer; white-space:nowrap; background:#0f172a; color:#ffffff;">Filter</button>
     {% if q or status or trust_id %}
     <a href="/filings/?mode=funds" style="font-size:12px; color:#64748b; margin-left:4px;">Clear</a>
     {% endif %}
@@ -60,7 +76,7 @@
 </form>
 
 {# Result count #}
-<div style="font-size:13px; color:#64748b; margin-bottom:12px;">
+<div style="font-size:13px; color:#94a3b8; margin-bottom:12px;">
   Showing {{ (page - 1) * per_page + 1 }}-{{ [page * per_page, total_results]|min }} of {{ "{:,}".format(total_results) }} funds
 </div>
 
@@ -80,7 +96,7 @@
     <tbody>
       {% for row in funds %}
       {% set f = row.FundStatus %}
-      <tr style="border-bottom:1px solid #f1f5f9;">
+      <tr style="border-bottom:1px solid #f1f5f9;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background=''">
         <td style="font-size:13px; color:#0f172a; padding:10px 16px; height:40px; vertical-align:middle;">
           {% if f.series_id %}
           <a href="/funds/{{ f.series_id }}" style="color:#2563eb; text-decoration:none; font-weight:500;">{{ f.fund_name }}</a>
@@ -134,23 +150,23 @@
 {# Pagination #}
 {% if total_pages > 1 %}
 <div style="display:flex; justify-content:space-between; align-items:center; margin-top:16px; padding:12px 0;">
-  <div style="font-size:13px; color:#64748b;">
+  <div style="font-size:13px; color:#94a3b8;">
     {{ "{:,}".format(total_results) }} funds &middot; page {{ page }} of {{ total_pages }}
   </div>
   <div style="display:flex; align-items:center; gap:4px;">
     {% set base_params = "mode=funds&q=" ~ q ~ "&status=" ~ status ~ "&trust_id=" ~ trust_id ~ "&per_page=" ~ per_page %}
     {% if page > 1 %}
-    <a href="/filings/?{{ base_params }}&page={{ page - 1 }}" class="btn btn-sm">Prev</a>
+    <a href="/filings/?{{ base_params }}&page={{ page - 1 }}" style="display:inline-flex; align-items:center; justify-content:center; padding:4px 12px; font-size:12px; font-weight:500; border-radius:4px; text-decoration:none; background:#f3f4f6; color:#374151;">Prev</a>
     {% else %}
-    <span class="btn btn-sm" style="opacity:0.4; cursor:default;">Prev</span>
+    <span style="display:inline-flex; align-items:center; justify-content:center; padding:4px 12px; font-size:12px; font-weight:500; border-radius:4px; background:#f3f4f6; color:#374151; opacity:0.4; cursor:default;">Prev</span>
     {% endif %}
 
     {% if total_pages <= 7 %}
       {% for p in range(1, total_pages + 1) %}
         {% if p == page %}
-        <span style="padding:4px 10px; background:#0f172a; color:white; border-radius:4px; font-size:12px; font-weight:600;">{{ p }}</span>
+        <span style="display:inline-flex; align-items:center; justify-content:center; padding:4px 10px; background:#0f172a; color:#ffffff; border-radius:4px; font-size:12px; font-weight:600; min-width:32px;">{{ p }}</span>
         {% else %}
-        <a href="/filings/?{{ base_params }}&page={{ p }}" class="btn btn-sm">{{ p }}</a>
+        <a href="/filings/?{{ base_params }}&page={{ p }}" style="display:inline-flex; align-items:center; justify-content:center; padding:4px 10px; font-size:12px; font-weight:500; border-radius:4px; text-decoration:none; background:#f3f4f6; color:#374151; min-width:32px;">{{ p }}</a>
         {% endif %}
       {% endfor %}
     {% else %}
@@ -163,21 +179,21 @@
       {% set prev_p = [0] %}
       {% for p in pages_to_show %}
         {% if p - prev_p[-1] > 1 %}
-        <span style="padding:4px 4px; font-size:12px; color:#64748b;">...</span>
+        <span style="padding:4px 4px; font-size:12px; color:#94a3b8;">...</span>
         {% endif %}
         {% if p == page %}
-        <span style="padding:4px 10px; background:#0f172a; color:white; border-radius:4px; font-size:12px; font-weight:600;">{{ p }}</span>
+        <span style="display:inline-flex; align-items:center; justify-content:center; padding:4px 10px; background:#0f172a; color:#ffffff; border-radius:4px; font-size:12px; font-weight:600; min-width:32px;">{{ p }}</span>
         {% else %}
-        <a href="/filings/?{{ base_params }}&page={{ p }}" class="btn btn-sm">{{ p }}</a>
+        <a href="/filings/?{{ base_params }}&page={{ p }}" style="display:inline-flex; align-items:center; justify-content:center; padding:4px 10px; font-size:12px; font-weight:500; border-radius:4px; text-decoration:none; background:#f3f4f6; color:#374151; min-width:32px;">{{ p }}</a>
         {% endif %}
         {% if prev_p.append(p) %}{% endif %}
       {% endfor %}
     {% endif %}
 
     {% if page < total_pages %}
-    <a href="/filings/?{{ base_params }}&page={{ page + 1 }}" class="btn btn-sm">Next</a>
+    <a href="/filings/?{{ base_params }}&page={{ page + 1 }}" style="display:inline-flex; align-items:center; justify-content:center; padding:4px 12px; font-size:12px; font-weight:500; border-radius:4px; text-decoration:none; background:#f3f4f6; color:#374151;">Next</a>
     {% else %}
-    <span class="btn btn-sm" style="opacity:0.4; cursor:default;">Next</span>
+    <span style="display:inline-flex; align-items:center; justify-content:center; padding:4px 12px; font-size:12px; font-weight:500; border-radius:4px; background:#f3f4f6; color:#374151; opacity:0.4; cursor:default;">Next</span>
     {% endif %}
   </div>
 </div>
@@ -191,7 +207,7 @@
 {# Filter bar #}
 <form method="get" action="/filings/" style="margin-bottom:16px;">
   <input type="hidden" name="mode" value="filings">
-  <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+  <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; background:#ffffff; border:1px solid #e5e7eb; border-radius:6px; padding:12px 16px;">
     <input type="text" name="q" value="{{ q }}" placeholder="Search filings..."
            style="flex:1; min-width:240px; padding:8px 12px; font-size:13px; font-family:inherit; border:1px solid #e5e7eb; border-radius:4px; outline:none; color:#0f172a; background:#ffffff;">
     <select name="form_type" style="padding:8px 32px 8px 12px; font-size:13px; font-family:inherit; border:1px solid #e5e7eb; border-radius:4px; background:#ffffff; appearance:none; color:#0f172a; cursor:pointer; outline:none;">
@@ -213,7 +229,7 @@
       <option value="90" {% if date_range == '90' %}selected{% endif %}>Last 90 Days</option>
       <option value="365" {% if date_range == '365' %}selected{% endif %}>Last Year</option>
     </select>
-    <button type="submit" style="padding:8px 20px; font-size:13px; font-weight:600; font-family:inherit; border:none; border-radius:4px; cursor:pointer; white-space:nowrap; background:#2563eb; color:#ffffff;">Filter</button>
+    <button type="submit" style="padding:8px 20px; font-size:13px; font-weight:500; font-family:inherit; border:none; border-radius:6px; cursor:pointer; white-space:nowrap; background:#0f172a; color:#ffffff;">Filter</button>
     {% if q or form_type or trust_id or date_range != 'all' %}
     <a href="/filings/?mode=filings" style="font-size:12px; color:#64748b; margin-left:4px;">Clear</a>
     {% endif %}
@@ -221,7 +237,7 @@
 </form>
 
 {# Form count summary bar #}
-<div style="display:flex; align-items:center; gap:16px; font-size:13px; color:#64748b; margin-bottom:16px;">
+<div style="display:flex; align-items:center; gap:16px; font-size:13px; color:#94a3b8; margin-bottom:16px;">
   {% if form_counts %}
   {% if form_counts.get('485BPOS', 0) > 0 %}
   <div style="display:flex; align-items:center; gap:6px;">
@@ -274,7 +290,7 @@
       {% for row in filings %}
       {% set f = row.Filing %}
       {% set form_upper = f.form|upper if f.form else '' %}
-      <tr style="border-bottom:1px solid #f1f5f9;">
+      <tr style="border-bottom:1px solid #f1f5f9;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background=''">
         <td style="font-size:13px; color:#0f172a; padding:10px 16px; height:40px; vertical-align:middle; font-variant-numeric:tabular-nums;">{{ f.filing_date or '' }}</td>
         <td style="font-size:13px; padding:10px 16px; height:40px; vertical-align:middle;">
           {% if form_upper.startswith('485B') and 'BXT' not in form_upper %}
@@ -311,31 +327,31 @@
 {# Pagination #}
 {% if total_pages > 1 %}
 <div style="display:flex; justify-content:space-between; align-items:center; margin-top:16px; padding:12px 0;">
-  <div style="font-size:13px; color:#64748b;">
+  <div style="font-size:13px; color:#94a3b8;">
     {{ "{:,}".format(total_filings) }} filings &middot; page {{ page }} of {{ total_pages }}
   </div>
   <div style="display:flex; align-items:center; gap:4px;">
     {% if page > 1 %}
-    <a href="?{{ base_qs }}{% if base_qs %}&{% endif %}page={{ page - 1 }}" class="btn btn-sm">Prev</a>
+    <a href="?{{ base_qs }}{% if base_qs %}&{% endif %}page={{ page - 1 }}" style="display:inline-flex; align-items:center; justify-content:center; padding:4px 12px; font-size:12px; font-weight:500; border-radius:4px; text-decoration:none; background:#f3f4f6; color:#374151;">Prev</a>
     {% else %}
-    <span class="btn btn-sm" style="opacity:0.4; cursor:default;">Prev</span>
+    <span style="display:inline-flex; align-items:center; justify-content:center; padding:4px 12px; font-size:12px; font-weight:500; border-radius:4px; background:#f3f4f6; color:#374151; opacity:0.4; cursor:default;">Prev</span>
     {% endif %}
     {% set start_p = [1, page - 2]|max %}
     {% set end_p = [total_pages + 1, page + 3]|min %}
     {% for p in range(start_p, end_p) %}
     {% if p == page %}
-    <span style="padding:4px 10px; background:#0f172a; color:white; border-radius:4px; font-size:12px; font-weight:600;">{{ p }}</span>
+    <span style="display:inline-flex; align-items:center; justify-content:center; padding:4px 10px; background:#0f172a; color:#ffffff; border-radius:4px; font-size:12px; font-weight:600; min-width:32px;">{{ p }}</span>
     {% else %}
-    <a href="?{{ base_qs }}{% if base_qs %}&{% endif %}page={{ p }}" class="btn btn-sm">{{ p }}</a>
+    <a href="?{{ base_qs }}{% if base_qs %}&{% endif %}page={{ p }}" style="display:inline-flex; align-items:center; justify-content:center; padding:4px 10px; font-size:12px; font-weight:500; border-radius:4px; text-decoration:none; background:#f3f4f6; color:#374151; min-width:32px;">{{ p }}</a>
     {% endif %}
     {% endfor %}
     {% if page < total_pages %}
-    <a href="?{{ base_qs }}{% if base_qs %}&{% endif %}page={{ page + 1 }}" class="btn btn-sm">Next</a>
+    <a href="?{{ base_qs }}{% if base_qs %}&{% endif %}page={{ page + 1 }}" style="display:inline-flex; align-items:center; justify-content:center; padding:4px 12px; font-size:12px; font-weight:500; border-radius:4px; text-decoration:none; background:#f3f4f6; color:#374151;">Next</a>
     {% else %}
-    <span class="btn btn-sm" style="opacity:0.4; cursor:default;">Next</span>
+    <span style="display:inline-flex; align-items:center; justify-content:center; padding:4px 12px; font-size:12px; font-weight:500; border-radius:4px; background:#f3f4f6; color:#374151; opacity:0.4; cursor:default;">Next</span>
     {% endif %}
   </div>
-  <select style="padding:4px 8px; font-size:12px; border:1px solid #e5e7eb; border-radius:4px;" onchange="location='?{{ base_qs }}{% if base_qs %}&{% endif %}page=1&per_page='+this.value">
+  <select style="padding:4px 8px; font-size:12px; border:1px solid #e5e7eb; border-radius:4px; color:#0f172a; background:#ffffff; font-family:inherit;" onchange="location='?{{ base_qs }}{% if base_qs %}&{% endif %}page=1&per_page='+this.value">
     {% for n in [25, 50, 100, 200] %}
     <option value="{{ n }}"{{ ' selected' if n == per_page else '' }}>{{ n }}/page</option>
     {% endfor %}

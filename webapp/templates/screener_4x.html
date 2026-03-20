@@ -1,14 +1,50 @@
 {% extends "base.html" %}
-{% block title %}Product Screener - REX Financial{% endblock %}
+{% block title %}Leverage Screener - REX Financial{% endblock %}
+
+{% block head %}
+<style>
+/* ===== Screener: 4x Candidates — STYLE_GUIDE overrides ===== */
+
+/* Remove zebra striping */
+.screener-wrap tbody tr:nth-child(even) { background: transparent; }
+
+/* Section header */
+.sg-section {
+  display: flex; align-items: center; justify-content: space-between;
+  margin: 32px 0 12px; padding-bottom: 8px; padding-left: 12px;
+  border-bottom: 1px solid #e5e7eb; border-left: 3px solid #059669;
+}
+.sg-section h2 { font-size: 16px; font-weight: 600; color: #0f172a; margin: 0; }
+.sg-badge {
+  background: #0f172a; color: #ffffff; padding: 2px 12px;
+  border-radius: 100px; font-size: 12px; font-weight: 600; font-family: var(--font-mono);
+}
+
+/* Info box — verdict block style */
+.sg-info {
+  background: #ffffff; border: 1px solid #e5e7eb; border-left: 3px solid #2563eb;
+  border-radius: 0 6px 6px 0; padding: 16px 20px; margin-bottom: 24px;
+}
+.sg-info h2 { font-size: 16px; font-weight: 600; color: #0f172a; margin: 0 0 4px; }
+.sg-info p { font-size: 14px; color: #374151; line-height: 1.6; margin: 0; }
+
+/* Description text */
+.sg-desc { font-size: 12px; color: #64748b; margin-bottom: 8px; }
+
+/* Criteria footnote */
+.sg-footnote { font-size: 11px; color: #94a3b8; margin-top: 12px; }
+.sg-footnote b { color: #64748b; }
+</style>
+{% endblock %}
 
 {% block content %}
 <div class="header">
   <div class="breadcrumb">
     <a href="/">Home</a><span class="sep">/</span>
     <a href="/screener/">Filings</a><span class="sep">/</span>
-    <span>Product Screener</span>
+    <span>Leverage Screener</span>
   </div>
-  <h1>Product Screener</h1>
+  <h1 style="font-size:20px; font-weight:600; color:#0f172a;">Leverage Screener</h1>
   <div class="date">
     {% if data_date %}Data as of {{ data_date }}{% endif %}
   </div>
@@ -18,34 +54,34 @@
 {% include "_screener_subnav.html" %}
 
 {% if cache_warming is defined and cache_warming %}
-<div class="what-changed" style="background:var(--blue-subtle); border-color:var(--blue);">
-  <h2>Data is loading...</h2>
-  <p>The screener cache is warming up. This page will be ready shortly. Please refresh in a few seconds.</p>
+<div style="padding:16px 20px; background:#ffffff; border:1px solid #e5e7eb; border-left:3px solid #2563eb; border-radius:0 6px 6px 0; margin-bottom:24px;">
+  <div style="font-size:16px; font-weight:600; color:#0f172a; margin-bottom:4px;">Data is loading...</div>
+  <p style="font-size:13px; color:#64748b; margin:0;">The screener cache is warming up. This page will be ready shortly. Please refresh in a few seconds.</p>
 </div>
 {% elif not data_available %}
-<div class="what-changed" style="background:var(--orange-bg); border-color:var(--orange);">
-  <h2>No Bloomberg data available</h2>
-  <p>Screener data not yet available. Run the daily pipeline to load Bloomberg data and score candidates.</p>
+<div style="padding:16px 20px; background:#fffbeb; border:1px solid #e5e7eb; border-left:3px solid #d97706; border-radius:0 6px 6px 0; margin-bottom:24px;">
+  <div style="font-size:16px; font-weight:600; color:#0f172a; margin-bottom:4px;">No Bloomberg data available</div>
+  <p style="font-size:13px; color:#64748b; margin:0;">Screener data not yet available. Run the daily pipeline to load Bloomberg data and score candidates.</p>
 </div>
 {% else %}
 
 <!-- Info box -->
-<div class="what-changed">
+<div class="sg-info">
   <h2>4x Leverage Candidates</h2>
   <p>4x leverage amplifies daily moves by 4. Candidates below are existing 2x successes with daily volatility under 20%, keeping 4x fund daily swings manageable. Sorted by existing 2x AUM (proven demand).</p>
 </div>
 
 <!-- KPI Row -->
 <div class="kpi-row">
-  <div class="kpi">
+  <div class="kpi kpi-filing">
     <div class="num">{{ four_x|length }}</div>
     <div class="label">Total Candidates</div>
   </div>
-  <div class="kpi">
+  <div class="kpi kpi-filing">
     <div class="num">{{ "%.1f"|format(avg_daily_vol) }}%</div>
     <div class="label">Avg Daily Vol</div>
   </div>
-  <div class="kpi">
+  <div class="kpi kpi-filing">
     <div class="num">
       {% set total_aum = four_x|sum(attribute='aum_2x') %}
       {% if total_aum >= 1000 %}${{ "%.1f"|format(total_aum / 1000) }}B
@@ -56,13 +92,14 @@
 </div>
 
 <!-- 4x Candidates Table -->
-<div class="section-header">
+<div class="sg-section">
   <h2>4x Candidates</h2>
-  <span class="badge">{{ four_x|length }} stocks</span>
+  <span class="sg-badge">{{ four_x|length }} stocks</span>
 </div>
-<p style="font-size:12px; color:var(--gray); margin-bottom:8px;">
+<p class="sg-desc">
   Stocks with existing 2x products and daily volatility &lt; 20%. Sorted by 2x AUM descending.
 </p>
+<div class="screener-wrap">
 <div class="table-scroll-wrap">
 <table id="fourXTable">
   <thead>
@@ -82,16 +119,16 @@
   <tbody>
     {% for c in four_x %}
     <tr>
-      <td style="color:var(--gray); font-size:12px;">{{ loop.index }}</td>
+      <td style="color:#94a3b8; font-size:12px;">{{ loop.index }}</td>
       <td class="ticker-col"><a href="/screener/stock/{{ c.ticker }} US">{{ c.ticker }}</a></td>
       <td style="font-size:12px;">{{ c.sector or '-' }}</td>
-      <td style="text-align:right; font-size:12px;">
+      <td style="text-align:right; font-size:12px; font-variant-numeric:tabular-nums;">
         {% if c.aum_2x >= 1000 %}${{ "%.1f"|format(c.aum_2x / 1000) }}B
         {% elif c.aum_2x > 0 %}${{ "{:,.0f}".format(c.aum_2x) }}M
         {% else %}-{% endif %}
       </td>
-      <td style="text-align:right; font-size:12px;">{{ "%.1f"|format(c.vol_30d) }}%</td>
-      <td style="text-align:right; font-size:12px;">{{ "%.1f"|format(c.daily_vol) }}%</td>
+      <td style="text-align:right; font-size:12px; font-variant-numeric:tabular-nums;">{{ "%.1f"|format(c.vol_30d) }}%</td>
+      <td style="text-align:right; font-size:12px; font-variant-numeric:tabular-nums;">{{ "%.1f"|format(c.daily_vol) }}%</td>
       <td style="text-align:center;">{{ c.count_2x }}</td>
       <td><span class="rex-{{ c.rex_2x|lower|replace(' ', '') }}">{{ c.rex_2x }}</span></td>
       <td><span class="rex-{{ c.rex_4x|lower|replace(' ', '') }}">{{ c.rex_4x }}</span></td>
@@ -101,8 +138,9 @@
   </tbody>
 </table>
 </div>
+</div>
 
-<p style="font-size:11px; color:var(--gray); margin-top:12px;">
+<p class="sg-footnote">
   <b>Criteria:</b> Existing 2x products | Daily volatility &lt; 20% | Capped at 100 names | Sorted by 2x AUM descending.
 </p>
 

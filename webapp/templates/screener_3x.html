@@ -1,23 +1,101 @@
 {% extends "base.html" %}
-{% block title %}Product Screener - REX Financial{% endblock %}
+{% block title %}Leverage Screener - REX Financial{% endblock %}
+
+{% block head %}
+<style>
+/* ===== Screener: 3x Analysis — STYLE_GUIDE overrides ===== */
+
+/* Remove zebra striping */
+.screener-wrap tbody tr:nth-child(even) { background: transparent; }
+
+/* Section header — left accent, pillar-colored */
+.sg-section {
+  display: flex; align-items: center; justify-content: space-between;
+  margin: 32px 0 12px; padding-bottom: 8px; padding-left: 12px;
+  border-bottom: 1px solid #e5e7eb;
+}
+.sg-section h2 { font-size: 16px; font-weight: 600; color: #0f172a; margin: 0; }
+.sg-section-green { border-left: 3px solid #059669; }
+.sg-section-blue { border-left: 3px solid #2563eb; }
+.sg-section-amber { border-left: 3px solid #d97706; }
+.sg-badge {
+  background: #0f172a; color: #ffffff; padding: 2px 12px;
+  border-radius: 100px; font-size: 12px; font-weight: 600; font-family: var(--font-mono);
+}
+.sg-badge-green { background: #059669; }
+.sg-badge-blue { background: #2563eb; }
+.sg-badge-amber { background: #d97706; }
+
+/* Score legend */
+.sg-legend {
+  display: flex; gap: 16px; align-items: center; margin-bottom: 16px;
+  padding: 10px 16px; background: #ffffff; border: 1px solid #e5e7eb; border-radius: 6px; font-size: 12px;
+}
+.sg-legend-title { font-weight: 600; color: #0f172a; }
+.sg-legend-dot {
+  display: inline-block; width: 10px; height: 10px; border-radius: 2px;
+  margin-right: 4px; vertical-align: middle;
+}
+
+/* Key findings — verdict block style */
+.sg-findings {
+  list-style: none; padding: 16px 20px; margin: 0 0 24px 0;
+  background: #ffffff; border: 1px solid #e5e7eb; border-left: 3px solid #2563eb;
+  border-radius: 0 6px 6px 0;
+}
+.sg-findings li {
+  font-size: 14px; color: #374151; line-height: 1.6; padding: 2px 0;
+}
+.sg-findings li + li { margin-top: 4px; }
+
+/* Score bar (keep existing colored bars) */
+.score-bar { display: inline-block; width: 60px; height: 6px; background: #e5e7eb; border-radius: 3px; vertical-align: middle; margin-left: 4px; }
+.score-fill { height: 100%; border-radius: 3px; }
+
+/* Accordion for Tier 3 / Methodology */
+.sg-accordion { border: 1px solid #e5e7eb; border-radius: 6px; overflow: hidden; margin-top: 32px; background: #ffffff; }
+.sg-accordion-hd {
+  background: #f8fafc; padding: 12px 16px; cursor: pointer;
+  display: flex; justify-content: space-between; align-items: center; user-select: none;
+}
+.sg-accordion-hd:hover { background: #f1f5f9; }
+.sg-accordion-hd h3 { font-size: 14px; font-weight: 600; color: #0f172a; margin: 0; }
+.sg-accordion-bd { display: none; padding: 0; }
+
+/* PDF button */
+.sg-btn-pdf {
+  padding: 8px 16px; background: #0f172a; color: #ffffff; border: none; border-radius: 4px;
+  font-size: 13px; font-weight: 500; text-decoration: none; cursor: pointer;
+}
+.sg-btn-pdf:hover { background: #1e293b; color: #ffffff; text-decoration: none; }
+
+/* Description text */
+.sg-desc { font-size: 12px; color: #64748b; margin-bottom: 8px; }
+
+/* Methodology content */
+.sg-methodology { font-size: 13px; color: #374151; line-height: 1.7; padding: 16px; }
+.sg-methodology p + p { margin-top: 8px; }
+.sg-methodology b { color: #0f172a; }
+</style>
+{% endblock %}
 
 {% block content %}
 <div class="header">
   <div class="breadcrumb">
     <a href="/">Home</a><span class="sep">/</span>
     <a href="/screener/">Filings</a><span class="sep">/</span>
-    <span>Product Screener</span>
+    <span>Leverage Screener</span>
   </div>
   <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:12px;">
     <div>
-      <h1>Product Screener</h1>
+      <h1 style="font-size:20px; font-weight:600; color:#0f172a;">Leverage Screener</h1>
       <div class="date">
         {% if data_date %}Data as of {{ data_date }}{% endif %}
         {% if computed_at %} | Analysis computed {{ computed_at }}{% endif %}
       </div>
     </div>
     {% if data_available %}
-    <a href="/screener/report" class="btn btn-primary" style="margin-top:4px;">Download PDF</a>
+    <a href="/screener/report" class="sg-btn-pdf">Download PDF</a>
     {% endif %}
   </div>
 </div>
@@ -26,36 +104,36 @@
 {% include "_screener_subnav.html" %}
 
 {% if cache_warming is defined and cache_warming %}
-<div class="what-changed" style="background:var(--blue-subtle); border-color:var(--blue);">
-  <h2>Data is loading...</h2>
-  <p>The screener cache is warming up. This page will be ready shortly. Please refresh in a few seconds.</p>
+<div style="padding:16px 20px; background:#ffffff; border:1px solid #e5e7eb; border-left:3px solid #2563eb; border-radius:0 6px 6px 0; margin-bottom:24px;">
+  <div style="font-size:16px; font-weight:600; color:#0f172a; margin-bottom:4px;">Data is loading...</div>
+  <p style="font-size:13px; color:#64748b; margin:0;">The screener cache is warming up. This page will be ready shortly. Please refresh in a few seconds.</p>
 </div>
 {% elif not data_available %}
-<div class="what-changed" style="background:var(--orange-bg); border-color:var(--orange);">
-  <h2>No Bloomberg data available</h2>
-  <p>Screener data not yet available. Run the daily pipeline to load Bloomberg data and score candidates.</p>
+<div style="padding:16px 20px; background:#fffbeb; border:1px solid #e5e7eb; border-left:3px solid #d97706; border-radius:0 6px 6px 0; margin-bottom:24px;">
+  <div style="font-size:16px; font-weight:600; color:#0f172a; margin-bottom:4px;">No Bloomberg data available</div>
+  <p style="font-size:13px; color:#64748b; margin:0;">Screener data not yet available. Run the daily pipeline to load Bloomberg data and score candidates.</p>
 </div>
 {% else %}
 
 <!-- ==================== KPI ROW 1: 3x MARKET ==================== -->
 <div class="kpi-row">
-  <div class="kpi">
+  <div class="kpi kpi-filing">
     <div class="num">
       {% if snapshot.total_aum >= 1000 %}${{ "%.1f"|format(snapshot.total_aum / 1000) }}B
       {% else %}${{ "{:,.0f}".format(snapshot.total_aum) }}M{% endif %}
     </div>
     <div class="label">Total 3x AUM</div>
   </div>
-  <div class="kpi">
+  <div class="kpi kpi-filing">
     <div class="num">{{ snapshot.product_count }}</div>
     <div class="label">3x Products</div>
   </div>
-  <div class="kpi">
+  <div class="kpi kpi-filing">
     <div class="num">{{ snapshot.single_stock_count }}</div>
     <div class="label">3x Single Stock</div>
   </div>
-  <div class="kpi">
-    <div class="num" style="color:var(--green);">
+  <div class="kpi kpi-filing">
+    <div class="num" style="color:#059669;">
       {% if snapshot.rex_aum >= 1000 %}${{ "%.1f"|format(snapshot.rex_aum / 1000) }}B
       {% else %}${{ "{:,.0f}".format(snapshot.rex_aum) }}M{% endif %}
     </div>
@@ -64,24 +142,24 @@
 </div>
 
 <!-- ==================== KPI ROW 2: 2x MARKET CONTEXT ==================== -->
-<div class="kpi-row kpi-row-blue">
-  <div class="kpi">
+<div class="kpi-row">
+  <div class="kpi kpi-market">
     <div class="num">
       {% if snapshot.total_2x_aum >= 1000 %}${{ "%.1f"|format(snapshot.total_2x_aum / 1000) }}B
       {% else %}${{ "{:,.0f}".format(snapshot.total_2x_aum) }}M{% endif %}
     </div>
     <div class="label">Total 2x AUM</div>
   </div>
-  <div class="kpi">
+  <div class="kpi kpi-market">
     <div class="num">{{ snapshot.total_2x_count }}</div>
     <div class="label">2x Products</div>
   </div>
-  <div class="kpi">
+  <div class="kpi kpi-market">
     <div class="num">{{ snapshot.ss_2x_count }}</div>
     <div class="label">2x Single Stock</div>
   </div>
-  <div class="kpi">
-    <div class="num" style="color:var(--green);">
+  <div class="kpi kpi-market">
+    <div class="num" style="color:#059669;">
       {% if snapshot.rex_2x_aum >= 1000 %}${{ "%.1f"|format(snapshot.rex_2x_aum / 1000) }}B
       {% else %}${{ "{:,.0f}".format(snapshot.rex_2x_aum) }}M{% endif %}
     </div>
@@ -90,7 +168,7 @@
 </div>
 
 <!-- ==================== KEY FINDINGS ==================== -->
-<ul class="key-findings">
+<ul class="sg-findings">
   {% if snapshot.single_stock_count == 0 %}
   <li><strong>Zero 3x single-stock ETFs exist today.</strong> Every filing is first-mover advantage.</li>
   {% endif %}
@@ -99,7 +177,7 @@
   <li>Tier 1 combined 2x AUM: <b>${{ "{:,.0f}".format(tiers.tier_1|sum(attribute='aum_2x')) }}M</b> in proven demand.</li>
   {% endif %}
   {% if four_x_count %}
-  <li><b>{{ four_x_count }}</b> low-volatility 2x successes identified for <a href="/screener/4x">4x filing</a>.</li>
+  <li><b>{{ four_x_count }}</b> low-volatility 2x successes identified for <a href="/screener/4x" style="color:#2563eb; font-weight:500;">4x filing</a>.</li>
   {% endif %}
   {% if snapshot.top_issuers %}
   <li>Top 3x issuer: {{ snapshot.top_issuers[0].issuer }} (${{ "{:,.0f}".format(snapshot.top_issuers[0].aum) }}M AUM, {{ snapshot.top_issuers[0].count }} products).</li>
@@ -107,24 +185,25 @@
 </ul>
 
 {# -- Score Legend -- #}
-<div style="display:flex; gap:16px; align-items:center; margin-bottom:16px; padding:10px 16px; background:var(--card-bg, #fff); border:1px solid var(--border); border-radius:8px; font-size:0.8rem;">
-  <span style="font-weight:600; color:var(--navy, #1E3A5F);">Score Legend:</span>
-  <span><span style="display:inline-block; width:10px; height:10px; border-radius:2px; background:var(--green); margin-right:4px; vertical-align:middle;"></span> 70+ File Immediately</span>
-  <span><span style="display:inline-block; width:10px; height:10px; border-radius:2px; background:var(--orange); margin-right:4px; vertical-align:middle;"></span> 40-69 File Soon</span>
-  <span><span style="display:inline-block; width:10px; height:10px; border-radius:2px; background:var(--gray); margin-right:4px; vertical-align:middle;"></span> &lt;40 Monitor</span>
+<div class="sg-legend">
+  <span class="sg-legend-title">Score Legend:</span>
+  <span><span class="sg-legend-dot" style="background:#059669;"></span> 70+ File Immediately</span>
+  <span><span class="sg-legend-dot" style="background:#d97706;"></span> 40-69 File Soon</span>
+  <span><span class="sg-legend-dot" style="background:#9ca3af;"></span> &lt;40 Monitor</span>
 </div>
 
 <!-- ==================== TIER 1: FILE IMMEDIATELY ==================== -->
+<div class="screener-wrap">
 {% if tiers.tier_1 %}
-<div class="section-header" style="border-color:var(--green);">
-  <h2 style="color:var(--green);">Tier 1 - File Immediately</h2>
-  <span class="badge" style="background:var(--green);">{{ tiers.tier_1|length }} stocks</span>
+<div class="sg-section sg-section-green">
+  <h2 style="color:#059669;">Tier 1 - File Immediately</h2>
+  <span class="sg-badge sg-badge-green">{{ tiers.tier_1|length }} stocks</span>
 </div>
-<p style="font-size:12px; color:var(--gray); margin-bottom:8px;">
+<p class="sg-desc">
   Stocks with proven 2x leveraged product demand. Every name has existing 2x AUM, sorted by 3x Filing Score.
 </p>
 <div class="table-scroll-wrap">
-<table id="tier1Table" class="tier-1-header">
+<table id="tier1Table">
   <thead>
     <tr>
       <th style="width:35px;">#</th>
@@ -141,26 +220,26 @@
   <tbody>
     {% for c in tiers.tier_1 %}
     <tr>
-      <td style="color:var(--gray); font-size:12px;">{{ loop.index }}</td>
+      <td style="color:#94a3b8; font-size:12px;">{{ loop.index }}</td>
       <td class="ticker-col"><a href="/screener/stock/{{ c.ticker }} US">{{ c.ticker }}</a></td>
       <td style="font-size:12px;">{{ c.sector or '-' }}</td>
       <td style="text-align:right;">
         <span style="display:inline-block; width:36px; text-align:right; font-weight:600;
-          {% if c.score >= 70 %}color:var(--green);
-          {% elif c.score >= 40 %}color:var(--orange);
-          {% else %}color:var(--gray);{% endif %}">{{ "%.0f"|format(c.score) }}</span>
+          {% if c.score >= 70 %}color:#059669;
+          {% elif c.score >= 40 %}color:#d97706;
+          {% else %}color:#9ca3af;{% endif %}">{{ "%.0f"|format(c.score) }}</span>
         <div class="score-bar"><div class="score-fill" style="width:{{ c.score }}%;
-          {% if c.score >= 70 %}background:var(--green);
-          {% elif c.score >= 40 %}background:var(--orange);
-          {% else %}background:var(--gray);{% endif %}"></div></div>
+          {% if c.score >= 70 %}background:#059669;
+          {% elif c.score >= 40 %}background:#d97706;
+          {% else %}background:#9ca3af;{% endif %}"></div></div>
       </td>
-      <td style="text-align:right; font-size:12px;">
+      <td style="text-align:right; font-size:12px; font-variant-numeric:tabular-nums;">
         {% if c.mkt_cap and c.mkt_cap >= 1000 %}${{ "%.0f"|format(c.mkt_cap / 1000) }}B
         {% elif c.mkt_cap %}${{ "{:,.0f}".format(c.mkt_cap) }}M
         {% else %}-{% endif %}
       </td>
       <td style="text-align:center;">{{ c.count_2x }}</td>
-      <td style="text-align:right; font-size:12px;">
+      <td style="text-align:right; font-size:12px; font-variant-numeric:tabular-nums;">
         {% if c.aum_2x >= 1000 %}${{ "%.1f"|format(c.aum_2x / 1000) }}B
         {% elif c.aum_2x > 0 %}${{ "{:,.0f}".format(c.aum_2x) }}M
         {% else %}-{% endif %}
@@ -176,15 +255,15 @@
 
 <!-- ==================== TIER 2: FILE SOON ==================== -->
 {% if tiers.tier_2 %}
-<div class="section-header" style="margin-top:30px; border-color:var(--blue);">
-  <h2 style="color:var(--blue);">Tier 2 - File Soon</h2>
-  <span class="badge" style="background:var(--blue);">{{ tiers.tier_2|length }} stocks</span>
+<div class="sg-section sg-section-blue" style="margin-top:32px;">
+  <h2 style="color:#2563eb;">Tier 2 - File Soon</h2>
+  <span class="sg-badge sg-badge-blue">{{ tiers.tier_2|length }} stocks</span>
 </div>
-<p style="font-size:12px; color:var(--gray); margin-bottom:8px;">
+<p class="sg-desc">
   Strong fundamentals with growing leveraged product interest. File after Tier 1 priorities are submitted.
 </p>
 <div class="table-scroll-wrap">
-<table id="tier2Table" class="tier-2-header">
+<table id="tier2Table">
   <thead>
     <tr>
       <th style="width:35px;">#</th>
@@ -201,26 +280,26 @@
   <tbody>
     {% for c in tiers.tier_2 %}
     <tr>
-      <td style="color:var(--gray); font-size:12px;">{{ loop.index }}</td>
+      <td style="color:#94a3b8; font-size:12px;">{{ loop.index }}</td>
       <td class="ticker-col"><a href="/screener/stock/{{ c.ticker }} US">{{ c.ticker }}</a></td>
       <td style="font-size:12px;">{{ c.sector or '-' }}</td>
       <td style="text-align:right;">
         <span style="display:inline-block; width:36px; text-align:right; font-weight:600;
-          {% if c.score >= 70 %}color:var(--green);
-          {% elif c.score >= 40 %}color:var(--orange);
-          {% else %}color:var(--gray);{% endif %}">{{ "%.0f"|format(c.score) }}</span>
+          {% if c.score >= 70 %}color:#059669;
+          {% elif c.score >= 40 %}color:#d97706;
+          {% else %}color:#9ca3af;{% endif %}">{{ "%.0f"|format(c.score) }}</span>
         <div class="score-bar"><div class="score-fill" style="width:{{ c.score }}%;
-          {% if c.score >= 70 %}background:var(--green);
-          {% elif c.score >= 40 %}background:var(--orange);
-          {% else %}background:var(--gray);{% endif %}"></div></div>
+          {% if c.score >= 70 %}background:#059669;
+          {% elif c.score >= 40 %}background:#d97706;
+          {% else %}background:#9ca3af;{% endif %}"></div></div>
       </td>
-      <td style="text-align:right; font-size:12px;">
+      <td style="text-align:right; font-size:12px; font-variant-numeric:tabular-nums;">
         {% if c.mkt_cap and c.mkt_cap >= 1000 %}${{ "%.0f"|format(c.mkt_cap / 1000) }}B
         {% elif c.mkt_cap %}${{ "{:,.0f}".format(c.mkt_cap) }}M
         {% else %}-{% endif %}
       </td>
       <td style="text-align:center;">{{ c.count_2x }}</td>
-      <td style="text-align:right; font-size:12px;">
+      <td style="text-align:right; font-size:12px; font-variant-numeric:tabular-nums;">
         {% if c.aum_2x >= 1000 %}${{ "%.1f"|format(c.aum_2x / 1000) }}B
         {% elif c.aum_2x > 0 %}${{ "{:,.0f}".format(c.aum_2x) }}M
         {% else %}-{% endif %}
@@ -236,17 +315,17 @@
 
 <!-- ==================== TIER 3: MONITOR (COLLAPSED) ==================== -->
 {% if tiers.tier_3 %}
-<div class="trust-block" style="margin-top:30px;">
-  <div class="trust-header" onclick="toggleTrust(this)" style="border-left:4px solid var(--orange);">
-    <h3 style="color:var(--orange);">Tier 3 - Monitor <span style="font-size:12px; color:var(--gray); font-weight:normal;">({{ tiers.tier_3|length }} stocks)</span></h3>
-    <span class="arrow">&#9654;</span>
+<div class="sg-accordion" style="margin-top:32px;">
+  <div class="sg-accordion-hd" onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'block' ? 'none' : 'block';" style="border-left:3px solid #d97706;">
+    <h3 style="color:#d97706;">Tier 3 - Monitor <span style="font-size:12px; color:#94a3b8; font-weight:400;">({{ tiers.tier_3|length }} stocks)</span></h3>
+    <span style="font-size:12px; color:#64748b;">&#9654;</span>
   </div>
-  <div class="trust-body">
-    <p style="font-size:12px; color:var(--gray); padding:8px 16px 4px;">
+  <div class="sg-accordion-bd">
+    <p class="sg-desc" style="padding:8px 16px 4px;">
       Stocks meeting minimum thresholds. Monitor for rising demand before filing.
     </p>
     <div class="table-scroll-wrap">
-    <table id="tier3Table" class="tier-3-header">
+    <table id="tier3Table">
       <thead>
         <tr>
           <th style="width:35px;">#</th>
@@ -263,26 +342,26 @@
       <tbody>
         {% for c in tiers.tier_3 %}
         <tr>
-          <td style="color:var(--gray); font-size:12px;">{{ loop.index }}</td>
+          <td style="color:#94a3b8; font-size:12px;">{{ loop.index }}</td>
           <td class="ticker-col"><a href="/screener/stock/{{ c.ticker }} US">{{ c.ticker }}</a></td>
           <td style="font-size:12px;">{{ c.sector or '-' }}</td>
           <td style="text-align:right;">
             <span style="display:inline-block; width:36px; text-align:right; font-weight:600;
-              {% if c.score >= 70 %}color:var(--green);
-              {% elif c.score >= 40 %}color:var(--orange);
-              {% else %}color:var(--gray);{% endif %}">{{ "%.0f"|format(c.score) }}</span>
+              {% if c.score >= 70 %}color:#059669;
+              {% elif c.score >= 40 %}color:#d97706;
+              {% else %}color:#9ca3af;{% endif %}">{{ "%.0f"|format(c.score) }}</span>
             <div class="score-bar"><div class="score-fill" style="width:{{ c.score }}%;
-              {% if c.score >= 70 %}background:var(--green);
-              {% elif c.score >= 40 %}background:var(--orange);
-              {% else %}background:var(--gray);{% endif %}"></div></div>
+              {% if c.score >= 70 %}background:#059669;
+              {% elif c.score >= 40 %}background:#d97706;
+              {% else %}background:#9ca3af;{% endif %}"></div></div>
           </td>
-          <td style="text-align:right; font-size:12px;">
+          <td style="text-align:right; font-size:12px; font-variant-numeric:tabular-nums;">
             {% if c.mkt_cap and c.mkt_cap >= 1000 %}${{ "%.0f"|format(c.mkt_cap / 1000) }}B
             {% elif c.mkt_cap %}${{ "{:,.0f}".format(c.mkt_cap) }}M
             {% else %}-{% endif %}
           </td>
           <td style="text-align:center;">{{ c.count_2x }}</td>
-          <td style="text-align:right; font-size:12px;">
+          <td style="text-align:right; font-size:12px; font-variant-numeric:tabular-nums;">
             {% if c.aum_2x >= 1000 %}${{ "%.1f"|format(c.aum_2x / 1000) }}B
             {% elif c.aum_2x > 0 %}${{ "{:,.0f}".format(c.aum_2x) }}M
             {% else %}-{% endif %}
@@ -297,27 +376,28 @@
   </div>
 </div>
 {% endif %}
+</div>{# end .screener-wrap #}
 
 <!-- ==================== METHODOLOGY (COLLAPSED) ==================== -->
-<div class="trust-block" style="margin-top:30px;">
-  <div class="trust-header" onclick="toggleTrust(this)">
+<div class="sg-accordion" style="margin-top:32px;">
+  <div class="sg-accordion-hd" onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'block' ? 'none' : 'block';">
     <h3>Methodology</h3>
-    <span class="arrow">&#9654;</span>
+    <span style="font-size:12px; color:#64748b;">&#9654;</span>
   </div>
-  <div class="trust-body" style="padding:16px;">
-    <div style="font-size:13px; color:var(--gray); line-height:1.7;">
-      <p><b style="color:var(--navy);">3x Filing Score</b> = 40% Stock Fundamentals + 60% 2x AUM Demand</p>
-      <p style="margin-top:8px;">
+  <div class="sg-accordion-bd">
+    <div class="sg-methodology">
+      <p><b>3x Filing Score</b> = 40% Stock Fundamentals + 60% 2x AUM Demand</p>
+      <p>
         <b>Stock Fundamentals (40%)</b>: Percentile-ranked composite of Turnover (30%), Options OI (30%), Mkt Cap (20%), Volatility (10%), Short Interest (10%).
       </p>
-      <p style="margin-top:4px;">
+      <p>
         <b>2x AUM Demand (60%)</b>: Percentile-ranked total AUM across all existing 2x single-stock products on each underlier. Stocks with no 2x products receive 0.
       </p>
-      <p style="margin-top:12px;"><b style="color:var(--navy);">Tiering</b></p>
+      <p style="margin-top:12px;"><b>Tiering</b></p>
       <p><b>Tier 1</b>: Stocks with existing 2x AUM (proven market demand), sorted by 3x Filing Score.</p>
       <p><b>Tier 2</b>: Next highest scoring stocks without 2x history.</p>
       <p><b>Tier 3</b>: Remaining stocks meeting minimum score thresholds.</p>
-      <p style="margin-top:8px; font-style:italic;">Risk levels are informational only and do not affect tiering. All tiers sorted by the same 3x Filing Score.</p>
+      <p style="margin-top:8px; font-style:italic; color:#64748b;">Risk levels are informational only and do not affect tiering. All tiers sorted by the same 3x Filing Score.</p>
     </div>
   </div>
 </div>
