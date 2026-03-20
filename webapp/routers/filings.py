@@ -34,6 +34,7 @@ def filing_explorer(
     form_type: str = "",
     trust_id: int = 0,
     date_range: str = "all",
+    sort: str = "",
     page: int = Query(default=1, ge=1),
     per_page: int = Query(default=25, ge=10, le=250),
     db: Session = Depends(get_db),
@@ -56,7 +57,7 @@ def filing_explorer(
     if mode == "funds":
         return _handle_funds_mode(
             request, db, trusts,
-            q=q, status=status, trust_id=trust_id, page=page, per_page=per_page,
+            q=q, status=status, trust_id=trust_id, sort=sort, page=page, per_page=per_page,
             fund_count=fund_count, filing_count=filing_count, trust_count=trust_count,
         )
     else:
@@ -76,11 +77,12 @@ def _handle_funds_mode(
     q: str,
     status: str,
     trust_id: int,
-    page: int,
-    per_page: int,
-    fund_count: int,
-    filing_count: int,
-    trust_count: int,
+    sort: str = "",
+    page: int = 1,
+    per_page: int = 25,
+    fund_count: int = 0,
+    filing_count: int = 0,
+    trust_count: int = 0,
 ):
     """Funds tab — query FundStatus, adapted from funds.py logic."""
     # Clamp per_page
@@ -120,7 +122,19 @@ def _handle_funds_mode(
     if page > total_pages:
         page = total_pages
 
-    query = query.order_by(FundStatus.latest_filing_date.desc().nullslast(), FundStatus.fund_name)
+    # Server-side sorting
+    sort_map = {
+        "name": FundStatus.fund_name.asc(),
+        "name_desc": FundStatus.fund_name.desc(),
+        "ticker": FundStatus.ticker.asc().nullslast(),
+        "ticker_desc": FundStatus.ticker.desc().nullsfirst(),
+        "status": FundStatus.status.asc(),
+        "status_desc": FundStatus.status.desc(),
+        "date": FundStatus.latest_filing_date.asc().nullslast(),
+        "date_desc": FundStatus.latest_filing_date.desc().nullslast(),
+    }
+    order = sort_map.get(sort, FundStatus.latest_filing_date.desc().nullslast())
+    query = query.order_by(order)
     query = query.offset((page - 1) * per_page).limit(per_page)
     results = db.execute(query).all()
 
@@ -132,6 +146,7 @@ def _handle_funds_mode(
         "q": q,
         "status": status,
         "trust_id": trust_id,
+        "sort": sort,
         "page": page,
         "per_page": per_page,
         "total_results": total_results,
