@@ -95,8 +95,8 @@ def _handle_funds_mode(
         Trust.slug.label("trust_slug"),
     ).join(Trust, Trust.id == FundStatus.trust_id)
 
-    # Exclude blank fund names
-    query = query.where(FundStatus.fund_name != "")
+    # Exclude blank/placeholder fund names
+    query = query.where(FundStatus.fund_name.notin(["", "-", " "]))
 
     # Exclude mutual fund share classes
     for pattern in MUTUAL_FUND_EXCLUSIONS:
@@ -120,7 +120,7 @@ def _handle_funds_mode(
     if page > total_pages:
         page = total_pages
 
-    query = query.order_by(FundStatus.fund_name)
+    query = query.order_by(FundStatus.latest_filing_date.desc().nullslast(), FundStatus.fund_name)
     query = query.offset((page - 1) * per_page).limit(per_page)
     results = db.execute(query).all()
 

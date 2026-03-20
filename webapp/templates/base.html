@@ -116,81 +116,38 @@
 
     <!-- PILLAR 2: Filing Intelligence -->
     <div class="mega-trigger-wrap">
-      <button class="mega-trigger {% if request.url.path.startswith('/dashboard') or request.url.path.startswith('/funds') or request.url.path.startswith('/filings') or request.url.path.startswith('/screener') or request.url.path.startswith('/analytics') %}active{% endif %}" aria-expanded="false" data-panel="filings">Filings</button>
+      <button class="mega-trigger {% if request.url.path == '/dashboard' or request.url.path.startswith('/filings') or request.url.path.startswith('/screener') or request.url.path.startswith('/funds') or request.url.path.startswith('/trusts') %}active{% endif %}" aria-expanded="false" data-panel="filings">Filings</button>
       <div class="mega-panel" id="panel-filings">
         <div class="mega-columns">
           <div class="mega-column">
-            <div class="mega-section-label">Dashboards</div>
+            <div class="mega-section-label">Monitor</div>
             <a href="/dashboard" class="mega-link {% if request.url.path == '/dashboard' %}active{% endif %}">
               <div class="mega-link-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M16 13H8"/><path d="M16 17H8"/></svg></div>
               <div class="mega-link-text">
                 <div class="mega-link-title">Filing Activity</div>
-                <div class="mega-link-desc">Today's SEC filings across 2,475 trusts</div>
+                <div class="mega-link-desc">Recent filings, competitor watch, intelligence brief</div>
               </div>
             </a>
+          </div>
+          <div class="mega-column">
             <div class="mega-section-label">Search</div>
-            <a href="/funds/" class="mega-link {% if request.url.path == '/funds/' %}active{% endif %}">
+            <a href="/filings/" class="mega-link {% if request.url.path.startswith('/filings') %}active{% endif %}">
               <div class="mega-link-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg></div>
               <div class="mega-link-text">
-                <div class="mega-link-title">Search Funds</div>
-                <div class="mega-link-desc">Find funds by name, ticker, trust</div>
-              </div>
-            </a>
-            <a href="/filings/" class="mega-link {% if request.url.path == '/filings/' %}active{% endif %}">
-              <div class="mega-link-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg></div>
-              <div class="mega-link-text">
-                <div class="mega-link-title">Search Filings</div>
-                <div class="mega-link-desc">Filter by form type, date, trust</div>
+                <div class="mega-link-title">Filing Explorer</div>
+                <div class="mega-link-desc">Search funds and filings in one place</div>
               </div>
             </a>
           </div>
           <div class="mega-column">
-            <div class="mega-section-label">Analysis</div>
-            <a href="/screener/" class="mega-link {% if request.url.path == '/screener/' %}active{% endif %}">
+            <div class="mega-section-label">Analyze</div>
+            <a href="/screener/" class="mega-link {% if request.url.path.startswith('/screener') %}active{% endif %}">
               <div class="mega-link-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg></div>
               <div class="mega-link-text">
-                <div class="mega-link-title">Filing Landscape</div>
-                <div class="mega-link-desc">3x/4x/5x competitive matrix</div>
+                <div class="mega-link-title">Product Screener</div>
+                <div class="mega-link-desc">Competitive landscape, 3x/4x scoring, ticker evaluation</div>
               </div>
             </a>
-            <a href="/screener/3x-analysis" class="mega-link {% if request.url.path == '/screener/3x-analysis' %}active{% endif %}">
-              <div class="mega-link-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="6"/><path d="M15.477 12.89L17 22l-5-3-5 3 1.523-9.11"/></svg></div>
-              <div class="mega-link-text">
-                <div class="mega-link-title">Bloomberg Scoring</div>
-                <div class="mega-link-desc">Demand-tiered product recommendations</div>
-              </div>
-            </a>
-            <a href="/screener/4x" class="mega-link {% if request.url.path == '/screener/4x' %}active{% endif %}">
-              <div class="mega-link-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg></div>
-              <div class="mega-link-text">
-                <div class="mega-link-title">4x Analysis</div>
-                <div class="mega-link-desc">4x leverage breakdown</div>
-              </div>
-            </a>
-          </div>
-          <div class="mega-column">
-            <div class="mega-section-label">Tools</div>
-            <a href="/screener/evaluate" class="mega-link {% if request.url.path == '/screener/evaluate' %}active{% endif %}">
-              <div class="mega-link-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="M22 4L12 14.01l-3-3"/></svg></div>
-              <div class="mega-link-text">
-                <div class="mega-link-title">Evaluate Ticker</div>
-                <div class="mega-link-desc">Score a ticker for launch viability</div>
-              </div>
-            </a>
-            <div class="mega-link coming-soon">
-              <div class="mega-link-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/></svg></div>
-              <div class="mega-link-text">
-                <div class="mega-link-title">Fund Analytics <span class="coming-soon-badge">Soon</span></div>
-                <div class="mega-link-desc">Fund-level performance analytics</div>
-              </div>
-            </div>
-            <div class="mega-link coming-soon">
-              <div class="mega-link-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M23 18l-9.5-9.5-5 5L1 6"/><path d="M17 18h6v-6"/></svg></div>
-              <div class="mega-link-text">
-                <div class="mega-link-title">Fund Withdrawals <span class="coming-soon-badge">Soon</span></div>
-                <div class="mega-link-desc">Track fund closures and withdrawals</div>
-              </div>
-            </div>
           </div>
         </div>
       </div>
@@ -410,10 +367,8 @@
     <div>
       <div class="footer-heading">Filings</div>
       <a href="/dashboard" class="footer-link">Filing Activity</a>
-      <a href="/funds/" class="footer-link">Search Funds</a>
-      <a href="/filings/" class="footer-link">Search Filings</a>
-      <a href="/screener/" class="footer-link">Filing Landscape</a>
-      <a href="/screener/3x-analysis" class="footer-link">Bloomberg Scoring</a>
+      <a href="/filings/" class="footer-link">Filing Explorer</a>
+      <a href="/screener/" class="footer-link">Product Screener</a>
     </div>
     <div>
       <div class="footer-heading">Ownership</div>
