@@ -109,7 +109,7 @@ def run_pipeline(ciks: list[str], overrides: dict | None = None, since: str | No
                  user_agent: str | None = None, request_timeout: int = 45, pause: float = 0.35,
                  refresh_submissions: bool = True, refresh_max_age_hours: int = 6, refresh_force_now: bool = False,
                  force_reprocess: bool = False, max_workers: int = _DEFAULT_WORKERS,
-                 use_async: bool = False, use_daily_index: bool = False,
+                 use_async: bool = True, use_daily_index: bool = False,
                  triggered_by: str = "manual", etf_only: bool = False) -> int:
     output_root = Path(output_root); cache_dir = Path(cache_dir)
     output_root.mkdir(parents=True, exist_ok=True); cache_dir.mkdir(parents=True, exist_ok=True)

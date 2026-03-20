@@ -116,7 +116,7 @@ class SECClient:
                 except Exception:
                     should_refresh = True
         if should_refresh:
-            time.sleep(self.pause)
+            time.sleep(0.11)  # Faster for submissions checks (~9 req/s, within SEC 10 req/s limit)
             # Use If-Modified-Since to skip unchanged submissions (304 = no change)
             headers = {}
             if cache_path.exists():
