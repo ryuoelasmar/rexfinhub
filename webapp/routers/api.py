@@ -293,3 +293,78 @@ async def upload_db(
         import logging
         logging.getLogger(__name__).error("DB upload failed: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.post("/db/upload-notes")
+async def upload_notes_db(
+    file: UploadFile = File(...),
+    _: None = Depends(verify_api_key),
+):
+    """Replace the structured_notes database with an uploaded copy.
+
+    Streams to disk in 64KB chunks. Accepts raw or gzipped (.gz) SQLite DB.
+    """
+    import gzip as _gzip
+
+    notes_db_path = Path("data/structured_notes.db")
+    notes_db_path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = str(notes_db_path) + ".uploading"
+
+    try:
+        is_gzipped = (file.filename or "").endswith(".gz") or file.content_type == "application/gzip"
+        total_in = 0
+        total_out = 0
+
+        if is_gzipped:
+            gz_tmp = tmp_path + ".gz"
+            with open(gz_tmp, "wb") as f:
+                while True:
+                    chunk = await file.read(65536)
+                    if not chunk:
+                        break
+                    f.write(chunk)
+                    total_in += len(chunk)
+            # Remove old DB to free space before decompressing
+            try:
+                os.unlink(str(notes_db_path))
+            except OSError:
+                pass
+            with _gzip.open(gz_tmp, "rb") as gz_in:
+                with open(tmp_path, "wb") as f_out:
+                    while True:
+                        chunk = gz_in.read(65536)
+                        if not chunk:
+                            break
+                        f_out.write(chunk)
+                        total_out += len(chunk)
+            try:
+                os.unlink(gz_tmp)
+            except OSError:
+                pass
+        else:
+            with open(tmp_path, "wb") as f:
+                while True:
+                    chunk = await file.read(65536)
+                    if not chunk:
+                        break
+                    f.write(chunk)
+                    total_out += len(chunk)
+            total_in = total_out
+
+        shutil.move(tmp_path, str(notes_db_path))
+
+        in_mb = total_in / 1_000_000
+        out_mb = total_out / 1_000_000
+        msg = f"Notes DB replaced ({out_mb:.1f} MB)"
+        if is_gzipped:
+            msg = f"Notes DB replaced ({in_mb:.1f} MB gzipped -> {out_mb:.1f} MB)"
+        return {"status": "ok", "message": msg}
+    except Exception as e:
+        for p in [tmp_path, tmp_path + ".gz"]:
+            try:
+                os.unlink(p)
+            except OSError:
+                pass
+        import logging
+        logging.getLogger(__name__).error("Notes DB upload failed: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error")
