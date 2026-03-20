@@ -40,7 +40,7 @@
 /* Key findings — verdict block style */
 .sg-findings {
   list-style: none; padding: 16px 20px; margin: 0 0 24px 0;
-  background: #ffffff; border: 1px solid #e5e7eb; border-left: 3px solid #2563eb;
+  background: #ffffff; border: 1px solid #e5e7eb; border-left: 2px solid #2563eb;
   border-radius: 0 6px 6px 0;
 }
 .sg-findings li {
@@ -71,6 +71,15 @@
 
 /* Description text */
 .sg-desc { font-size: 12px; color: #64748b; margin-bottom: 8px; }
+
+/* REX/Risk badge overrides — STYLE_GUIDE approved colors */
+.rex-yes { color: #059669; font-weight: 700; }
+.rex-filed { color: #2563eb; font-weight: 700; }
+.rex-no { color: #9ca3af; }
+.risk-low { color: #059669; font-weight: 700; }
+.risk-medium { color: #d97706; font-weight: 700; }
+.risk-high { color: #dc2626; font-weight: 700; }
+.risk-extreme { color: #7c3aed; font-weight: 700; }
 
 /* Methodology content */
 .sg-methodology { font-size: 13px; color: #374151; line-height: 1.7; padding: 16px; }
@@ -104,12 +113,12 @@
 {% include "_screener_subnav.html" %}
 
 {% if cache_warming is defined and cache_warming %}
-<div style="padding:16px 20px; background:#ffffff; border:1px solid #e5e7eb; border-left:3px solid #2563eb; border-radius:0 6px 6px 0; margin-bottom:24px;">
+<div style="padding:16px 20px; background:#ffffff; border:1px solid #e5e7eb; border-left:2px solid #2563eb; border-radius:0 6px 6px 0; margin-bottom:24px;">
   <div style="font-size:16px; font-weight:600; color:#0f172a; margin-bottom:4px;">Data is loading...</div>
   <p style="font-size:13px; color:#64748b; margin:0;">The screener cache is warming up. This page will be ready shortly. Please refresh in a few seconds.</p>
 </div>
 {% elif not data_available %}
-<div style="padding:16px 20px; background:#fffbeb; border:1px solid #e5e7eb; border-left:3px solid #d97706; border-radius:0 6px 6px 0; margin-bottom:24px;">
+<div style="padding:16px 20px; background:#fffbeb; border:1px solid #e5e7eb; border-left:2px solid #d97706; border-radius:0 6px 6px 0; margin-bottom:24px;">
   <div style="font-size:16px; font-weight:600; color:#0f172a; margin-bottom:4px;">No Bloomberg data available</div>
   <p style="font-size:13px; color:#64748b; margin:0;">Screener data not yet available. Run the daily pipeline to load Bloomberg data and score candidates.</p>
 </div>
@@ -316,7 +325,7 @@
 <!-- ==================== TIER 3: MONITOR (COLLAPSED) ==================== -->
 {% if tiers.tier_3 %}
 <div class="sg-accordion" style="margin-top:32px;">
-  <div class="sg-accordion-hd" onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'block' ? 'none' : 'block';" style="border-left:3px solid #d97706;">
+  <div class="sg-accordion-hd" onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'block' ? 'none' : 'block';" style="border-left:2px solid #d97706;">
     <h3 style="color:#d97706;">Tier 3 - Monitor <span style="font-size:12px; color:#94a3b8; font-weight:400;">({{ tiers.tier_3|length }} stocks)</span></h3>
     <span style="font-size:12px; color:#64748b;">&#9654;</span>
   </div>

@@ -24,8 +24,8 @@
 }
 .sg-btn-dark { background: #0f172a; color: #ffffff; }
 .sg-btn-dark:hover { background: #1e293b; }
-.sg-btn-green { background: #059669; color: #ffffff; }
-.sg-btn-green:hover { background: #047857; }
+.sg-btn-green { background: #0f172a; color: #ffffff; }
+.sg-btn-green:hover { background: #1e293b; }
 .sg-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
 /* Ticker chips */
@@ -108,7 +108,7 @@
 /* Error area */
 .sg-error {
   display: none; padding: 16px 20px; background: #fef2f2;
-  border: 1px solid #e5e7eb; border-left: 3px solid #dc2626;
+  border: 1px solid #e5e7eb; border-left: 2px solid #dc2626;
   border-radius: 0 6px 6px 0; margin-bottom: 24px;
 }
 .sg-error h2 { font-size: 16px; font-weight: 600; color: #0f172a; margin: 0 0 4px; }
@@ -134,12 +134,12 @@
 {% include "_screener_subnav.html" %}
 
 {% if cache_warming is defined and cache_warming %}
-<div style="padding:16px 20px; background:#ffffff; border:1px solid #e5e7eb; border-left:3px solid #2563eb; border-radius:0 6px 6px 0; margin-bottom:24px;">
+<div style="padding:16px 20px; background:#ffffff; border:1px solid #e5e7eb; border-left:2px solid #2563eb; border-radius:0 6px 6px 0; margin-bottom:24px;">
   <div style="font-size:16px; font-weight:600; color:#0f172a; margin-bottom:4px;">Data is loading...</div>
   <p style="font-size:13px; color:#64748b; margin:0;">The screener cache is warming up. This page will be ready shortly. Please refresh in a few seconds.</p>
 </div>
 {% elif not data_available %}
-<div style="padding:16px 20px; background:#fffbeb; border:1px solid #e5e7eb; border-left:3px solid #d97706; border-radius:0 6px 6px 0; margin-bottom:24px;">
+<div style="padding:16px 20px; background:#fffbeb; border:1px solid #e5e7eb; border-left:2px solid #d97706; border-radius:0 6px 6px 0; margin-bottom:24px;">
   <div style="font-size:16px; font-weight:600; color:#0f172a; margin-bottom:4px;">No Bloomberg data available</div>
   <p style="font-size:13px; color:#64748b; margin:0;">Screener data not yet available. Run the daily pipeline to load Bloomberg data.</p>
 </div>

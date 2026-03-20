@@ -22,7 +22,7 @@
 
 /* Info box — verdict block style */
 .sg-info {
-  background: #ffffff; border: 1px solid #e5e7eb; border-left: 3px solid #2563eb;
+  background: #ffffff; border: 1px solid #e5e7eb; border-left: 2px solid #2563eb;
   border-radius: 0 6px 6px 0; padding: 16px 20px; margin-bottom: 24px;
 }
 .sg-info h2 { font-size: 16px; font-weight: 600; color: #0f172a; margin: 0 0 4px; }
@@ -31,9 +31,29 @@
 /* Description text */
 .sg-desc { font-size: 12px; color: #64748b; margin-bottom: 8px; }
 
+/* REX/Risk badge overrides — STYLE_GUIDE approved colors */
+.rex-yes { color: #059669; font-weight: 700; }
+.rex-filed { color: #2563eb; font-weight: 700; }
+.rex-no { color: #9ca3af; }
+.risk-low { color: #059669; font-weight: 700; }
+.risk-medium { color: #d97706; font-weight: 700; }
+.risk-high { color: #dc2626; font-weight: 700; }
+.risk-extreme { color: #7c3aed; font-weight: 700; }
+
 /* Criteria footnote */
 .sg-footnote { font-size: 11px; color: #94a3b8; margin-top: 12px; }
 .sg-footnote b { color: #64748b; }
+
+/* Show all toggle */
+.sg-toggle-row {
+  display: flex; justify-content: center; margin-top: 12px;
+}
+.sg-toggle-btn {
+  padding: 6px 16px; background: #f3f4f6; color: #374151; border: 1px solid #e5e7eb;
+  border-radius: 4px; font-size: 13px; font-weight: 500; cursor: pointer;
+  font-family: inherit; transition: all 0.15s ease;
+}
+.sg-toggle-btn:hover { background: #e5e7eb; color: #0f172a; }
 </style>
 {% endblock %}
 
@@ -54,12 +74,12 @@
 {% include "_screener_subnav.html" %}
 
 {% if cache_warming is defined and cache_warming %}
-<div style="padding:16px 20px; background:#ffffff; border:1px solid #e5e7eb; border-left:3px solid #2563eb; border-radius:0 6px 6px 0; margin-bottom:24px;">
+<div style="padding:16px 20px; background:#ffffff; border:1px solid #e5e7eb; border-left:2px solid #2563eb; border-radius:0 6px 6px 0; margin-bottom:24px;">
   <div style="font-size:16px; font-weight:600; color:#0f172a; margin-bottom:4px;">Data is loading...</div>
   <p style="font-size:13px; color:#64748b; margin:0;">The screener cache is warming up. This page will be ready shortly. Please refresh in a few seconds.</p>
 </div>
 {% elif not data_available %}
-<div style="padding:16px 20px; background:#fffbeb; border:1px solid #e5e7eb; border-left:3px solid #d97706; border-radius:0 6px 6px 0; margin-bottom:24px;">
+<div style="padding:16px 20px; background:#fffbeb; border:1px solid #e5e7eb; border-left:2px solid #d97706; border-radius:0 6px 6px 0; margin-bottom:24px;">
   <div style="font-size:16px; font-weight:600; color:#0f172a; margin-bottom:4px;">No Bloomberg data available</div>
   <p style="font-size:13px; color:#64748b; margin:0;">Screener data not yet available. Run the daily pipeline to load Bloomberg data and score candidates.</p>
 </div>
@@ -118,7 +138,7 @@
   </thead>
   <tbody>
     {% for c in four_x %}
-    <tr>
+    <tr{% if loop.index > 20 %} class="fourx-overflow" style="display:none;"{% endif %}>
       <td style="color:#94a3b8; font-size:12px;">{{ loop.index }}</td>
       <td class="ticker-col"><a href="/screener/stock/{{ c.ticker }} US">{{ c.ticker }}</a></td>
       <td style="font-size:12px;">{{ c.sector or '-' }}</td>
@@ -140,9 +160,27 @@
 </div>
 </div>
 
+{% if four_x|length > 20 %}
+<div class="sg-toggle-row">
+  <button class="sg-toggle-btn" id="toggleFourX" onclick="toggleFourXRows()">Show all {{ four_x|length }} rows</button>
+</div>
+{% endif %}
+
 <p class="sg-footnote">
   <b>Criteria:</b> Existing 2x products | Daily volatility &lt; 20% | Capped at 100 names | Sorted by 2x AUM descending.
 </p>
 
 {% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+function toggleFourXRows() {
+  const rows = document.querySelectorAll('.fourx-overflow');
+  const btn = document.getElementById('toggleFourX');
+  const showing = rows[0] && rows[0].style.display !== 'none';
+  rows.forEach(r => r.style.display = showing ? 'none' : '');
+  btn.textContent = showing ? 'Show all {{ four_x|length }} rows' : 'Show top 20 only';
+}
+</script>
 {% endblock %}
