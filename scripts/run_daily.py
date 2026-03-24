@@ -43,14 +43,15 @@ def _load_api_key() -> str:
 
 
 def upload_db_to_render() -> None:
-    """Upload the local SQLite DB to Render (gzipped to avoid OOM).
+    """Upload a stripped SQLite DB to Render (no 13F tables, gzipped).
 
-    Raw DB is ~450MB but compresses to ~63MB with gzip.
-    Render decompresses in streaming chunks on arrival.
+    Full DB is ~1.2GB (13F holdings = 3.5M rows). Stripping those gives
+    ~450MB raw / ~63MB gzipped — fits Render's 1GB disk and 512MB RAM.
     """
     import gzip
+    import shutil
+    import sqlite3
     import requests
-    import tempfile
 
     db_path = PROJECT_ROOT / "data" / "etp_tracker.db"
     if not db_path.exists():
@@ -60,12 +61,22 @@ def upload_db_to_render() -> None:
     api_key = _load_api_key()
     headers = {"X-API-Key": api_key} if api_key else {}
 
-    # Compress to temp file (450MB -> ~63MB)
-    gz_path = str(db_path) + ".upload.gz"
+    # Create a stripped copy (drop 13F tables that blow up the size)
+    render_db = PROJECT_ROOT / "data" / "etp_tracker_render.db"
+    gz_path = str(render_db) + ".upload.gz"
     try:
-        raw_mb = db_path.stat().st_size / 1e6
-        print(f"  Compressing {raw_mb:.0f} MB...", end=" ", flush=True)
-        with open(db_path, "rb") as f_in:
+        print("  Stripping 13F tables...", end=" ", flush=True)
+        shutil.copy2(db_path, render_db)
+        conn = sqlite3.connect(str(render_db))
+        for table in ("holdings", "institutions", "cusip_mappings"):
+            conn.execute(f"DROP TABLE IF EXISTS [{table}]")
+        conn.execute("VACUUM")
+        conn.close()
+        raw_mb = render_db.stat().st_size / 1e6
+        print(f"{raw_mb:.0f} MB (was {db_path.stat().st_size / 1e6:.0f} MB)")
+
+        print(f"  Compressing...", end=" ", flush=True)
+        with open(render_db, "rb") as f_in:
             with gzip.open(gz_path, "wb", compresslevel=6) as f_out:
                 while True:
                     chunk = f_in.read(1024 * 1024)
@@ -85,14 +96,15 @@ def upload_db_to_render() -> None:
         if resp.status_code == 200:
             print(f"  Uploaded to Render ({gz_mb:.0f} MB compressed, {raw_mb:.0f} MB raw)")
         else:
-            print(f"  Upload failed: {resp.status_code} {resp.text}")
+            print(f"  Upload failed: {resp.status_code} {resp.text[:200]}")
     except Exception as e:
         print(f"  Upload failed (non-fatal): {e}")
     finally:
-        try:
-            Path(gz_path).unlink(missing_ok=True)
-        except Exception:
-            pass
+        for p in (gz_path, str(render_db)):
+            try:
+                Path(p).unlink(missing_ok=True)
+            except Exception:
+                pass
 
 
 def upload_screener_cache_to_render() -> None:
