@@ -13,7 +13,8 @@ reportlab>=4.0.0
 # Web platform (FastAPI)
 fastapi>=0.115.0
 uvicorn[standard]>=0.30.0
-jinja2>=3.1.0
+starlette>=0.41.0,<0.53.0
+jinja2>=3.1.0,<3.1.7
 python-multipart>=0.0.9
 sqlalchemy>=2.0.0
 
