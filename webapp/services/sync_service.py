@@ -13,6 +13,7 @@ from datetime import date, datetime
 from pathlib import Path
 
 import pandas as pd
+from etp_tracker.utils import slugify_name
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -92,7 +93,7 @@ def _get_trust_map(db: Session) -> dict[str, Trust]:
 def sync_filings(db: Session, trust: Trust, output_dir: Path) -> int:
     """Sync step 1 CSV (All Trust Filings) into filings table.
     Returns count of new filings inserted."""
-    csv_path = output_dir / f"{trust.name}_1_All_Trust_Filings.csv"
+    csv_path = output_dir / f"{slugify_name(trust.name)}_1_All_Trust_Filings.csv"
     if not csv_path.exists():
         return 0
 
@@ -136,7 +137,7 @@ def sync_filings(db: Session, trust: Trust, output_dir: Path) -> int:
 def sync_extractions(db: Session, trust: Trust, output_dir: Path) -> int:
     """Sync step 3 CSV (Fund Extraction) into fund_extractions table.
     Returns count of new extractions inserted."""
-    csv_path = output_dir / f"{trust.name}_3_Prospectus_Fund_Extraction.csv"
+    csv_path = output_dir / f"{slugify_name(trust.name)}_3_Prospectus_Fund_Extraction.csv"
     if not csv_path.exists():
         return 0
 
@@ -190,7 +191,7 @@ def sync_fund_status(db: Session, trust: Trust, output_dir: Path) -> int:
     """Sync step 4 CSV (Fund Status) into fund_status table.
     Upserts by (trust_id, series_id, class_contract_id).
     Returns count of funds upserted."""
-    csv_path = output_dir / f"{trust.name}_4_Fund_Status.csv"
+    csv_path = output_dir / f"{slugify_name(trust.name)}_4_Fund_Status.csv"
     if not csv_path.exists():
         return 0
 
@@ -276,7 +277,7 @@ def sync_fund_status(db: Session, trust: Trust, output_dir: Path) -> int:
 def sync_name_history(db: Session, trust: Trust, output_dir: Path) -> int:
     """Sync step 5 CSV (Name History) into name_history table.
     Returns count of entries synced."""
-    csv_path = output_dir / f"{trust.name}_5_Name_History.csv"
+    csv_path = output_dir / f"{slugify_name(trust.name)}_5_Name_History.csv"
     if not csv_path.exists():
         return 0
 
@@ -330,7 +331,7 @@ def sync_name_history(db: Session, trust: Trust, output_dir: Path) -> int:
 def sync_trust(db: Session, trust: Trust, output_root: Path) -> dict:
     """Sync all CSV data for one trust into the database.
     Returns dict with counts."""
-    output_dir = output_root / trust.name
+    output_dir = output_root / slugify_name(trust.name)
     if not output_dir.exists():
         return {"trust": trust.name, "filings": 0, "extractions": 0, "funds": 0, "names": 0}
 
