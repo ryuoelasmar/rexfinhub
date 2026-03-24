@@ -268,12 +268,17 @@ def create_app() -> FastAPI:
     @app.get("/debug-test")
     def debug_test(request: Request):
         """Diagnostic: test template rendering without auth."""
+        import traceback as tb
         try:
             return templates.TemplateResponse("login.html", {
                 "request": request, "error": None, "next_url": "/"
             })
         except Exception as e:
-            return JSONResponse({"error": str(e), "type": type(e).__name__}, status_code=500)
+            return JSONResponse({
+                "error": str(e),
+                "type": type(e).__name__,
+                "traceback": tb.format_exc()[-2000:],
+            }, status_code=500)
 
     # --- Maintenance banner (in-memory, resets on deploy) ---
     @app.get("/api/v1/maintenance")
