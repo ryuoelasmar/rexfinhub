@@ -236,6 +236,15 @@ def compute_and_cache() -> dict:
         return result
 
 
+def _safe_float(val, default=0.0) -> float:
+    """Convert to float, handling #ERROR, NaN, None, and non-numeric strings."""
+    try:
+        f = float(val) if val is not None and str(val).strip() not in ("", "#ERROR", "N/A") else default
+        return round(f, 1) if f == f else default  # NaN check
+    except (ValueError, TypeError):
+        return default
+
+
 def _build_li_products(etp_df) -> list[dict]:
     """Extract L&I products (leverage >= 1.5x) from ETP data for the landscape products tab."""
     import pandas as pd
@@ -277,8 +286,8 @@ def _build_li_products(etp_df) -> list[dict]:
             "issuer": str(row.get("issuer_display", row.get("issuer", ""))),
             "leverage": float(row.get("_lev", 0)),
             "direction": direction,
-            "aum": round(float(row.get("t_w4.aum", 0) or 0), 1),
-            "flow_1m": round(float(row.get("t_w4.fund_flow_1month", 0) or 0), 1),
+            "aum": _safe_float(row.get("t_w4.aum", 0)),
+            "flow_1m": _safe_float(row.get("t_w4.fund_flow_1month", 0)),
             "is_rex": bool(row.get("is_rex", False)),
         })
 
