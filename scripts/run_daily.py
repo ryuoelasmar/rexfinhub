@@ -223,7 +223,48 @@ def run_market_sync():
 
 
 # ===================================================================
-# Step 5: Compact DB
+# Step 5: Classification (new funds, rex funds, exclusions)
+# ===================================================================
+def run_classification():
+    """Scan for unmapped funds, auto-classify HIGH/MEDIUM confidence."""
+    try:
+        from tools.rules_editor.classify_engine import scan_unmapped, apply_classifications
+    except ImportError:
+        print("  classify_engine not available, skipping.")
+        return 0
+
+    result = scan_unmapped(since_days=30)
+    candidates = result.get("candidates", [])
+    outside = result.get("outside", [])
+
+    if not candidates:
+        print(f"  No new candidates ({len(outside)} outside-category funds)")
+        return 0
+
+    # Auto-approve HIGH and MEDIUM confidence
+    approved = [c for c in candidates if c.get("confidence") in ("HIGH", "MEDIUM")]
+    if approved:
+        apply_classifications(approved)
+        # Sync rules CSVs
+        rules_dir = PROJECT_ROOT / "data" / "rules"
+        config_dir = PROJECT_ROOT / "config" / "rules"
+        for csv_name in ["fund_mapping.csv", "issuer_mapping.csv",
+                         "attributes_LI.csv", "attributes_CC.csv",
+                         "attributes_Crypto.csv", "attributes_Defined.csv",
+                         "attributes_Thematic.csv"]:
+            src = rules_dir / csv_name
+            dst = config_dir / csv_name
+            if src.exists():
+                shutil.copy2(src, dst)
+        print(f"  Classified {len(approved)} funds ({len(candidates) - len(approved)} LOW confidence skipped)")
+    else:
+        print(f"  {len(candidates)} candidates all LOW confidence — skipped")
+
+    return len(approved)
+
+
+# ===================================================================
+# Step 6: Compact DB
 # ===================================================================
 def compact_db():
     """WAL checkpoint + VACUUM for clean upload."""
@@ -404,23 +445,30 @@ def main():
             print(f"  Archive failed: {e}")
 
         # === Market data + screener cache ===
-        print("\n[5/8] Market Data + Screener Cache...")
+        print("\n[5/9] Market Data + Screener Cache...")
         try:
             run_market_sync()
         except Exception as e:
             print(f"  Market sync failed: {e}")
 
+        # === Classification ===
+        print("\n[6/9] Classifying new funds...")
+        try:
+            run_classification()
+        except Exception as e:
+            print(f"  Classification failed: {e}")
+
         # === Upload phase ===
-        print("\n[6/8] Compacting DB...")
+        print("\n[7/9] Compacting DB...")
         try:
             compact_db()
         except Exception as e:
             print(f"  Compact failed: {e}")
 
-        print("\n[7/8] Uploading screener cache to Render...")
+        print("\n[8/9] Uploading screener cache to Render...")
         upload_screener_cache_to_render()
 
-        print("\n[8/8] Uploading DB to Render...")
+        print("\n[9/9] Uploading DB to Render...")
         upload_db_to_render()
 
     else:
