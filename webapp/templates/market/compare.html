@@ -63,7 +63,7 @@
 
 {# --- Comparison Table --- #}
 <div class="table-responsive" style="margin-top:20px;">
-  <table class="data-table" style="table-layout:fixed;">
+  <table class="data-table" style="table-layout:fixed; font-variant-numeric:tabular-nums;">
     <colgroup>
       <col style="width:140px;">
       {% for fund in fund_data %}
@@ -292,6 +292,7 @@ document.addEventListener('DOMContentLoaded', function() {
       },
       options: {
         indexAxis: 'y',
+        layout: { padding: { left: 80, right: 80 } },
         plugins: {
           legend: { display: false },
           tooltip: { callbacks: { label: function(ctx) {
@@ -303,16 +304,19 @@ document.addEventListener('DOMContentLoaded', function() {
             align: function(ctx) {
               return ctx.dataset.data[ctx.dataIndex] >= 0 ? 'right' : 'left';
             },
-            color: '#1E293B',
-            font: { size: 11, weight: '600' },
+            color: function(ctx) {
+              return ctx.dataset.data[ctx.dataIndex] >= 0 ? '#059669' : '#DC2626';
+            },
+            font: { size: 12, weight: '700' },
             formatter: function(value) {
               if (value === 0) return '';
               return (value >= 0 ? '+' : '') + '$' + Math.abs(value).toFixed(1) + 'M';
-            }
+            },
+            clip: false
           }
         },
         scales: {
-          x: { display: false },
+          x: { display: false, grace: '20%' },
           y: {
             ticks: { font: { size: 11, weight: '600' } },
             grid: { display: false }

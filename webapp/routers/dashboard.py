@@ -185,6 +185,27 @@ def home_page(request: Request, db: Session = Depends(get_db)):
     except Exception:
         pass
 
+    # KPI: new fund filings this week (funds that appeared for the first time)
+    weekly_new_fund_count = 0
+    try:
+        weekly_new_fund_count = db.execute(text("""
+            SELECT COUNT(DISTINCT fe.series_name)
+            FROM fund_extractions fe
+            JOIN filings f ON fe.filing_id = f.id
+            WHERE f.filing_date >= :cutoff
+            AND fe.series_name NOT IN (
+                SELECT DISTINCT fe2.series_name FROM fund_extractions fe2
+                JOIN filings f2 ON fe2.filing_id = f2.id
+                WHERE f2.filing_date < :cutoff AND fe2.series_name IS NOT NULL
+            )
+            AND fe.series_name IS NOT NULL AND fe.series_name != ''
+        """), {"cutoff": str(week_ago)}).scalar() or 0
+    except Exception:
+        pass
+
+    # KPI: structured notes filed this week
+    weekly_notes_count = sum(n["count"] for n in weekly_notes_filings)
+
     return templates.TemplateResponse("home.html", {
         "request": request,
         "brief_text": brief_text,
@@ -196,6 +217,8 @@ def home_page(request: Request, db: Session = Depends(get_db)):
         "last_sync_date": last_sync_date,
         "weekly_fund_filings": weekly_fund_filings,
         "weekly_notes_filings": weekly_notes_filings,
+        "weekly_new_fund_count": weekly_new_fund_count,
+        "weekly_notes_count": weekly_notes_count,
     })
 
 

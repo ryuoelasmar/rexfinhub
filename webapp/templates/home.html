@@ -256,12 +256,12 @@
       <div class="ha-kpi-label">Weekly Flows</div>
     </div>
     <div class="ha-kpi-card kpi-ownership" id="kpi-filings">
-      <div class="ha-kpi-value" data-kpi="todays_filings">--</div>
-      <div class="ha-kpi-label">Today's Filings</div>
+      <div class="ha-kpi-value">{{ weekly_new_fund_count|default(0) }}</div>
+      <div class="ha-kpi-label">New Fund Filings This Week</div>
     </div>
     <div class="ha-kpi-card kpi-notes" id="kpi-notes">
-      <div class="ha-kpi-value">{{ "{:,}".format(notes_product_count) if notes_product_count else "0" }}</div>
-      <div class="ha-kpi-label">Structured Products</div>
+      <div class="ha-kpi-value">{{ weekly_notes_count|default(0) }}</div>
+      <div class="ha-kpi-label">Structured Notes This Week</div>
     </div>
   </div>
 </div>
