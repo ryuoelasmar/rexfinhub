@@ -139,15 +139,24 @@
   {% if new_filings_7d %}<strong>{{ new_filings_7d }}</strong> new filings this week.{% endif %}
 </div>
 
-<!-- 4. Trust Search -->
-<div style="margin-top:16px; margin-bottom:32px;">
-  <div style="font-size:16px; font-weight:600; color:#0f172a; margin-bottom:12px;">Find a Trust</div>
-  <div style="max-width:480px;">
+<!-- 4. Trust & Fund Search -->
+<div style="display:grid; grid-template-columns:1fr 1fr; gap:24px; margin-top:16px; margin-bottom:32px;">
+  <div>
+    <div style="font-size:16px; font-weight:600; color:#0f172a; margin-bottom:12px;">Find a Trust</div>
     <input type="text" id="trustSearch" placeholder="Search {{ trusts|length }} trusts by name..."
       style="width:100%; padding:10px 14px; border:1px solid #e5e7eb; border-radius:6px; font-size:14px; font-family:inherit;"
       onkeyup="filterTrusts(this.value)">
+    <div id="trustResults" style="margin-top:12px; max-height:200px; overflow-y:auto;"></div>
   </div>
-  <div id="trustResults" style="margin-top:12px; max-height:300px; overflow-y:auto;"></div>
+  <div>
+    <div style="font-size:16px; font-weight:600; color:#0f172a; margin-bottom:12px;">Search by Fund or Filing</div>
+    <form method="get" action="/filings/explorer" style="display:flex; gap:8px;">
+      <input type="hidden" name="mode" value="funds">
+      <input type="text" name="q" placeholder="Fund name, ticker, or accession number..."
+        style="flex:1; padding:10px 14px; border:1px solid #e5e7eb; border-radius:6px; font-size:14px; font-family:inherit;">
+      <button type="submit" style="background:#0f172a; color:#fff; border:none; border-radius:6px; padding:10px 20px; font-size:13px; font-weight:500; cursor:pointer;">Search</button>
+    </form>
+  </div>
 </div>
 
 <script>
