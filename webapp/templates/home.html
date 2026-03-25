@@ -259,9 +259,9 @@
       <div class="ha-kpi-value" data-kpi="todays_filings">--</div>
       <div class="ha-kpi-label">Today's Filings</div>
     </div>
-    <div class="ha-kpi-card kpi-notes" id="kpi-institutions">
-      <div class="ha-kpi-value" data-kpi="institutions_count">--</div>
-      <div class="ha-kpi-label">Institutions Tracked</div>
+    <div class="ha-kpi-card kpi-notes" id="kpi-notes">
+      <div class="ha-kpi-value">{{ "{:,}".format(notes_product_count) if notes_product_count else "0" }}</div>
+      <div class="ha-kpi-label">Structured Products</div>
     </div>
   </div>
 </div>

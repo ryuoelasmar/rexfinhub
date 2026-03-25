@@ -402,7 +402,6 @@ _SUITE_ORDER = [
     "Osprey",
     "T-Bill",
     "Thematic",
-    "London",
 ]
 
 
