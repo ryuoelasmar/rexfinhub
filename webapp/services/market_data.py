@@ -723,9 +723,10 @@ def get_rex_summary(db: Session, fund_structure: str | None = None, category: st
             else:
                 sparkline.append(0.0)
 
-        # Top 50 products in this suite by AUM
+        # Top 50 ACTIVE products in this suite by AUM (exclude liquidated/delisted)
         suite_products = []
-        top_suite = rex_suite_df.nlargest(min(50, len(rex_suite_df)), "t_w4.aum")
+        actv_suite = rex_suite_df[_is_actv(rex_suite_df)] if not rex_suite_df.empty else rex_suite_df
+        top_suite = actv_suite.nlargest(min(50, len(actv_suite)), "t_w4.aum")
         for _, row in top_suite.iterrows():
             p_ticker = str(row.get("ticker_clean", row.get("ticker", "")))
             p_aum = float(row.get("t_w4.aum", 0) or 0)

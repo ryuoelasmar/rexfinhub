@@ -93,8 +93,8 @@ GIF US,Growth & Income
 ULTI US,IncomeMax
 ATCL US,Autocallable
 TLDR US,T-Bill
-DRNZ US,DRNZ
+DRNZ US,Thematic
 BMAX US,Thematic
-FEPI LN,London
-FEGI LN,London
-CEGI LN,London
+FEPI LN,Equity Premium Income
+FEGI LN,Equity Premium Income
+CEGI LN,Equity Premium Income

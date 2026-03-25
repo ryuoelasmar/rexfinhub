@@ -86,15 +86,13 @@ var MarketCharts = (function() {
             formatter: function(value, ctx) {
               var total = ctx.dataset.data.reduce(function(a,b){return a+b;},0);
               var pct = total > 0 ? (value/total*100).toFixed(1) : 0;
-              var label = ctx.chart.data.labels[ctx.dataIndex];
-              var short = label.replace('Leverage & Inverse - ','L&I ').replace('Income - ','Inc ');
-              return pct > 3 ? short + '\n' + pct + '%' : pct + '%';
+              return pct > 5 ? pct + '%' : '';
             },
             anchor: 'center',
             align: 'center',
             display: function(ctx) {
               var total = ctx.dataset.data.reduce(function(a,b){return a+b;},0);
-              return total > 0 && ctx.dataset.data[ctx.dataIndex] / total > 0.02;
+              return total > 0 && ctx.dataset.data[ctx.dataIndex] / total > 0.04;
             }
           },
           legend: {
