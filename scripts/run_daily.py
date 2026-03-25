@@ -32,13 +32,11 @@ USER_AGENT = "REX-ETP-Tracker/2.0 (relasmar@rexfin.com)"
 DASHBOARD_URL = "https://rex-etp-tracker.onrender.com"
 RENDER_API_URL = "https://rex-etp-tracker.onrender.com/api/v1"
 
-# Cache paths: scrape to C: (fast), archive to D: (cold storage)
+# Cache paths: scrape to C: (fast SSD), archive to D: (cold USB storage)
 CACHE_LOCAL = PROJECT_ROOT / "cache"          # C: SSD — fast writes during scrape
-CACHE_ARCHIVE = Path("D:/sec-data/cache/rexfinhub")  # D: USB — cold storage
+CACHE_ARCHIVE = Path("D:/sec-data/cache/rexfinhub")  # D: USB — cold storage, 276GB history
 
 # Structured notes
-NOTES_DB_PRIMARY = Path("D:/sec-data/databases/structured_notes.db")
-NOTES_DB_FALLBACK = PROJECT_ROOT / "data" / "structured_notes.db"
 NOTES_PROJECT = Path("C:/Projects/structured-notes")
 
 
@@ -52,12 +50,66 @@ def _load_api_key() -> str:
     return ""
 
 
+def _d_available() -> bool:
+    return CACHE_ARCHIVE.parent.exists()
+
+
 def _resolve_cache_dir() -> Path:
-    """Use D: if available (has existing 276GB cache), else C: local."""
-    if CACHE_ARCHIVE.exists():
-        return CACHE_ARCHIVE
+    """Scrape to C: always (fast). D: used for reads via symlink/fallback."""
     CACHE_LOCAL.mkdir(parents=True, exist_ok=True)
+    # Copy submissions cache from D: to C: if D: has it and C: doesn't
+    if _d_available():
+        for subdir in ("submissions",):
+            src = CACHE_ARCHIVE / subdir
+            dst = CACHE_LOCAL / subdir
+            if src.exists() and not dst.exists():
+                print(f"  Linking {subdir} from D: cache...")
+                # Use junction (symlink) so reads hit D:, writes go to C:
+                # On Windows, shutil.copytree is safer than symlinks
+                dst.mkdir(parents=True, exist_ok=True)
     return CACHE_LOCAL
+
+
+def archive_cache_to_d():
+    """After scrape: copy new files from C: cache to D: archive, then clean C:."""
+    if not _d_available():
+        print("  D: not available — cache stays on C:")
+        return
+
+    c_web = CACHE_LOCAL / "web"
+    d_web = CACHE_ARCHIVE / "web"
+    c_sub = CACHE_LOCAL / "submissions"
+    d_sub = CACHE_ARCHIVE / "submissions"
+
+    copied = 0
+    for src_dir, dst_dir in [(c_web, d_web), (c_sub, d_sub)]:
+        if not src_dir.exists():
+            continue
+        dst_dir.mkdir(parents=True, exist_ok=True)
+        for src_file in src_dir.rglob("*"):
+            if not src_file.is_file():
+                continue
+            rel = src_file.relative_to(src_dir)
+            dst_file = dst_dir / rel
+            if not dst_file.exists() or src_file.stat().st_size != dst_file.stat().st_size:
+                dst_file.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(src_file, dst_file)
+                copied += 1
+
+    if copied:
+        print(f"  Archived {copied} new files from C: to D:")
+
+    # Validate: count files match
+    c_count = sum(1 for _ in CACHE_LOCAL.rglob("*") if _.is_file()) if CACHE_LOCAL.exists() else 0
+    d_count = sum(1 for _ in CACHE_ARCHIVE.rglob("*") if _.is_file()) if CACHE_ARCHIVE.exists() else 0
+    print(f"  Cache files — C: {c_count}, D: {d_count}")
+
+    # Clean C: if archive succeeded
+    if copied > 0 and d_count >= c_count:
+        shutil.rmtree(CACHE_LOCAL, ignore_errors=True)
+        print(f"  C: cache cleaned ({c_count} files)")
+    elif c_count > 0:
+        print(f"  C: cache NOT cleaned (D: has fewer files)")
 
 
 # ===================================================================
@@ -308,46 +360,112 @@ def main():
 
     changed_trusts = None
 
-    if run_all or args.sec:
-        print("\n[1/7] SEC Filing Pipeline...")
-        try:
-            changed_trusts = run_sec_pipeline()
-        except Exception as e:
-            print(f"  Pipeline failed: {e}")
+    if run_all:
+        # === PARALLEL PHASE: SEC scrape + Structured Notes simultaneously ===
+        # These use different SEC endpoints and different databases — safe to run together
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        print("\n[1-2/8] SEC Pipeline + Structured Notes (parallel)...")
 
-    if run_all or args.sec:
-        print("\n[2/7] Syncing filings to DB...")
+        sec_result = [None]  # mutable container for thread result
+        notes_ok = [False]
+
+        def _run_sec():
+            try:
+                sec_result[0] = run_sec_pipeline()
+            except Exception as e:
+                print(f"  SEC pipeline failed: {e}")
+
+        def _run_notes():
+            try:
+                run_structured_notes()
+                notes_ok[0] = True
+            except Exception as e:
+                print(f"  Structured notes failed: {e}")
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            futures = [pool.submit(_run_sec), pool.submit(_run_notes)]
+            for f in as_completed(futures):
+                pass  # exceptions logged inside each function
+
+        changed_trusts = sec_result[0]
+
+        # === SEQUENTIAL PHASE: DB sync (needs SEC results) ===
+        print("\n[3/8] Syncing filings to DB...")
         try:
             run_db_sync(changed_trusts)
         except Exception as e:
             print(f"  DB sync failed: {e}")
 
-    if run_all or args.notes:
-        print("\n[3/7] Structured Notes (discover + extract)...")
+        # === Archive C: cache to D: ===
+        print("\n[4/8] Archiving cache C: -> D:...")
         try:
-            run_structured_notes()
+            archive_cache_to_d()
         except Exception as e:
-            print(f"  Structured notes failed: {e}")
+            print(f"  Archive failed: {e}")
 
-    if run_all or args.market:
-        print("\n[4/7] Market Data + Screener Cache...")
+        # === Market data + screener cache ===
+        print("\n[5/8] Market Data + Screener Cache...")
         try:
             run_market_sync()
         except Exception as e:
             print(f"  Market sync failed: {e}")
 
-    if run_all or args.upload:
-        print("\n[5/7] Compacting DB...")
+        # === Upload phase ===
+        print("\n[6/8] Compacting DB...")
         try:
             compact_db()
         except Exception as e:
             print(f"  Compact failed: {e}")
 
-        print("\n[6/7] Uploading screener cache to Render...")
+        print("\n[7/8] Uploading screener cache to Render...")
         upload_screener_cache_to_render()
 
-        print("\n[7/7] Uploading DB to Render...")
+        print("\n[8/8] Uploading DB to Render...")
         upload_db_to_render()
+
+    else:
+        # Partial runs (sequential)
+        if args.sec:
+            print("\n[1] SEC Filing Pipeline...")
+            try:
+                changed_trusts = run_sec_pipeline()
+            except Exception as e:
+                print(f"  Pipeline failed: {e}")
+            print("\n[2] Syncing filings to DB...")
+            try:
+                run_db_sync(changed_trusts)
+            except Exception as e:
+                print(f"  DB sync failed: {e}")
+            print("\n[3] Archiving cache...")
+            try:
+                archive_cache_to_d()
+            except Exception as e:
+                print(f"  Archive failed: {e}")
+
+        if args.notes:
+            print("\n[1] Structured Notes...")
+            try:
+                run_structured_notes()
+            except Exception as e:
+                print(f"  Structured notes failed: {e}")
+
+        if args.market:
+            print("\n[1] Market Data + Screener Cache...")
+            try:
+                run_market_sync()
+            except Exception as e:
+                print(f"  Market sync failed: {e}")
+
+        if args.upload:
+            print("\n[1] Compacting DB...")
+            try:
+                compact_db()
+            except Exception as e:
+                print(f"  Compact failed: {e}")
+            print("\n[2] Uploading screener cache...")
+            upload_screener_cache_to_render()
+            print("\n[3] Uploading DB...")
+            upload_db_to_render()
 
     elapsed = time.time() - start
     print(f"\n=== Done in {elapsed:.0f}s ({elapsed / 60:.1f}m) ===")
