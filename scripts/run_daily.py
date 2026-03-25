@@ -1,39 +1,49 @@
 """
-Daily SEC Pipeline Runner
+Full Daily Sync — SEC filings, structured notes, market data, Render upload.
 
-Scrapes SEC filings, syncs to DB, refreshes market data, uploads to Render.
-Emails are sent separately via `send daily` / `send weekly`.
+Scrapes to C: (fast SSD), archives to D: (cold storage) after completion.
+Computes screener cache with all Bloomberg-dependent data (candidates, evaluator,
+products) and uploads to Render so the live site has everything.
 
 Usage:
-    run sec              # bash alias
-    python scripts/run_daily.py
+    python scripts/run_daily.py          # full sync
+    python scripts/run_daily.py --sec    # SEC filings only
+    python scripts/run_daily.py --notes  # structured notes only
+    python scripts/run_daily.py --market # market data + cache only
+    python scripts/run_daily.py --upload # upload to Render only
 """
 from __future__ import annotations
+import argparse
+import json
 import os
+import shutil
 import time
 import sys
 from pathlib import Path
 from datetime import datetime
 
-# Ensure project root is on path and set working directory
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 os.chdir(PROJECT_ROOT)
 
-from etp_tracker.run_pipeline import run_pipeline, load_ciks_from_db
-
-
 OUTPUT_DIR = PROJECT_ROOT / "outputs"
-SINCE_DATE = "2024-01-01"  # 2-year window for daily runs (keeps it fast)
+SINCE_DATE = "2024-01-01"
 USER_AGENT = "REX-ETP-Tracker/2.0 (relasmar@rexfin.com)"
 DASHBOARD_URL = "https://rex-etp-tracker.onrender.com"
 RENDER_API_URL = "https://rex-etp-tracker.onrender.com/api/v1"
 
+# Cache paths: scrape to C: (fast), archive to D: (cold storage)
+CACHE_LOCAL = PROJECT_ROOT / "cache"          # C: SSD — fast writes during scrape
+CACHE_ARCHIVE = Path("D:/sec-data/cache/rexfinhub")  # D: USB — cold storage
+
+# Structured notes
+NOTES_DB_PRIMARY = Path("D:/sec-data/databases/structured_notes.db")
+NOTES_DB_FALLBACK = PROJECT_ROOT / "data" / "structured_notes.db"
+NOTES_PROJECT = Path("C:/Projects/structured-notes")
 
 
 def _load_api_key() -> str:
-    """Load API_KEY from .env."""
-    env_file = Path(__file__).resolve().parent.parent / "config" / ".env"
+    env_file = PROJECT_ROOT / "config" / ".env"
     if env_file.exists():
         for line in env_file.read_text(encoding="utf-8").splitlines():
             line = line.strip()
@@ -42,14 +52,186 @@ def _load_api_key() -> str:
     return ""
 
 
-def upload_db_to_render() -> None:
-    """Upload a stripped SQLite DB to Render (no 13F tables, gzipped).
+def _resolve_cache_dir() -> Path:
+    """Use D: if available (has existing 276GB cache), else C: local."""
+    if CACHE_ARCHIVE.exists():
+        return CACHE_ARCHIVE
+    CACHE_LOCAL.mkdir(parents=True, exist_ok=True)
+    return CACHE_LOCAL
 
-    Full DB is ~1.2GB (13F holdings = 3.5M rows). Stripping those gives
-    ~450MB raw / ~63MB gzipped — fits Render's 1GB disk and 512MB RAM.
-    """
+
+# ===================================================================
+# Step 1: SEC Filing Pipeline
+# ===================================================================
+def run_sec_pipeline():
+    """Scrape SEC filings for 2,475 trusts."""
+    from etp_tracker.run_pipeline import run_pipeline, load_ciks_from_db
+
+    cache_dir = _resolve_cache_dir()
+    print(f"  Cache: {cache_dir}")
+
+    ciks, overrides = load_ciks_from_db()
+    n, changed_trusts = run_pipeline(
+        ciks=ciks,
+        overrides=overrides,
+        since=SINCE_DATE,
+        refresh_submissions=True,
+        user_agent=USER_AGENT,
+        etf_only=True,
+        cache_dir=cache_dir,
+    )
+    print(f"  Processed {n} trusts ({len(changed_trusts) if changed_trusts else 0} with new filings)")
+    return changed_trusts
+
+
+# ===================================================================
+# Step 2: DB Sync
+# ===================================================================
+def run_db_sync(changed_trusts=None):
+    """Sync pipeline CSVs into SQLite database."""
+    from webapp.database import init_db, SessionLocal
+    from webapp.services.sync_service import seed_trusts, sync_all
+
+    init_db()
+    db = SessionLocal()
+    try:
+        seed_trusts(db)
+        sync_all(db, OUTPUT_DIR, only_trusts=changed_trusts if changed_trusts else None)
+    finally:
+        db.close()
+    print("  Database synced.")
+
+
+# ===================================================================
+# Step 3: Structured Notes
+# ===================================================================
+def run_structured_notes():
+    """Discover + extract structured notes from SEC."""
+    if not NOTES_PROJECT.exists():
+        print("  structured-notes project not found, skipping.")
+        return
+
+    import subprocess
+    # Discovery
+    print("  Discovering new filings...")
+    result = subprocess.run(
+        [sys.executable, "cli.py", "discover"],
+        cwd=str(NOTES_PROJECT), capture_output=True, text=True, timeout=600
+    )
+    if result.returncode == 0:
+        # Count new filings from output
+        lines = [l for l in result.stdout.split('\n') if 'new filings' in l]
+        for l in lines[-5:]:
+            print(f"    {l.strip()}")
+    else:
+        print(f"  Discovery failed: {result.stderr[-200:]}")
+        return
+
+    # Extraction
+    print("  Extracting products...")
+    result = subprocess.run(
+        [sys.executable, "run_extraction.py", "--since", "2024"],
+        cwd=str(NOTES_PROJECT), capture_output=True, text=True, timeout=600
+    )
+    if result.returncode == 0:
+        lines = [l for l in result.stdout.split('\n') if 'processed' in l.lower() or 'products' in l.lower() or 'errors' in l.lower()]
+        for l in lines[-5:]:
+            print(f"    {l.strip()}")
+    else:
+        print(f"  Extraction failed: {result.stderr[-200:]}")
+
+
+# ===================================================================
+# Step 4: Market Data + Screener Cache
+# ===================================================================
+def run_market_sync():
+    """Sync Bloomberg market data and compute full screener cache."""
+    from webapp.database import init_db, SessionLocal
+    from webapp.services.market_sync import sync_market_data
+
+    init_db()
+    db = SessionLocal()
+    try:
+        result = sync_market_data(db)
+        print(f"  Market: {result['master_rows']} funds, {result['ts_rows']} TS rows")
+    finally:
+        db.close()
+
+    # Recompute screener cache (includes candidates, evaluator, li_products)
+    print("  Computing screener cache...")
+    from webapp.services.screener_3x_cache import compute_and_cache
+    data = compute_and_cache()
+    cache_path = PROJECT_ROOT / "temp" / "screener_cache.json"
+    cache_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(cache_path, "w") as f:
+        json.dump(data, f, default=str)
+    size_kb = cache_path.stat().st_size / 1024
+    print(f"  Cache: {size_kb:.0f} KB — {len(data.get('two_x_candidates', []))} 2x, "
+          f"{len(data.get('eval_cache', {}))} eval, {len(data.get('li_products', []))} products")
+
+
+# ===================================================================
+# Step 5: Compact DB
+# ===================================================================
+def compact_db():
+    """WAL checkpoint + VACUUM for clean upload."""
+    import sqlite3
+    db_path = str(PROJECT_ROOT / "data" / "etp_tracker.db")
+    if not Path(db_path).exists():
+        return
+    conn = sqlite3.connect(db_path)
+    conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+    size_before = Path(db_path).stat().st_size / 1e6
+    conn.execute("VACUUM")
+    conn.close()
+    size_after = Path(db_path).stat().st_size / 1e6
+    print(f"  DB compacted: {size_before:.0f}MB -> {size_after:.0f}MB")
+
+
+# ===================================================================
+# Step 6: Upload to Render
+# ===================================================================
+def upload_screener_cache_to_render():
+    """Upload screener cache JSON (~500KB) to Render."""
+    import requests
+
+    cache_path = PROJECT_ROOT / "temp" / "screener_cache.json"
+    if not cache_path.exists():
+        # Try computing it
+        try:
+            from webapp.services.screener_3x_cache import get_3x_analysis
+            data = get_3x_analysis()
+            if data:
+                with open(cache_path, "w") as f:
+                    json.dump(data, f, default=str)
+        except Exception:
+            pass
+
+    if not cache_path.exists():
+        print("  No screener cache found, skipping.")
+        return
+
+    try:
+        session = requests.Session()
+        session.post(f"{DASHBOARD_URL}/login", data={"password": "***REDACTED***", "next": "/"})
+        with open(cache_path, "rb") as f:
+            resp = session.post(
+                f"{DASHBOARD_URL}/admin/upload/screener-cache",
+                files={"file": ("screener_cache.json", f, "application/json")},
+                timeout=60,
+            )
+        if resp.status_code == 200:
+            keys = resp.json().get("keys", [])
+            print(f"  Uploaded {cache_path.stat().st_size / 1024:.0f} KB ({len(keys)} keys)")
+        else:
+            print(f"  Upload failed: {resp.status_code}")
+    except Exception as e:
+        print(f"  Screener cache upload failed (non-fatal): {e}")
+
+
+def upload_db_to_render():
+    """Upload stripped SQLite DB to Render (no 13F tables)."""
     import gzip
-    import shutil
     import sqlite3
     import requests
 
@@ -60,10 +242,9 @@ def upload_db_to_render() -> None:
 
     api_key = _load_api_key()
     headers = {"X-API-Key": api_key} if api_key else {}
-
-    # Create a stripped copy (drop 13F tables that blow up the size)
     render_db = PROJECT_ROOT / "data" / "etp_tracker_render.db"
     gz_path = str(render_db) + ".upload.gz"
+
     try:
         print("  Stripping 13F tables...", end=" ", flush=True)
         shutil.copy2(db_path, render_db)
@@ -75,7 +256,7 @@ def upload_db_to_render() -> None:
         raw_mb = render_db.stat().st_size / 1e6
         print(f"{raw_mb:.0f} MB (was {db_path.stat().st_size / 1e6:.0f} MB)")
 
-        print(f"  Compressing...", end=" ", flush=True)
+        print("  Compressing...", end=" ", flush=True)
         with open(render_db, "rb") as f_in:
             with gzip.open(gz_path, "wb", compresslevel=6) as f_out:
                 while True:
@@ -94,7 +275,7 @@ def upload_db_to_render() -> None:
                 timeout=600,
             )
         if resp.status_code == 200:
-            print(f"  Uploaded to Render ({gz_mb:.0f} MB compressed, {raw_mb:.0f} MB raw)")
+            print(f"  Uploaded to Render ({gz_mb:.0f} MB compressed)")
         else:
             print(f"  Upload failed: {resp.status_code} {resp.text[:200]}")
     except Exception as e:
@@ -107,122 +288,69 @@ def upload_db_to_render() -> None:
                 pass
 
 
-def upload_screener_cache_to_render() -> None:
-    """Upload pre-computed screener cache JSON to Render (237KB, instant).
-
-    This ensures the candidates/evaluator pages show data on the live site
-    without needing the full 1GB+ DB upload to succeed.
-    """
-    import json
-    import requests
-
-    try:
-        from webapp.services.screener_3x_cache import get_3x_analysis
-        data = get_3x_analysis()
-        if not data:
-            print("  No screener cache in memory, skipping.")
-            return
-
-        # Write to temp file
-        cache_path = PROJECT_ROOT / "temp" / "screener_cache.json"
-        cache_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(cache_path, "w") as f:
-            json.dump(data, f, default=str)
-        size_kb = cache_path.stat().st_size / 1024
-
-        # Login as admin and upload
-        session = requests.Session()
-        session.post(f"{DASHBOARD_URL}/login", data={"password": "***REDACTED***", "next": "/"})
-        with open(cache_path, "rb") as f:
-            resp = session.post(
-                f"{DASHBOARD_URL}/admin/upload/screener-cache",
-                files={"file": ("screener_cache.json", f, "application/json")},
-                timeout=30,
-            )
-        if resp.status_code == 200:
-            keys = resp.json().get("keys", [])
-            print(f"  Uploaded {size_kb:.0f} KB ({len(keys)} keys: {', '.join(keys[:5])}...)")
-        else:
-            print(f"  Upload failed: {resp.status_code} {resp.text[:200]}")
-    except Exception as e:
-        print(f"  Screener cache upload failed (non-fatal): {e}")
-
-
+# ===================================================================
+# Main
+# ===================================================================
 def main():
+    parser = argparse.ArgumentParser(description="Full daily sync")
+    parser.add_argument("--sec", action="store_true", help="SEC filings only")
+    parser.add_argument("--notes", action="store_true", help="Structured notes only")
+    parser.add_argument("--market", action="store_true", help="Market data + cache only")
+    parser.add_argument("--upload", action="store_true", help="Upload to Render only")
+    args = parser.parse_args()
+
+    # If no flags, run everything
+    run_all = not (args.sec or args.notes or args.market or args.upload)
+
     start = time.time()
     today = datetime.now().strftime("%Y-%m-%d %H:%M")
-    print(f"=== ETP Filing Tracker - Daily Run ({today}) ===")
+    print(f"=== REX Full Sync ({today}) ===")
 
-    # Step 1: Run pipeline
-    print("\n[1/4] Running pipeline...")
-    ciks, overrides = load_ciks_from_db()
-    n, changed_trusts = run_pipeline(
-        ciks=ciks,
-        overrides=overrides,
-        since=SINCE_DATE,
-        refresh_submissions=True,
-        user_agent=USER_AGENT,
-        etf_only=True,
-    )
-    print(f"  Processed {n} trusts ({len(changed_trusts)} with new filings)")
+    changed_trusts = None
 
-    # Step 2: Sync to database
-    print("\n[2/4] Syncing to database...")
-    try:
-        from webapp.database import init_db, SessionLocal
-        from webapp.services.sync_service import seed_trusts, sync_all
-        init_db()
-        db = SessionLocal()
+    if run_all or args.sec:
+        print("\n[1/7] SEC Filing Pipeline...")
         try:
-            seed_trusts(db)
-            sync_all(db, OUTPUT_DIR, only_trusts=changed_trusts if changed_trusts is not None else None)
-        finally:
-            db.close()
-        print("  Database synced.")
-    except Exception as e:
-        print(f"  DB sync failed (non-fatal): {e}")
+            changed_trusts = run_sec_pipeline()
+        except Exception as e:
+            print(f"  Pipeline failed: {e}")
 
-    # Step 2b: Sync market data to SQLite
-    print("\n[2b/4] Syncing market data...")
-    try:
-        from webapp.services.market_sync import sync_market_data
-        db_mkt = SessionLocal()
+    if run_all or args.sec:
+        print("\n[2/7] Syncing filings to DB...")
         try:
-            mkt_result = sync_market_data(db_mkt)
-            print(f"  Market: {mkt_result['master_rows']} funds, {mkt_result['ts_rows']} TS rows, {len(mkt_result['report_keys'])} reports cached")
-        finally:
-            db_mkt.close()
-    except Exception as e:
-        print(f"  Market sync failed (non-fatal): {e}")
+            run_db_sync(changed_trusts)
+        except Exception as e:
+            print(f"  DB sync failed: {e}")
 
-    # Step 3: Screener already computed + saved to DB by sync_market_data()
-    print("\n[3/4] Rescoring screener...")
-    print("  Screener rescored (via market sync).")
+    if run_all or args.notes:
+        print("\n[3/7] Structured Notes (discover + extract)...")
+        try:
+            run_structured_notes()
+        except Exception as e:
+            print(f"  Structured notes failed: {e}")
 
-    # Checkpoint WAL + VACUUM so upload sends compact data (avoid OOM on Render)
-    try:
-        import sqlite3
-        _db_path = str(PROJECT_ROOT / "data" / "etp_tracker.db")
-        _conn = sqlite3.connect(_db_path)
-        _conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
-        _size_before = Path(_db_path).stat().st_size / 1e6
-        _conn.execute("VACUUM")
-        _conn.close()
-        _size_after = Path(_db_path).stat().st_size / 1e6
-        print(f"  DB compacted: {_size_before:.0f}MB -> {_size_after:.0f}MB")
-    except Exception as e:
-        print(f"  DB compact failed (non-fatal): {e}")
+    if run_all or args.market:
+        print("\n[4/7] Market Data + Screener Cache...")
+        try:
+            run_market_sync()
+        except Exception as e:
+            print(f"  Market sync failed: {e}")
 
-    # Step 4: Upload screener cache to Render (237KB, always works)
-    print("\n[4/5] Uploading screener cache to Render...")
-    upload_screener_cache_to_render()
+    if run_all or args.upload:
+        print("\n[5/7] Compacting DB...")
+        try:
+            compact_db()
+        except Exception as e:
+            print(f"  Compact failed: {e}")
 
-    # Step 5: Upload DB to Render (large, may fail on Starter plan)
-    print("\n[5/5] Uploading database to Render...")
-    upload_db_to_render()
+        print("\n[6/7] Uploading screener cache to Render...")
+        upload_screener_cache_to_render()
+
+        print("\n[7/7] Uploading DB to Render...")
+        upload_db_to_render()
 
     elapsed = time.time() - start
-    print(f"\n=== Done in {elapsed:.0f}s ({elapsed/60:.1f}m) ===")
+    print(f"\n=== Done in {elapsed:.0f}s ({elapsed / 60:.1f}m) ===")
 
 
 if __name__ == "__main__":
