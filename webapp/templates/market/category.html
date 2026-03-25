@@ -110,11 +110,7 @@
       <button class="pill chart-mode-btn" data-mode="spread" onclick="switchCatChartMode('spread')">Bid-Ask</button>
       <button class="pill chart-mode-btn" data-mode="appreciation" onclick="switchCatChartMode('appreciation')">Mkt Appr</button>
     </div>
-    <div id="catAumControls" style="margin-bottom:8px;">
-      <label style="font-size:0.82rem; cursor:pointer;">
-        <input type="checkbox" id="showIssuerBreakdown" onchange="switchCatChartMode('aum')"> Show Issuer Breakdown
-      </label>
-    </div>
+    <div id="catAumControls" style="display:none;"></div>
     <div id="catFlowControls" style="display:none; margin-bottom:8px;">
       <button class="pill cat-flow-btn active" data-period="1w" onclick="showCatFlowPeriod('1w')">1W</button>
       <button class="pill cat-flow-btn" data-period="1m" onclick="showCatFlowPeriod('1m')">1M</button>
