@@ -11,6 +11,7 @@ import logging
 import os
 import threading
 from datetime import datetime
+from pathlib import Path
 
 log = logging.getLogger(__name__)
 
@@ -95,7 +96,17 @@ def warm_cache(db=None) -> None:
                 return
 
     if _ON_RENDER:
-        log.info("Screener: no DB cache on Render, will serve empty until next sync")
+        # Try JSON file on persistent disk (uploaded via /admin/upload/screener-cache)
+        cache_file = Path("data/SCREENER/cache.json")
+        if cache_file.exists():
+            try:
+                data = json.loads(cache_file.read_text())
+                set_3x_analysis(data)
+                log.info("Screener loaded from cache.json (%d keys)", len(data))
+                return
+            except Exception as e:
+                log.warning("Failed to load cache.json: %s", e)
+        log.info("Screener: no cache on Render, will serve empty until next sync")
         return
 
     # Local: compute from Excel
