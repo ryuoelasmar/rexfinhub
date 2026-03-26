@@ -35,7 +35,7 @@ def derive_rex_benchmarks(
         (etp_df.get("is_rex") == True)
         & (etp_df.get("uses_leverage") == True)
         & (etp_df.get(subcat_col) == "Single Stock")
-        & (etp_df["t_w4.aum"].fillna(0) > 0)
+        & (pd.to_numeric(etp_df["t_w4.aum"], errors="coerce").fillna(0) > 0)
     ]
 
     if rex_lev.empty:

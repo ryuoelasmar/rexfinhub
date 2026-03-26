@@ -316,3 +316,21 @@ BWVTF US,,SPX,Synthetic,Broad Beta
 GIF US,,FOF,Synthetic,Single Stock
 ACYN US,,Autocall,Synthetic,Autocallable
 MINY US,,Basket,Traditional,Single Stock
+ROCY US,,,Traditional,Broad Beta
+ROCQ US,,,Traditional,Tech
+FBDC US,,,Synthetic,Broad Beta
+FYLG US,,BXLFH,Traditional,International
+HYLG US,,BXLVH,Traditional,International
+PQBW US,,BXN,Synthetic,Tech
+QYLE US,,NQYLEI,Traditional,Tech
+QDCC US,,BXQD,Traditional,Broad Beta
+XYLE US,,BXESG,Traditional,Broad Beta
+HVPW US,,,Synthetic,Broad Beta
+EMCC US,,BXEMG,Traditional,International
+HFIN US,,,Traditional,Broad Beta
+DISY US,,,Traditional,Broad Beta
+XOMY US,,,Traditional,Broad Beta
+JPMY US,,,Traditional,Broad Beta
+DDDD US,,,Synthetic,Broad Beta
+NVDK US,NVDA,,Synthetic,Single Stock
+TSLK US,TSLA,,Traditional,Single Stock

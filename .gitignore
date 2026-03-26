@@ -23,7 +23,6 @@ backup/
 data/
 !data/rules/
 !data/DASHBOARD/bloomberg_daily_file.xlsm
-nul
 
 # Environment variables and secrets
 .env
@@ -31,6 +30,9 @@ nul
 *.env
 !config/.env.example
 config/email_recipients_private.txt
+config/email_recipients.txt
+config/digest_subscribers.txt
+config/trust_requests.txt
 
 # Temporary/scratch files
 temp/
@@ -43,8 +45,9 @@ reports/
 cookies.txt
 cookies_render.txt
 
-# Claude internal
-.claude/scheduled_tasks.lock
+# Claude Code (per-user, not shared)
+CLAUDE.md
+.claude/
 
 # Database files (if using SQLite locally)
 *.db
@@ -85,4 +88,3 @@ dmypy.json
 
 # Orchestrator worktrees
 .worktrees/
-.claude/worktrees/

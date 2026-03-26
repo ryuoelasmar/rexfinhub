@@ -1,9 +1,10 @@
 """
 Tests for web pages and REST API endpoints.
 """
+import os
 import pytest
 
-API_KEY = "***REDACTED***"
+API_KEY = os.environ.get("API_KEY", "test-key")
 API_HEADERS = {"X-API-Key": API_KEY}
 
 

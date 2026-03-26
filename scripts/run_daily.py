@@ -40,14 +40,22 @@ CACHE_ARCHIVE = Path("D:/sec-data/cache/rexfinhub")  # D: USB — cold storage, 
 NOTES_PROJECT = Path("C:/Projects/structured-notes")
 
 
-def _load_api_key() -> str:
+def _load_env(key: str) -> str:
+    """Load a value from config/.env or environment."""
+    env_val = os.environ.get(key, "")
+    if env_val:
+        return env_val
     env_file = PROJECT_ROOT / "config" / ".env"
     if env_file.exists():
         for line in env_file.read_text(encoding="utf-8").splitlines():
             line = line.strip()
-            if line.startswith("API_KEY="):
+            if line.startswith(f"{key}="):
                 return line.split("=", 1)[1].strip().strip('"').strip("'")
     return ""
+
+
+def _load_api_key() -> str:
+    return _load_env("API_KEY")
 
 
 def _d_available() -> bool:
@@ -306,7 +314,7 @@ def upload_screener_cache_to_render():
 
     try:
         session = requests.Session()
-        session.post(f"{DASHBOARD_URL}/login", data={"password": "***REDACTED***", "next": "/"})
+        session.post(f"{DASHBOARD_URL}/login", data={"password": _load_env("ADMIN_PASSWORD"), "next": "/"})
         with open(cache_path, "rb") as f:
             resp = session.post(
                 f"{DASHBOARD_URL}/admin/upload/screener-cache",

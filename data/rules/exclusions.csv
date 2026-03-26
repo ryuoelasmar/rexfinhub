@@ -1,1 +1,27 @@
-ticker,etp_category
+ticker,etp_category,reason
+BECO US,,false_positive
+BFTR US,,false_positive
+BTEK US,,false_positive
+COWS US,,false_positive
+DUNK US,,false_positive
+EMSF US,,false_positive
+FFND US,,false_positive
+FFOX US,,false_positive
+FITE US,,false_positive
+FOWF US,,false_positive
+FUT US,,false_positive
+GBUY US,,false_positive
+GCC US,,false_positive
+GREI US,,false_positive
+GSFP US,,false_positive
+IDAT US,,false_positive
+KSTR US,,false_positive
+LRGE US,,false_positive
+MAGS US,,false_positive
+MATE US,,false_positive
+PP US,,false_positive
+QQQJ US,,false_positive
+RDVY US,,false_positive
+VSDA US,,false_positive
+WTMF US,,false_positive
+YUMY US,,false_positive

@@ -21,6 +21,7 @@ os.chdir(PROJECT_ROOT)
 
 DASHBOARD_URL = "https://rex-etp-tracker.onrender.com"
 PREVIEW_DIR = PROJECT_ROOT / "outputs" / "previews"
+SEND_LOG = PROJECT_ROOT / "data" / ".send_log.json"
 
 
 def _save_and_open(html: str, name: str):
@@ -51,6 +52,36 @@ def _send_via_smtp(html: str, subject: str):
     if private:
         _send_html_digest(html, private, subject_override=subject)
     return ok
+
+
+def _load_send_log() -> dict:
+    """Load the send log (tracks what was sent today to prevent duplicates)."""
+    import json
+    if SEND_LOG.exists():
+        try:
+            return json.loads(SEND_LOG.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            pass
+    return {}
+
+
+def _record_send(bundle: str):
+    """Record that a bundle was sent today."""
+    import json
+    log = _load_send_log()
+    today = datetime.now().strftime("%Y-%m-%d")
+    if today not in log:
+        log[today] = {}
+    log[today][bundle] = datetime.now().strftime("%H:%M")
+    SEND_LOG.parent.mkdir(parents=True, exist_ok=True)
+    SEND_LOG.write_text(json.dumps(log, indent=2), encoding="utf-8")
+
+
+def _already_sent_today(bundle: str) -> str | None:
+    """Check if a bundle was already sent today. Returns time if yes, None if no."""
+    log = _load_send_log()
+    today = datetime.now().strftime("%Y-%m-%d")
+    return log.get(today, {}).get(bundle)
 
 
 # ---------------------------------------------------------------------------
@@ -210,15 +241,116 @@ def main():
     label = "PREVIEW" if preview else "SEND"
     print(f"=== [{label}] {bundle.upper()} ({datetime.now().strftime('%Y-%m-%d %H:%M')}) ===")
 
+    # Always sync market data from Bloomberg before generating reports
+    # so DB reflects the latest inception dates, market status, AUM, etc.
+    # Uses the full market pipeline (auto-classify + queues + DB + reports).
+    print("\n  Syncing market data from Bloomberg...")
+    try:
+        from market.config import DATA_FILE as _MKT_DATA_FILE, RULES_DIR as _MKT_RULES_DIR
+        from market.rules import load_all_rules
+        from market.ingest import read_input
+        from market.derive import derive_dim_fund_category
+        from market.transform import run_transform
+        from market.auto_classify import classify_all, classify_to_dataframe
+        from market.queues import build_queues_report
+        from webapp.database import init_db, SessionLocal as _SyncSL
+        from market.db_writer import (
+            create_pipeline_run, finish_pipeline_run,
+            write_master_data, write_time_series, write_stock_data,
+            write_classifications, write_market_statuses,
+        )
+        from market.rules import sync_rules_to_db
+
+        init_db()
+        rules = load_all_rules(_MKT_RULES_DIR)
+        data = read_input(_MKT_DATA_FILE)
+        etp = data["etp_combined"]
+        fm = rules["fund_mapping"]
+        im = rules["issuer_mapping"]
+        dim = derive_dim_fund_category(
+            fund_mapping=fm, issuer_mapping=im,
+            rex_funds=rules["rex_funds"],
+            category_attributes=rules["category_attributes"],
+            etp_combined=etp,
+        )
+        result = run_transform(etp, rules, dim)
+        master = result["master"]
+        ts = result["ts"]
+
+        # Auto-classify + merge
+        classifications = classify_all(etp)
+        class_df = classify_to_dataframe(etp)
+        class_merge = class_df[["ticker", "strategy", "confidence", "underlier_type"]].copy()
+        class_merge = class_merge.rename(columns={"confidence": "strategy_confidence"})
+        for col in ["strategy", "strategy_confidence", "underlier_type"]:
+            if col in master.columns:
+                master = master.drop(columns=[col])
+        master = master.merge(class_merge, on="ticker", how="left")
+
+        # Queues report
+        queues = build_queues_report(etp, fm, im)
+
+        # Write to DB
+        _sync_session = _SyncSL()
+        try:
+            run_id = create_pipeline_run(_sync_session, str(_MKT_DATA_FILE))
+            sync_rules_to_db(rules, _sync_session)
+            m_count = write_master_data(_sync_session, master, run_id)
+            ts_count = write_time_series(_sync_session, ts, run_id)
+            s_count = write_stock_data(_sync_session, data["stock_data"], run_id)
+            write_classifications(_sync_session, classifications, run_id)
+            mkt_status_rule = rules.get("market_status", None)
+            if mkt_status_rule is not None and not mkt_status_rule.empty:
+                write_market_statuses(_sync_session, mkt_status_rule)
+            finish_pipeline_run(
+                _sync_session, run_id, status="completed",
+                etp_rows_read=len(etp), master_rows_written=m_count,
+                ts_rows_written=ts_count, stock_rows_written=s_count,
+                unmapped_count=queues["summary"]["unmapped_count"],
+                new_issuer_count=queues["summary"]["new_issuer_count"],
+            )
+            _sync_session.commit()
+
+            # Cache reports
+            from webapp.services.market_sync import _compute_and_cache_reports
+            from webapp.models import MktReportCache
+            from sqlalchemy import delete
+            _sync_session.execute(delete(MktReportCache))
+            _sync_session.flush()
+            cached_keys = _compute_and_cache_reports(_sync_session, master, run_id)
+            _sync_session.commit()
+            print(f"  Market pipeline: {m_count} funds, {len(classifications)} classified, {queues['summary']['unmapped_count']} unmapped, {len(cached_keys)} reports cached")
+        finally:
+            _sync_session.close()
+    except Exception as e:
+        print(f"  Market sync failed (non-fatal): {e}")
+        import traceback; traceback.print_exc()
+
+    # Duplicate send guard (preview is always allowed, per-bundle)
+    force = "--force" in [a.lower() for a in sys.argv[1:]]
+
+    def _guard_and_run(b: str, fn):
+        if not preview:
+            sent_at = _already_sent_today(b)
+            if sent_at and not force:
+                print(f"\n  SKIPPED: {b} already sent today at {sent_at}.")
+                return False
+        fn(preview)
+        if not preview:
+            _record_send(b)
+        return True
+
     if bundle == "daily":
-        do_daily(preview)
+        _guard_and_run("daily", do_daily)
     elif bundle == "weekly":
-        do_weekly(preview)
+        _guard_and_run("weekly", do_weekly)
     elif bundle == "market_share":
-        do_market_share(preview)
+        _guard_and_run("market_share", do_market_share)
     else:  # "all"
-        do_daily(preview)
-        do_weekly(preview)
+        d = _guard_and_run("daily", do_daily)
+        w = _guard_and_run("weekly", do_weekly)
+        if not preview and not d and not w:
+            print("\n  All reports already sent today. Use --force to resend.")
 
     print("\nDone.")
 

@@ -1,0 +1,15 @@
+# Default: Ryu owns everything
+*                                           @ryuoelasmar
+
+# Ownership pillar — collaborator owns these files
+# Replace @collaborator with her GitHub username when she joins
+# webapp/routers/holdings.py                @collaborator
+# webapp/routers/holdings_placeholder.py    @collaborator
+# webapp/routers/intel.py                   @collaborator
+# webapp/routers/intel_competitors.py       @collaborator
+# webapp/routers/intel_insights.py          @collaborator
+# webapp/templates/holdings*.html           @collaborator
+# webapp/templates/crossover.html           @collaborator
+# webapp/templates/institution*.html        @collaborator
+# etp_tracker/thirteen_f.py                 @collaborator
+# scripts/run_13f.py                        @collaborator
