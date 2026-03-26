@@ -6,6 +6,7 @@ Bloomberg-powered analysis, and candidate evaluation.
 """
 from __future__ import annotations
 
+import csv
 import io
 import logging
 import math
@@ -462,6 +463,39 @@ def filings_dashboard(
 # Filing Landscape (moved from screener.py)
 # ===================================================================
 
+def _filter_fund_rows(
+    fund_rows: list[dict],
+    leverage: str,
+    view: str,
+    q: str,
+) -> list[dict]:
+    """Apply leverage / view / search filters to fund_rows."""
+    filtered = fund_rows
+
+    # Leverage filter
+    if leverage and leverage != "all":
+        filtered = [r for r in filtered if r["leverage"] == leverage]
+
+    # View filter
+    if view == "rex-only":
+        filtered = [r for r in filtered if r["issuer"] in REX_ISSUERS]
+    elif view == "missing":
+        filtered = [r for r in filtered if r["issuer"] not in REX_ISSUERS]
+
+    # Search filter (case-insensitive across multiple fields)
+    if q:
+        ql = q.lower()
+        filtered = [
+            r for r in filtered
+            if ql in (r["underlier"] or "").lower()
+            or ql in (r["fund_name"] or "").lower()
+            or ql in (r["ticker"] or "").lower()
+            or ql in (r["issuer"] or "").lower()
+        ]
+
+    return filtered
+
+
 @router.get("/landscape")
 def filing_landscape(
     request: Request,
@@ -470,13 +504,19 @@ def filing_landscape(
     leverage: str = Query("all"),
     view: str = Query("all"),
     q: str = Query(""),
+    page: int = Query(default=1, ge=1),
+    per_page: int = Query(default=50, ge=10, le=200),
 ):
     """L&I Landscape - filing matrix (SEC) and product data (Bloomberg)."""
     if mode not in ("filings", "products"):
         mode = "filings"
 
+    # Clamp per_page to allowed values
+    if per_page not in (25, 50, 100, 200):
+        per_page = 50
+
     # ------------------------------------------------------------------
-    # Filings mode: SEC filing matrix
+    # Filings mode: SEC filing matrix + fund-level rows
     # ------------------------------------------------------------------
     if mode == "filings":
         from webapp.services.filing_landscape import build_filing_landscape
@@ -484,7 +524,7 @@ def filing_landscape(
         data = build_filing_landscape(db)
         matrices = data["matrices"]
 
-        # Build flat rows for the single unified table
+        # Build flat rows for the matrix view (backward compat)
         all_issuers_ordered = data["all_active_issuers"]
         flat_rows = []
         for lev in ("2x", "3x", "4x", "5x"):
@@ -498,6 +538,30 @@ def filing_landscape(
                     "has_rex": has_rex,
                 })
 
+        # Server-side filtering on fund_rows
+        all_fund_rows = data["fund_rows"]
+        filtered_rows = _filter_fund_rows(all_fund_rows, leverage, view, q)
+
+        # Pagination
+        total_rows = len(filtered_rows)
+        total_pages = max(1, math.ceil(total_rows / per_page))
+        if page > total_pages:
+            page = total_pages
+        start = (page - 1) * per_page
+        paginated_rows = filtered_rows[start:start + per_page]
+
+        # Query string for pagination links (preserve filters, exclude page)
+        qs_params = {"mode": "filings"}
+        if leverage and leverage != "all":
+            qs_params["leverage"] = leverage
+        if view and view != "all":
+            qs_params["view"] = view
+        if q:
+            qs_params["q"] = q
+        if per_page != 50:
+            qs_params["per_page"] = per_page
+        base_qs = urllib.parse.urlencode(qs_params)
+
         return templates.TemplateResponse("screener_landscape.html", {
             "request": request,
             "mode": "filings",
@@ -509,6 +573,15 @@ def filing_landscape(
             "leverage": leverage,
             "view": view,
             "q": q,
+            # Fund-level rows (paginated)
+            "fund_rows": paginated_rows,
+            "page": page,
+            "per_page": per_page,
+            "total_rows": total_rows,
+            "total_pages": total_pages,
+            "base_qs": base_qs,
+            "top_underliers": data["top_underliers"],
+            "leverage_counts": data["leverage_counts"],
         })
 
     # ------------------------------------------------------------------
@@ -532,6 +605,65 @@ def filing_landscape(
         "view": view,
         "q": q,
     })
+
+
+# ===================================================================
+# Landscape CSV Export
+# ===================================================================
+
+def _stream_landscape_csv(header: list[str], row_generator):
+    """Yield CSV content row-by-row (avoids buffering entire file)."""
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(header)
+    yield buf.getvalue()
+    for row_data in row_generator:
+        buf = io.StringIO()
+        writer = csv.writer(buf)
+        writer.writerow(row_data)
+        yield buf.getvalue()
+
+
+@router.get("/landscape/export")
+def landscape_export(
+    db: Session = Depends(get_db),
+    leverage: str = Query("all"),
+    view: str = Query("all"),
+    q: str = Query(""),
+):
+    """Export filtered landscape fund rows as CSV."""
+    from webapp.services.filing_landscape import build_filing_landscape
+
+    data = build_filing_landscape(db)
+    filtered = _filter_fund_rows(data["fund_rows"], leverage, view, q)
+
+    header = [
+        "Leverage", "Fund Name", "Ticker", "Issuer", "Trust",
+        "Underlier", "Status", "Effective Date", "Latest Filing",
+        "Form", "Prospectus Link",
+    ]
+
+    def rows():
+        for r in filtered:
+            yield [
+                r["leverage"],
+                r["fund_name"],
+                r["ticker"] or "",
+                r["issuer"],
+                r["trust"],
+                r["underlier"],
+                r["status"],
+                str(r["effective_date"]) if r["effective_date"] else "",
+                str(r["latest_filing_date"]) if r["latest_filing_date"] else "",
+                r["latest_form"] or "",
+                r["prospectus_link"] or "",
+            ]
+
+    return StreamingResponse(
+        _stream_landscape_csv(header, rows()),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=li_landscape_export.csv"},
+    )
 
 
 # ===================================================================

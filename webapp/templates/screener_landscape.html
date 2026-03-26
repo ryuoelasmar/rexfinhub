@@ -21,7 +21,7 @@
 .sg-divider { width: 1px; height: 20px; background: #e5e7eb; }
 .sg-search {
   padding: 6px 12px; border: 1px solid #e5e7eb; border-radius: 4px;
-  font-size: 13px; width: 160px; font-family: inherit; background: #ffffff; color: #0f172a;
+  font-size: 13px; width: 200px; font-family: inherit; background: #ffffff; color: #0f172a;
 }
 .sg-search:focus { outline: none; border-color: #2563eb; box-shadow: 0 0 0 2px rgba(37,99,235,0.1); }
 
@@ -66,6 +66,50 @@
 .landscape-row-count {
   font-size: 12px; color: #64748b; font-family: var(--font-mono);
 }
+
+/* Top underliers summary */
+.top-underlier-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 8px; margin-bottom: 24px;
+}
+.top-underlier-chip {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 12px; background: #f8fafc; border: 1px solid #e5e7eb;
+  border-radius: 6px; font-size: 13px; cursor: pointer; transition: all 0.15s ease;
+  text-decoration: none; color: #0f172a;
+}
+.top-underlier-chip:hover { background: #f1f5f9; border-color: #cbd5e1; text-decoration: none; }
+.top-underlier-chip .name { font-weight: 600; }
+.top-underlier-chip .count {
+  font-size: 11px; font-weight: 600; font-family: var(--font-mono);
+  color: #64748b; background: #e5e7eb; padding: 1px 6px; border-radius: 3px;
+}
+.top-underlier-chip .levs { font-size: 10px; color: #94a3b8; margin-left: 4px; }
+
+/* Leverage badge colors */
+.lev-badge {
+  display: inline-block; padding: 2px 8px; border-radius: 3px;
+  font-size: 11px; font-weight: 600; font-family: var(--font-mono); text-align: center;
+}
+.lev-1\.25x { background: #e0f2f1; color: #00695c; }
+.lev-1\.5x  { background: #e0f7fa; color: #00838f; }
+.lev-2x     { background: #e8f5e9; color: #2e7d32; }
+.lev-3x     { background: #e3f2fd; color: #1565c0; }
+.lev-4x     { background: #fff3e0; color: #e65100; }
+.lev-5x     { background: #fce4ec; color: #c62828; }
+
+/* Fund row link */
+.fund-link { color: #2563eb; text-decoration: none; font-weight: 500; }
+.fund-link:hover { text-decoration: underline; }
+
+/* Export button */
+.export-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 14px; border-radius: 4px; font-size: 13px; font-weight: 500;
+  background: #059669; color: #ffffff; text-decoration: none; border: none; cursor: pointer;
+  transition: all 0.15s ease;
+}
+.export-btn:hover { background: #047857; color: #ffffff; text-decoration: none; }
 </style>
 {% endblock %}
 
@@ -81,38 +125,20 @@
     <h1 style="font-size:20px; font-weight:600; color:#0f172a; margin:8px 0 4px;">L&I Landscape</h1>
     <div style="font-size:13px; color:#94a3b8;">
       {% if mode == 'filings' %}
-      2x / 3x / 4x / 5x SEC Filing Matrix | Source: EDGAR | {{ generated_at }}
+      Full L&I Filing Universe | Source: EDGAR | {{ generated_at }}
       {% else %}
       Bloomberg L&I Product Universe
       {% endif %}
     </div>
   </div>
-  {% if mode == 'filings' %}
+  {% if mode == 'filings' and leverage_counts %}
   <div style="display:flex; align-items:center; gap:0;">
-    <div style="padding:0 20px; border-right:1px solid #e5e7eb; text-align:center;">
-      <div style="font-size:24px; font-weight:700; color:#0f172a; font-variant-numeric:tabular-nums;">{{ kpis.count_2x }}</div>
-      <div style="font-size:10px; text-transform:uppercase; letter-spacing:0.04em; color:#94a3b8;">2X NAMES</div>
+    {% for lev, cnt in leverage_counts.items() if cnt > 0 %}
+    <div style="padding:0 16px;{% if not loop.last %} border-right:1px solid #e5e7eb;{% endif %} text-align:center;">
+      <div style="font-size:22px; font-weight:700; color:#0f172a; font-variant-numeric:tabular-nums;">{{ cnt }}</div>
+      <div style="font-size:10px; text-transform:uppercase; letter-spacing:0.04em; color:#94a3b8;">{{ lev }} FUNDS</div>
     </div>
-    <div style="padding:0 20px; border-right:1px solid #e5e7eb; text-align:center;">
-      <div style="font-size:24px; font-weight:700; color:#0f172a; font-variant-numeric:tabular-nums;">{{ kpis.count_3x }}</div>
-      <div style="font-size:10px; text-transform:uppercase; letter-spacing:0.04em; color:#94a3b8;">3X NAMES</div>
-    </div>
-    <div style="padding:0 20px; border-right:1px solid #e5e7eb; text-align:center;">
-      <div style="font-size:24px; font-weight:700; color:#0f172a; font-variant-numeric:tabular-nums;">{{ kpis.count_4x }}</div>
-      <div style="font-size:10px; text-transform:uppercase; letter-spacing:0.04em; color:#94a3b8;">4X NAMES</div>
-    </div>
-    <div style="padding:0 20px; border-right:1px solid #e5e7eb; text-align:center;">
-      <div style="font-size:24px; font-weight:700; color:#0f172a; font-variant-numeric:tabular-nums;">{{ kpis.count_5x }}</div>
-      <div style="font-size:10px; text-transform:uppercase; letter-spacing:0.04em; color:#94a3b8;">5X NAMES</div>
-    </div>
-    <div style="padding:0 20px; border-right:1px solid #e5e7eb; text-align:center;">
-      <div style="font-size:24px; font-weight:700; color:#0f172a; font-variant-numeric:tabular-nums;">{{ kpis.rex_exclusive }}</div>
-      <div style="font-size:10px; text-transform:uppercase; letter-spacing:0.04em; color:#94a3b8;">REX EXCLUSIVE</div>
-    </div>
-    <div style="padding:0 20px; text-align:center;">
-      <div style="font-size:24px; font-weight:700; color:#0f172a; font-variant-numeric:tabular-nums;">{{ kpis.total_names }}</div>
-      <div style="font-size:10px; text-transform:uppercase; letter-spacing:0.04em; color:#94a3b8;">UNIQUE NAMES</div>
-    </div>
+    {% endfor %}
   </div>
   {% endif %}
 </div>
@@ -127,7 +153,7 @@
 
 {% if mode == 'filings' %}
 {# ================================================================
-   FILINGS MODE — Issuer Scorecard + Single Flat Matrix Table
+   FILINGS MODE — Scorecard + Top Underliers + Fund Table + Export
    ================================================================ #}
 
 <!-- ==================== ISSUER SCORECARD ==================== -->
@@ -166,54 +192,118 @@
 </div>
 </div>
 
-<!-- ==================== FILTERS (JS client-side) ==================== -->
+<!-- ==================== TOP UNDERLIERS ==================== -->
+{% if top_underliers %}
 <div class="sg-section" style="margin-top:32px;">
-  <h2>Filing Matrix</h2>
-  <span class="sg-badge landscape-row-count" id="rowCount">{{ flat_rows|length }} rows</span>
+  <h2>Top Underliers</h2>
+  <span class="sg-badge">by fund count</span>
+</div>
+<div class="top-underlier-grid">
+  {% for u in top_underliers %}
+  <a href="/filings/landscape?mode=filings&q={{ u.underlier }}" class="top-underlier-chip">
+    <span>
+      <span class="name">{{ u.underlier }}</span>
+      <span class="levs">{{ u.leverages|join(', ') }}</span>
+    </span>
+    <span class="count">{{ u.count }}</span>
+  </a>
+  {% endfor %}
+</div>
+{% endif %}
+
+<!-- ==================== FILTERS (server-side via URL params) ==================== -->
+<div class="sg-section" style="margin-top:32px;">
+  <h2>Fund Filings</h2>
+  <div style="display:flex; align-items:center; gap:12px;">
+    <span class="sg-badge landscape-row-count">{{ "{:,}".format(total_rows) }} funds</span>
+    <a href="/filings/landscape/export?leverage={{ leverage }}&view={{ view }}&q={{ q|urlencode }}" class="export-btn">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Export CSV
+    </a>
+  </div>
 </div>
 
+<form method="get" action="/filings/landscape" style="margin:0;">
+<input type="hidden" name="mode" value="filings">
 <div class="sg-filter-bar">
-  {# Leverage filter pills #}
-  <button type="button" class="sg-pill active" data-filter-group="lev" data-value="all" onclick="setFilter(this)">All</button>
-  <button type="button" class="sg-pill" data-filter-group="lev" data-value="2x" onclick="setFilter(this)">2x</button>
-  <button type="button" class="sg-pill" data-filter-group="lev" data-value="3x" onclick="setFilter(this)">3x</button>
-  <button type="button" class="sg-pill" data-filter-group="lev" data-value="4x" onclick="setFilter(this)">4x</button>
-  <button type="button" class="sg-pill" data-filter-group="lev" data-value="5x" onclick="setFilter(this)">5x</button>
+  {# Leverage filter pills — link-based for server-side #}
+  <a href="/filings/landscape?mode=filings&view={{ view }}&q={{ q|urlencode }}" class="sg-pill{% if leverage == 'all' %} active{% endif %}">All</a>
+  {% for lev in ['1.25x', '1.5x', '2x', '3x', '4x', '5x'] %}
+  {% if leverage_counts.get(lev, 0) > 0 %}
+  <a href="/filings/landscape?mode=filings&leverage={{ lev }}&view={{ view }}&q={{ q|urlencode }}" class="sg-pill{% if leverage == lev %} active{% endif %}">{{ lev }}</a>
+  {% endif %}
+  {% endfor %}
   <span class="sg-divider"></span>
   {# View filter pills #}
-  <button type="button" class="sg-pill active" data-filter-group="view" data-value="all" onclick="setFilter(this)">All Names</button>
-  <button type="button" class="sg-pill" data-filter-group="view" data-value="rex-only" onclick="setFilter(this)">T-REX Only</button>
-  <button type="button" class="sg-pill" data-filter-group="view" data-value="missing" onclick="setFilter(this)">Gaps</button>
+  <a href="/filings/landscape?mode=filings&leverage={{ leverage }}&q={{ q|urlencode }}" class="sg-pill{% if view == 'all' %} active{% endif %}">All Names</a>
+  <a href="/filings/landscape?mode=filings&leverage={{ leverage }}&view=rex-only&q={{ q|urlencode }}" class="sg-pill{% if view == 'rex-only' %} active{% endif %}">REX / T-REX</a>
+  <a href="/filings/landscape?mode=filings&leverage={{ leverage }}&view=missing&q={{ q|urlencode }}" class="sg-pill{% if view == 'missing' %} active{% endif %}">Competitors</a>
   <span class="sg-divider"></span>
-  {# Search input #}
-  <input type="text" id="underlierSearch" placeholder="Search underlier..." class="sg-search" oninput="filterLandscape()">
+  {# Search input — submits as form #}
+  <input type="hidden" name="leverage" value="{{ leverage }}">
+  <input type="hidden" name="view" value="{{ view }}">
+  <input type="text" name="q" value="{{ q }}" placeholder="Search fund, underlier, issuer..." class="sg-search">
+  {% if q %}
+  <a href="/filings/landscape?mode=filings&leverage={{ leverage }}&view={{ view }}" class="sg-pill" style="font-size:12px; padding:4px 10px;">Clear</a>
+  {% endif %}
 </div>
+</form>
 
-<!-- ==================== SINGLE FLAT MATRIX TABLE ==================== -->
+<!-- ==================== FUND TABLE (server-side paginated) ==================== -->
 <div class="screener-wrap">
 <div class="table-scroll-wrap">
-<table id="landscapeTable">
+<table id="fundTable">
   <thead>
     <tr>
-      <th style="min-width:140px;" onclick="sortTable('landscapeTable',0)">Underlier</th>
-      <th style="min-width:60px; text-align:center;" onclick="sortTable('landscapeTable',1)">Leverage</th>
-      {% for iss in all_issuers %}
-      <th style="text-align:center; min-width:80px;{% if iss in ('T-REX', 'REX') %} color:#059669;{% endif %}" class="{% if iss in ('T-REX', 'REX') %}th-rex{% endif %}" onclick="sortTable('landscapeTable',{{ loop.index + 1 }})">{{ iss }}</th>
-      {% endfor %}
+      <th style="min-width:50px; text-align:center;">Leverage</th>
+      <th style="min-width:280px;">Fund Name</th>
+      <th style="min-width:70px;">Ticker</th>
+      <th style="min-width:110px;">Issuer</th>
+      <th style="min-width:150px;">Trust</th>
+      <th style="min-width:100px;">Underlier</th>
+      <th style="min-width:80px; text-align:center;">Status</th>
+      <th style="min-width:90px; text-align:center;">Latest Filing</th>
+      <th style="min-width:90px; text-align:center;">Prospectus</th>
     </tr>
   </thead>
   <tbody>
-    {% for row in flat_rows %}
-    <tr data-leverage="{{ row.leverage }}" data-rex="{{ 'true' if row.has_rex else 'false' }}" data-underlier="{{ row.underlier }}">
-      <td style="font-weight:600;">{{ row.underlier }}</td>
-      <td style="text-align:center; font-size:12px; font-weight:500; color:#64748b;">{{ row.leverage }}</td>
-      {% for iss in all_issuers %}
+    {% for r in fund_rows %}
+    <tr{% if r.issuer in ('T-REX', 'REX') %} class="scorecard-rex"{% endif %}>
       <td style="text-align:center;">
-        {% if iss in row.issuers %}
-        <span class="matrix-dot {% if iss in ('T-REX', 'REX') %}matrix-dot-rex{% else %}matrix-dot-other{% endif %}">&#9679;</span>
+        <span class="lev-badge lev-{{ r.leverage }}">{{ r.leverage }}</span>
+      </td>
+      <td style="font-size:13px;">
+        {% if r.series_id %}
+        <a href="/funds/{{ r.series_id }}" class="fund-link">{{ r.fund_name }}</a>
+        {% else %}
+        {{ r.fund_name }}
         {% endif %}
       </td>
-      {% endfor %}
+      <td style="font-family:var(--font-mono); font-size:12px; font-weight:600;">{{ r.ticker or '' }}</td>
+      <td style="font-size:13px;{% if r.issuer in ('T-REX', 'REX') %} font-weight:600; color:#059669;{% endif %}">{{ r.issuer }}</td>
+      <td style="font-size:12px; color:#64748b;">{{ r.trust }}</td>
+      <td style="font-weight:600; font-size:13px;">{{ r.underlier }}</td>
+      <td style="text-align:center;">
+        {% if r.status == 'EFFECTIVE' %}
+        <span class="status-effective" style="font-size:11px; padding:2px 8px; border-radius:3px;">EFFECTIVE</span>
+        {% elif r.status == 'PENDING' %}
+        <span class="status-pending" style="font-size:11px; padding:2px 8px; border-radius:3px;">PENDING</span>
+        {% elif r.status == 'DELAYED' %}
+        <span class="status-delayed" style="font-size:11px; padding:2px 8px; border-radius:3px;">DELAYED</span>
+        {% else %}
+        <span style="font-size:11px; color:#94a3b8;">{{ r.status }}</span>
+        {% endif %}
+      </td>
+      <td style="text-align:center; font-size:12px; font-variant-numeric:tabular-nums; color:#64748b;">
+        {{ r.latest_filing_date if r.latest_filing_date else '' }}
+      </td>
+      <td style="text-align:center;">
+        {% if r.prospectus_link %}
+        <a href="{{ r.prospectus_link }}" target="_blank" rel="noopener" style="font-size:12px; color:#2563eb; text-decoration:none; font-weight:500;">View</a>
+        {% else %}
+        <span style="font-size:11px; color:#cbd5e1;">--</span>
+        {% endif %}
+      </td>
     </tr>
     {% endfor %}
   </tbody>
@@ -221,12 +311,104 @@
 </div>
 </div>
 
-{% if not flat_rows %}
-<div style="margin-top:24px; padding:16px 20px; background:#ffffff; border:1px solid #e5e7eb; border-radius:6px;">
-  <div style="font-size:16px; font-weight:600; color:#0f172a; margin-bottom:4px;">No data</div>
-  <p style="font-size:13px; color:#64748b; margin:0;">No filing data available. Run the pipeline to populate the database.</p>
+{% if not fund_rows %}
+<div style="text-align:center; padding:40px; color:#64748b; font-size:14px;">
+  {% if q or leverage != 'all' or view != 'all' %}
+  No funds match the selected filters.
+  {% else %}
+  No filing data available. Run the pipeline to populate the database.
+  {% endif %}
 </div>
 {% endif %}
+
+{# Pagination #}
+{% if total_pages > 1 %}
+<div style="display:flex; justify-content:space-between; align-items:center; margin-top:16px; padding:12px 0;">
+  <div style="font-size:13px; color:#94a3b8;">
+    {{ "{:,}".format(total_rows) }} funds &middot; page {{ page }} of {{ total_pages }}
+  </div>
+  <div style="display:flex; align-items:center; gap:4px;">
+    {% if page > 1 %}
+    <a href="?{{ base_qs }}{% if base_qs %}&{% endif %}page={{ page - 1 }}" style="display:inline-flex; align-items:center; justify-content:center; padding:4px 12px; font-size:12px; font-weight:500; border-radius:4px; text-decoration:none; background:#f3f4f6; color:#374151;">Prev</a>
+    {% else %}
+    <span style="display:inline-flex; align-items:center; justify-content:center; padding:4px 12px; font-size:12px; font-weight:500; border-radius:4px; background:#f3f4f6; color:#374151; opacity:0.4; cursor:default;">Prev</span>
+    {% endif %}
+    {% set start_p = [1, page - 2]|max %}
+    {% set end_p = [total_pages + 1, page + 3]|min %}
+    {% for p in range(start_p, end_p) %}
+    {% if p == page %}
+    <span style="display:inline-flex; align-items:center; justify-content:center; padding:4px 10px; background:#0f172a; color:#ffffff; border-radius:4px; font-size:12px; font-weight:600; min-width:32px;">{{ p }}</span>
+    {% else %}
+    <a href="?{{ base_qs }}{% if base_qs %}&{% endif %}page={{ p }}" style="display:inline-flex; align-items:center; justify-content:center; padding:4px 10px; font-size:12px; font-weight:500; border-radius:4px; text-decoration:none; background:#f3f4f6; color:#374151; min-width:32px;">{{ p }}</a>
+    {% endif %}
+    {% endfor %}
+    {% if page < total_pages %}
+    <a href="?{{ base_qs }}{% if base_qs %}&{% endif %}page={{ page + 1 }}" style="display:inline-flex; align-items:center; justify-content:center; padding:4px 12px; font-size:12px; font-weight:500; border-radius:4px; text-decoration:none; background:#f3f4f6; color:#374151;">Next</a>
+    {% else %}
+    <span style="display:inline-flex; align-items:center; justify-content:center; padding:4px 12px; font-size:12px; font-weight:500; border-radius:4px; background:#f3f4f6; color:#374151; opacity:0.4; cursor:default;">Next</span>
+    {% endif %}
+  </div>
+  <select style="padding:4px 8px; font-size:12px; border:1px solid #e5e7eb; border-radius:4px; color:#0f172a; background:#ffffff; font-family:inherit;" onchange="location='?{{ base_qs }}{% if base_qs %}&{% endif %}page=1&per_page='+this.value">
+    {% for n in [25, 50, 100, 200] %}
+    <option value="{{ n }}"{{ ' selected' if n == per_page else '' }}>{{ n }}/page</option>
+    {% endfor %}
+  </select>
+</div>
+{% endif %}
+
+<!-- ==================== MATRIX VIEW (collapsible) ==================== -->
+<details style="margin-top:32px;">
+  <summary style="cursor:pointer; font-size:14px; font-weight:600; color:#0f172a; padding:8px 0;">
+    Competitive Matrix (Underlier &times; Issuer)
+    <span style="font-size:12px; font-weight:400; color:#94a3b8; margin-left:8px;">click to expand</span>
+  </summary>
+
+  <div class="sg-filter-bar" style="margin-top:16px;">
+    <button type="button" class="sg-pill active" data-filter-group="matrix-lev" data-value="all" onclick="setMatrixFilter(this)">All</button>
+    <button type="button" class="sg-pill" data-filter-group="matrix-lev" data-value="2x" onclick="setMatrixFilter(this)">2x</button>
+    <button type="button" class="sg-pill" data-filter-group="matrix-lev" data-value="3x" onclick="setMatrixFilter(this)">3x</button>
+    <button type="button" class="sg-pill" data-filter-group="matrix-lev" data-value="4x" onclick="setMatrixFilter(this)">4x</button>
+    <button type="button" class="sg-pill" data-filter-group="matrix-lev" data-value="5x" onclick="setMatrixFilter(this)">5x</button>
+    <span class="sg-divider"></span>
+    <button type="button" class="sg-pill active" data-filter-group="matrix-view" data-value="all" onclick="setMatrixFilter(this)">All Names</button>
+    <button type="button" class="sg-pill" data-filter-group="matrix-view" data-value="rex-only" onclick="setMatrixFilter(this)">T-REX Only</button>
+    <button type="button" class="sg-pill" data-filter-group="matrix-view" data-value="missing" onclick="setMatrixFilter(this)">Gaps</button>
+    <span class="sg-divider"></span>
+    <input type="text" id="matrixSearch" placeholder="Search underlier..." class="sg-search" oninput="filterMatrix()">
+    <span class="sg-badge landscape-row-count" id="matrixRowCount">{{ flat_rows|length }} rows</span>
+  </div>
+
+  <div class="screener-wrap">
+  <div class="table-scroll-wrap">
+  <table id="landscapeTable">
+    <thead>
+      <tr>
+        <th style="min-width:140px;" onclick="sortTable('landscapeTable',0)">Underlier</th>
+        <th style="min-width:60px; text-align:center;" onclick="sortTable('landscapeTable',1)">Leverage</th>
+        {% for iss in all_issuers %}
+        <th style="text-align:center; min-width:80px;{% if iss in ('T-REX', 'REX') %} color:#059669;{% endif %}" class="{% if iss in ('T-REX', 'REX') %}th-rex{% endif %}" onclick="sortTable('landscapeTable',{{ loop.index + 1 }})">{{ iss }}</th>
+        {% endfor %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in flat_rows %}
+      <tr data-leverage="{{ row.leverage }}" data-rex="{{ 'true' if row.has_rex else 'false' }}" data-underlier="{{ row.underlier }}">
+        <td style="font-weight:600;">{{ row.underlier }}</td>
+        <td style="text-align:center; font-size:12px; font-weight:500; color:#64748b;">{{ row.leverage }}</td>
+        {% for iss in all_issuers %}
+        <td style="text-align:center;">
+          {% if iss in row.issuers %}
+          <span class="matrix-dot {% if iss in ('T-REX', 'REX') %}matrix-dot-rex{% else %}matrix-dot-other{% endif %}">&#9679;</span>
+          {% endif %}
+        </td>
+        {% endfor %}
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  </div>
+</details>
 
 {% else %}
 {# ================================================================
@@ -306,29 +488,23 @@
 {% endif %}
 
 <script>
-/* ===== Client-side filtering for both modes ===== */
+/* ===== Matrix filtering (client-side, inside collapsible) ===== */
 
-function setFilter(btn) {
+function setMatrixFilter(btn) {
     var group = btn.getAttribute('data-filter-group');
     document.querySelectorAll('[data-filter-group="' + group + '"]').forEach(function(p) {
         p.classList.remove('active');
     });
     btn.classList.add('active');
-
-    if (group === 'lev' || group === 'view') {
-        filterLandscape();
-    } else {
-        filterProducts();
-    }
+    filterMatrix();
 }
 
-/* --- Filings mode filtering --- */
-function filterLandscape() {
-    var levBtn = document.querySelector('[data-filter-group="lev"].active');
-    var viewBtn = document.querySelector('[data-filter-group="view"].active');
+function filterMatrix() {
+    var levBtn = document.querySelector('[data-filter-group="matrix-lev"].active');
+    var viewBtn = document.querySelector('[data-filter-group="matrix-view"].active');
     var lev = levBtn ? levBtn.getAttribute('data-value') : 'all';
     var view = viewBtn ? viewBtn.getAttribute('data-value') : 'all';
-    var q = (document.getElementById('underlierSearch') || {}).value;
+    var q = (document.getElementById('matrixSearch') || {}).value;
     q = q ? q.toUpperCase() : '';
 
     var rows = document.querySelectorAll('#landscapeTable tbody tr');
@@ -349,11 +525,21 @@ function filterLandscape() {
         if (show) visible++;
     });
 
-    var counter = document.getElementById('rowCount');
+    var counter = document.getElementById('matrixRowCount');
     if (counter) counter.textContent = visible + ' rows';
 }
 
-/* --- Products mode filtering --- */
+/* ===== Products mode filtering (client-side) ===== */
+
+function setFilter(btn) {
+    var group = btn.getAttribute('data-filter-group');
+    document.querySelectorAll('[data-filter-group="' + group + '"]').forEach(function(p) {
+        p.classList.remove('active');
+    });
+    btn.classList.add('active');
+    filterProducts();
+}
+
 var _rexOnly = false;
 
 function toggleRex(btn) {
