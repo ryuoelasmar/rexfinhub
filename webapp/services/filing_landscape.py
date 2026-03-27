@@ -56,6 +56,12 @@ _MATRIX_LEVS = ("2x", "3x", "4x", "5x")
 
 def get_leverage(name: str) -> str | None:
     n = name.upper()
+    # Early exit: non-leveraged funds that contain "Ultra" in a bond/income context
+    if ("ULTRA" in n and any(k in n for k in [
+        "SHORT INCOME", "SHORT BOND", "SHORT DURATION", "SHORT TERM",
+        "SHORT-TERM", "ULTRA SHARES", "SHORT MUNICIPAL",
+    ])):
+        return None
     # Fractional leverage (must check BEFORE whole numbers)
     if re.search(r"1\.5\s*[Xx]", n):
         return "1.5x"
@@ -80,8 +86,11 @@ def get_leverage(name: str) -> str | None:
     if "ULTRASHORT" in n or "ULTRA SHORT" in n:
         return "2x"
     if "ULTRA " in n or n.endswith("ULTRA"):
-        # Exclude false positives: "Ultra Short Income", "Ultra Shares" (mutual fund classes)
-        if any(fp in n for fp in ["ULTRA SHORT INCOME", "ULTRA SHARES", "ULTRA SHORT DURATION"]):
+        # Exclude false positives: bond funds, income funds, mutual fund classes
+        if any(fp in n for fp in [
+            "ULTRA SHORT INCOME", "ULTRA SHARES", "ULTRA SHORT DURATION",
+            "ULTRA SHORT BOND", "ULTRASHORT BOND", "ULTRA SHORT TERM",
+        ]):
             return None
         return "2x"
     # 1x Inverse / Bear (no leverage multiplier, but inverse exposure)
@@ -146,9 +155,10 @@ def extract_underlier(name: str) -> str | None:
         m = re.search(pat, n, re.IGNORECASE)
         if m:
             result = m.group(1).strip()
-            # Clean trailing noise words
+            # Clean trailing noise words and brackets
             result = re.sub(r'\s+(?:Daily|Target|Shares|Fund|Trust|Strategy|Index)\s*$',
                             '', result, flags=re.IGNORECASE).strip()
+            result = result.strip('[]').strip()
             if result:
                 return result
     return None
