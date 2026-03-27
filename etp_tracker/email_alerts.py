@@ -1403,6 +1403,10 @@ def _gather_daily_data(db_session, since_date: str | None = None,
                 _mkt = next((c for c in _rex.columns if c.lower() == "market_status"), None)
                 if _mkt:
                     _rex = _rex[_rex[_mkt] == "ACTV"]
+                # Only count ETPs (ETF + ETN), exclude non-ETP Osprey products
+                _ft = next((c for c in _rex.columns if c.lower() == "fund_type"), None)
+                if _ft:
+                    _rex = _rex[_rex[_ft].isin(["ETF", "ETN"])]
                 rex_aum = _rex[_aum_col].sum()
     except Exception:
         pass

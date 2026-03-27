@@ -223,31 +223,22 @@
   </div>
 </div>
 
-<form method="get" action="/filings/landscape" style="margin:0;">
-<input type="hidden" name="mode" value="filings">
 <div class="sg-filter-bar">
-  {# Leverage filter pills — link-based for server-side #}
-  <a href="/filings/landscape?mode=filings&view={{ view }}&q={{ q|urlencode }}" class="sg-pill{% if leverage == 'all' %} active{% endif %}">All</a>
+  {# Leverage filter pills — client-side JS #}
+  <button class="sg-pill active" data-filter="leverage" data-value="all" onclick="setFilter('leverage','all')">All</button>
   {% for lev in ['1.25x', '1.5x', '2x', '3x', '4x', '5x'] %}
   {% if leverage_counts.get(lev, 0) > 0 %}
-  <a href="/filings/landscape?mode=filings&leverage={{ lev }}&view={{ view }}&q={{ q|urlencode }}" class="sg-pill{% if leverage == lev %} active{% endif %}">{{ lev }}</a>
+  <button class="sg-pill" data-filter="leverage" data-value="{{ lev }}" onclick="setFilter('leverage','{{ lev }}')">{{ lev }}</button>
   {% endif %}
   {% endfor %}
   <span class="sg-divider"></span>
-  {# View filter pills #}
-  <a href="/filings/landscape?mode=filings&leverage={{ leverage }}&q={{ q|urlencode }}" class="sg-pill{% if view == 'all' %} active{% endif %}">All Names</a>
-  <a href="/filings/landscape?mode=filings&leverage={{ leverage }}&view=rex-only&q={{ q|urlencode }}" class="sg-pill{% if view == 'rex-only' %} active{% endif %}">REX / T-REX</a>
-  <a href="/filings/landscape?mode=filings&leverage={{ leverage }}&view=missing&q={{ q|urlencode }}" class="sg-pill{% if view == 'missing' %} active{% endif %}">Competitors</a>
+  <button class="sg-pill active" data-filter="view" data-value="all" onclick="setFilter('view','all')">All Names</button>
+  <button class="sg-pill" data-filter="view" data-value="rex-only" onclick="setFilter('view','rex-only')">REX / T-REX</button>
+  <button class="sg-pill" data-filter="view" data-value="missing" onclick="setFilter('view','missing')">Competitors</button>
   <span class="sg-divider"></span>
-  {# Search input — submits as form #}
-  <input type="hidden" name="leverage" value="{{ leverage }}">
-  <input type="hidden" name="view" value="{{ view }}">
-  <input type="text" name="q" value="{{ q }}" placeholder="Search fund, underlier, issuer..." class="sg-search">
-  {% if q %}
-  <a href="/filings/landscape?mode=filings&leverage={{ leverage }}&view={{ view }}" class="sg-pill" style="font-size:12px; padding:4px 10px;">Clear</a>
-  {% endif %}
+  <input type="text" id="landscapeSearch" placeholder="Search fund, underlier, issuer..." class="sg-search" oninput="applyFilters()">
+  <button class="sg-pill" style="font-size:12px; padding:4px 10px; display:none;" id="clearSearch" onclick="document.getElementById('landscapeSearch').value='';applyFilters();this.style.display='none';">Clear</button>
 </div>
-</form>
 
 <!-- ==================== FUND TABLE (server-side paginated) ==================== -->
 <div class="screener-wrap">
@@ -268,7 +259,7 @@
   </thead>
   <tbody>
     {% for r in fund_rows %}
-    <tr{% if r.issuer in ('T-REX', 'REX') %} class="scorecard-rex"{% endif %}>
+    <tr class="fund-row{% if r.issuer in ('T-REX', 'REX') %} scorecard-rex{% endif %}" data-leverage="{{ r.leverage }}" data-issuer="{{ r.issuer }}" data-search="{{ r.fund_name|lower }} {{ (r.ticker or '')|lower }} {{ r.issuer|lower }} {{ r.underlier|lower }} {{ r.trust|lower }}">
       <td style="text-align:center;">
         <span class="lev-badge lev-{{ r.leverage }}">{{ r.leverage }}</span>
       </td>
@@ -311,50 +302,20 @@
 </div>
 </div>
 
-{% if not fund_rows %}
-<div style="text-align:center; padding:40px; color:#64748b; font-size:14px;">
-  {% if q or leverage != 'all' or view != 'all' %}
+<div id="noResults" style="text-align:center; padding:40px; color:#64748b; font-size:14px; display:none;">
   No funds match the selected filters.
-  {% else %}
-  No filing data available. Run the pipeline to populate the database.
-  {% endif %}
 </div>
-{% endif %}
 
-{# Pagination #}
-{% if total_pages > 1 %}
-<div style="display:flex; justify-content:space-between; align-items:center; margin-top:16px; padding:12px 0;">
-  <div style="font-size:13px; color:#94a3b8;">
-    {{ "{:,}".format(total_rows) }} funds &middot; page {{ page }} of {{ total_pages }}
-  </div>
-  <div style="display:flex; align-items:center; gap:4px;">
-    {% if page > 1 %}
-    <a href="?{{ base_qs }}{% if base_qs %}&{% endif %}page={{ page - 1 }}" style="display:inline-flex; align-items:center; justify-content:center; padding:4px 12px; font-size:12px; font-weight:500; border-radius:4px; text-decoration:none; background:#f3f4f6; color:#374151;">Prev</a>
-    {% else %}
-    <span style="display:inline-flex; align-items:center; justify-content:center; padding:4px 12px; font-size:12px; font-weight:500; border-radius:4px; background:#f3f4f6; color:#374151; opacity:0.4; cursor:default;">Prev</span>
-    {% endif %}
-    {% set start_p = [1, page - 2]|max %}
-    {% set end_p = [total_pages + 1, page + 3]|min %}
-    {% for p in range(start_p, end_p) %}
-    {% if p == page %}
-    <span style="display:inline-flex; align-items:center; justify-content:center; padding:4px 10px; background:#0f172a; color:#ffffff; border-radius:4px; font-size:12px; font-weight:600; min-width:32px;">{{ p }}</span>
-    {% else %}
-    <a href="?{{ base_qs }}{% if base_qs %}&{% endif %}page={{ p }}" style="display:inline-flex; align-items:center; justify-content:center; padding:4px 10px; font-size:12px; font-weight:500; border-radius:4px; text-decoration:none; background:#f3f4f6; color:#374151; min-width:32px;">{{ p }}</a>
-    {% endif %}
-    {% endfor %}
-    {% if page < total_pages %}
-    <a href="?{{ base_qs }}{% if base_qs %}&{% endif %}page={{ page + 1 }}" style="display:inline-flex; align-items:center; justify-content:center; padding:4px 12px; font-size:12px; font-weight:500; border-radius:4px; text-decoration:none; background:#f3f4f6; color:#374151;">Next</a>
-    {% else %}
-    <span style="display:inline-flex; align-items:center; justify-content:center; padding:4px 12px; font-size:12px; font-weight:500; border-radius:4px; background:#f3f4f6; color:#374151; opacity:0.4; cursor:default;">Next</span>
-    {% endif %}
-  </div>
-  <select style="padding:4px 8px; font-size:12px; border:1px solid #e5e7eb; border-radius:4px; color:#0f172a; background:#ffffff; font-family:inherit;" onchange="location='?{{ base_qs }}{% if base_qs %}&{% endif %}page=1&per_page='+this.value">
-    {% for n in [25, 50, 100, 200] %}
-    <option value="{{ n }}"{{ ' selected' if n == per_page else '' }}>{{ n }}/page</option>
-    {% endfor %}
+<div id="paginationBar" style="display:flex; justify-content:space-between; align-items:center; margin-top:16px; padding:12px 0;">
+  <div id="pageInfo" style="font-size:13px; color:#94a3b8;"></div>
+  <div id="pageButtons" style="display:flex; align-items:center; gap:4px;"></div>
+  <select id="perPageSelect" style="padding:4px 8px; font-size:12px; border:1px solid #e5e7eb; border-radius:4px; color:#0f172a; background:#ffffff; font-family:inherit;" onchange="currentPerPage=parseInt(this.value);currentPage=1;applyFilters();">
+    <option value="50" selected>50/page</option>
+    <option value="100">100/page</option>
+    <option value="200">200/page</option>
+    <option value="9999">All</option>
   </select>
 </div>
-{% endif %}
 
 <!-- ==================== MATRIX VIEW (collapsible) ==================== -->
 <details style="margin-top:32px;">
@@ -586,5 +547,104 @@ function filterProducts() {
     var counter = document.getElementById('productCount');
     if (counter) counter.textContent = visible + ' products';
 }
+
+/* ===== CLIENT-SIDE FILTERING FOR FILINGS MODE ===== */
+var currentLeverage = 'all';
+var currentView = 'all';
+var currentPage = 1;
+var currentPerPage = 50;
+var REX_ISSUERS = ['T-REX', 'REX'];
+
+function setFilter(type, value) {
+    if (type === 'leverage') currentLeverage = value;
+    if (type === 'view') currentView = value;
+    currentPage = 1;
+
+    /* Update pill active states */
+    document.querySelectorAll('[data-filter="' + type + '"]').forEach(function(btn) {
+        btn.classList.toggle('active', btn.getAttribute('data-value') === value);
+    });
+    applyFilters();
+}
+
+function applyFilters() {
+    var rows = document.querySelectorAll('#fundTable tbody .fund-row');
+    if (!rows.length) return;
+
+    var q = (document.getElementById('landscapeSearch') || {}).value || '';
+    q = q.toLowerCase().trim();
+    var clearBtn = document.getElementById('clearSearch');
+    if (clearBtn) clearBtn.style.display = q ? 'inline-flex' : 'none';
+
+    var visible = [];
+    rows.forEach(function(row) {
+        var lev = row.getAttribute('data-leverage');
+        var issuer = row.getAttribute('data-issuer');
+        var search = row.getAttribute('data-search');
+
+        var show = true;
+        if (currentLeverage !== 'all' && lev !== currentLeverage) show = false;
+        if (currentView === 'rex-only' && REX_ISSUERS.indexOf(issuer) === -1) show = false;
+        if (currentView === 'missing' && REX_ISSUERS.indexOf(issuer) !== -1) show = false;
+        if (q && search.indexOf(q) === -1) show = false;
+
+        if (show) visible.push(row);
+        row.style.display = 'none';
+    });
+
+    /* Pagination */
+    var total = visible.length;
+    var totalPages = Math.max(1, Math.ceil(total / currentPerPage));
+    if (currentPage > totalPages) currentPage = totalPages;
+    var start = (currentPage - 1) * currentPerPage;
+    var end = Math.min(start + currentPerPage, total);
+
+    for (var i = start; i < end; i++) {
+        visible[i].style.display = '';
+    }
+
+    /* No results message */
+    var noRes = document.getElementById('noResults');
+    if (noRes) noRes.style.display = total === 0 ? 'block' : 'none';
+
+    /* Page info */
+    var info = document.getElementById('pageInfo');
+    if (info) info.textContent = total.toLocaleString() + ' funds \u00b7 page ' + currentPage + ' of ' + totalPages;
+
+    /* Page buttons */
+    var btns = document.getElementById('pageButtons');
+    if (btns) {
+        btns.innerHTML = '';
+        if (totalPages <= 1) return;
+
+        function mkBtn(label, pg, active) {
+            var el = document.createElement('button');
+            el.textContent = label;
+            el.style.cssText = 'display:inline-flex;align-items:center;justify-content:center;padding:4px 10px;font-size:12px;font-weight:500;border-radius:4px;border:none;cursor:pointer;min-width:32px;font-family:inherit;';
+            if (active) {
+                el.style.background = '#0f172a'; el.style.color = '#ffffff'; el.style.fontWeight = '600';
+            } else if (pg === null) {
+                el.style.background = '#f3f4f6'; el.style.color = '#374151'; el.style.opacity = '0.4'; el.style.cursor = 'default';
+            } else {
+                el.style.background = '#f3f4f6'; el.style.color = '#374151';
+                el.onclick = function() { currentPage = pg; applyFilters(); };
+            }
+            btns.appendChild(el);
+        }
+
+        mkBtn('Prev', currentPage > 1 ? currentPage - 1 : null, false);
+        var sp = Math.max(1, currentPage - 2);
+        var ep = Math.min(totalPages, currentPage + 2);
+        for (var p = sp; p <= ep; p++) mkBtn(String(p), p, p === currentPage);
+        mkBtn('Next', currentPage < totalPages ? currentPage + 1 : null, false);
+    }
+}
+
+/* Initialize on load */
+document.addEventListener('DOMContentLoaded', function() {
+    if (document.querySelectorAll('#fundTable tbody .fund-row').length > 0) {
+        applyFilters();
+    }
+});
 </script>
 {% endblock %}

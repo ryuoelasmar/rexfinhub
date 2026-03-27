@@ -538,29 +538,8 @@ def filing_landscape(
                     "has_rex": has_rex,
                 })
 
-        # Server-side filtering on fund_rows
+        # All fund rows sent to client — filtering is 100% client-side JS
         all_fund_rows = data["fund_rows"]
-        filtered_rows = _filter_fund_rows(all_fund_rows, leverage, view, q)
-
-        # Pagination
-        total_rows = len(filtered_rows)
-        total_pages = max(1, math.ceil(total_rows / per_page))
-        if page > total_pages:
-            page = total_pages
-        start = (page - 1) * per_page
-        paginated_rows = filtered_rows[start:start + per_page]
-
-        # Query string for pagination links (preserve filters, exclude page)
-        qs_params = {"mode": "filings"}
-        if leverage and leverage != "all":
-            qs_params["leverage"] = leverage
-        if view and view != "all":
-            qs_params["view"] = view
-        if q:
-            qs_params["q"] = q
-        if per_page != 50:
-            qs_params["per_page"] = per_page
-        base_qs = urllib.parse.urlencode(qs_params)
 
         return templates.TemplateResponse("screener_landscape.html", {
             "request": request,
@@ -570,16 +549,16 @@ def filing_landscape(
             "all_issuers": all_issuers_ordered,
             "issuer_scorecard": data["issuer_scorecard"],
             "generated_at": data["generated_at"],
-            "leverage": leverage,
-            "view": view,
-            "q": q,
-            # Fund-level rows (paginated)
-            "fund_rows": paginated_rows,
-            "page": page,
-            "per_page": per_page,
-            "total_rows": total_rows,
-            "total_pages": total_pages,
-            "base_qs": base_qs,
+            "leverage": "all",
+            "view": "all",
+            "q": "",
+            # All fund rows — client-side filtering + pagination via JS
+            "fund_rows": all_fund_rows,
+            "page": 1,
+            "per_page": 50,
+            "total_rows": len(all_fund_rows),
+            "total_pages": max(1, math.ceil(len(all_fund_rows) / 50)),
+            "base_qs": "mode=filings",
             "top_underliers": data["top_underliers"],
             "leverage_counts": data["leverage_counts"],
         })
