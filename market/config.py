@@ -11,8 +11,8 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 # Primary: OneDrive MASTER Data folder (synced, Ryu updates here)
 _ONEDRIVE_BBG_DAILY = Path(
     r"C:\Users\RyuEl-Asmar\REX Financial LLC"
-    r"\REX Financial LLC - Rex Financial LLC"
-    r"\Product Development\MasterFiles\MASTER Data\bloomberg_daily_file.xlsm"
+    r"\REX Financial LLC - MasterFiles"
+    r"\MASTER Data\bloomberg_daily_file.xlsm"
 )
 _FALLBACK_BBG_DAILY = PROJECT_ROOT / "data" / "DASHBOARD" / "bloomberg_daily_file.xlsm"
 

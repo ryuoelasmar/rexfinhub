@@ -20,8 +20,8 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 ONEDRIVE_SRC = Path(
     r"C:\Users\RyuEl-Asmar\REX Financial LLC"
-    r"\REX Financial LLC - Rex Financial LLC"
-    r"\Product Development\MasterFiles\MASTER Data\bloomberg_daily_file.xlsm"
+    r"\REX Financial LLC - MasterFiles"
+    r"\MASTER Data\bloomberg_daily_file.xlsm"
 )
 FALLBACK_DST = PROJECT_ROOT / "data" / "DASHBOARD" / "bloomberg_daily_file.xlsm"
 HISTORY_DIR = PROJECT_ROOT / "data" / "DASHBOARD" / "history"
