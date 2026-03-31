@@ -580,26 +580,37 @@ def _flow_bars(inflows: list[dict], outflows: list[dict], n: int = 10) -> str:
 
     # Build rows: inflows first (green, bars go right), then outflows (red, bars go left)
     rows_html = ""
+    # If no outflows, use full-width bars (left-aligned); if both, use center-split
+    full_width = not top_out
+    bar_scale = 90 if full_width else 50
 
-    # Inflows: label | [empty][green bar] | value
+    # Inflows: label | [green bar] | value
     if top_in:
         rows_html += (f'<tr><td colspan="3" style="padding:4px 0 2px;font-size:10px;'
                       f'font-weight:600;color:{_GREEN};text-transform:uppercase;'
                       f'letter-spacing:0.5px;">Inflows</td></tr>')
     for f in top_in:
         flow = f.get("flow_1w", 0)
-        pct = abs(flow) / max_flow * 50  # max 50% width (half the bar area)
+        pct = abs(flow) / max_flow * bar_scale
         bar_w = max(pct, 2)
+        if full_width:
+            bar_html = (
+                f'<table cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;">'
+                f'<tr><td style="width:{bar_w:.0f}%;background:{_GREEN};height:14px;border-radius:3px;'
+                f'font-size:0;">&nbsp;</td>'
+                f'<td style="width:{100 - bar_w:.0f}%;font-size:0;">&nbsp;</td></tr></table>'
+            )
+        else:
+            bar_html = (
+                f'<table cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;">'
+                f'<tr><td style="width:50%;font-size:0;">&nbsp;</td>'
+                f'<td style="width:{bar_w:.0f}%;background:{_GREEN};height:14px;border-radius:0 3px 3px 0;'
+                f'font-size:0;">&nbsp;</td>'
+                f'<td style="width:{50 - bar_w:.0f}%;font-size:0;">&nbsp;</td></tr></table>'
+            )
         rows_html += f"""<tr>
 <td style="padding:2px 0;font-size:11px;color:{_NAVY};width:70px;white-space:nowrap;">{_esc(f["ticker"])}</td>
-<td style="padding:2px 4px;width:100%;">
-  <table cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;">
-  <tr><td style="width:50%;font-size:0;">&nbsp;</td>
-  <td style="width:{bar_w:.0f}%;background:{_GREEN};height:14px;border-radius:0 3px 3px 0;
-    font-size:0;">&nbsp;</td>
-  <td style="width:{50 - bar_w:.0f}%;font-size:0;">&nbsp;</td></tr>
-  </table>
-</td>
+<td style="padding:2px 4px;width:100%;">{bar_html}</td>
 <td style="padding:2px 0;font-size:11px;color:{_GREEN};text-align:right;white-space:nowrap;
   width:75px;font-weight:600;">{_esc(f["flow_1w_fmt"])}</td>
 </tr>"""
@@ -1616,7 +1627,7 @@ def build_autocall_email(dashboard_url: str = "", db=None) -> tuple[str, list]:
     if rex_s.get("count", 0) > 0:
         _metrics = []
         if _share_rank is not None:
-            sc = _GREEN if _share_rank <= 3 else _GRAY
+            sc = _GREEN if _share_rank <= 3 else _NAVY
             _metrics.append(
                 f'<td style="padding:6px 10px;text-align:center;">'
                 f'<div style="font-size:18px;font-weight:700;color:{sc};">#{_share_rank}</div>'
@@ -1624,7 +1635,7 @@ def build_autocall_email(dashboard_url: str = "", db=None) -> tuple[str, list]:
                 f'<div style="font-size:8px;color:{_GRAY};text-transform:uppercase;margin-top:3px;">Share Rank</div></td>'
             )
         if _flow_1w_rank is not None:
-            fc = _GREEN if _flow_1w_rank <= 3 else _GRAY
+            fc = _GREEN if _flow_1w_rank <= 3 else _NAVY
             _metrics.append(
                 f'<td style="padding:6px 10px;text-align:center;">'
                 f'<div style="font-size:18px;font-weight:700;color:{fc};">#{_flow_1w_rank}</div>'
@@ -1632,7 +1643,7 @@ def build_autocall_email(dashboard_url: str = "", db=None) -> tuple[str, list]:
                 f'<div style="font-size:8px;color:{_GRAY};text-transform:uppercase;margin-top:3px;">1W Flow Rank</div></td>'
             )
         if _flow_1m_rank is not None:
-            mc = _GREEN if _flow_1m_rank <= 3 else _GRAY
+            mc = _GREEN if _flow_1m_rank <= 3 else _NAVY
             _metrics.append(
                 f'<td style="padding:6px 10px;text-align:center;">'
                 f'<div style="font-size:18px;font-weight:700;color:{mc};">#{_flow_1m_rank}</div>'
@@ -1706,9 +1717,10 @@ def build_autocall_email(dashboard_url: str = "", db=None) -> tuple[str, list]:
         f'<b>Methodology:</b> Data as of <b>{date_str}</b>. '
         f'Fund flows = [Shares Outstanding(t) - Shares Outstanding(t-1)] x NAV(t). '
         f'All US ETP flows carry a <b>one-day lag</b> (issuers report shares outstanding with a one-day delay). '
-        f'1W sums daily flows over 5 trading days ending one day prior to pull date. '
-        f'1M looks back to the same calendar date one month prior '
-        f'(if the prior month has fewer days, it snaps to month-end), also lagged one day. '
+        f'1W sums daily flows over the 5 trading days ending one day prior to the pull date '
+        f'(e.g., pulled Tue 3/31 evening reflects Tue 3/25 through Mon 3/30). '
+        f'1M looks back one calendar month from one day prior to pull date '
+        f'(e.g., pulled Tue 3/31 reflects Feb 28 through Mon 3/30). '
         f'Values in USD millions. Source: Bloomberg.'
         f'</div></td></tr>'
     )
