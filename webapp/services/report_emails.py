@@ -1710,17 +1710,37 @@ def build_autocall_email(dashboard_url: str = "", db=None) -> tuple[str, list]:
     # Shows category AUM since CAIE launch (Jun 2025) + REX share from ATCL (Feb 2026).
     # Y1 axis capped at 5%. Uses QuickChart.io for email-safe rendering.
 
-    # Bloomberg methodology note
+    # Bloomberg methodology note — compute dynamic example dates
+    from dateutil.relativedelta import relativedelta
+    _pull = datetime.now()
+    _lag = _pull - timedelta(days=1)
+    # Walk back to find 5 trading days before lag
+    _d = _lag
+    _tdays = 0
+    while _tdays < 5:
+        _d -= timedelta(days=1)
+        if _d.weekday() < 5:
+            _tdays += 1
+    _1w_start = _d + timedelta(days=1)
+    while _1w_start.weekday() >= 5:
+        _1w_start += timedelta(days=1)
+    _1m_start = _lag - relativedelta(months=1)
+
+    _meth_pull_day = f"{_pull.strftime('%a')} {_pull.month}/{_pull.day}"
+    _meth_lag_day = f"{_lag.strftime('%a')} {_lag.month}/{_lag.day}"
+    _meth_1w_start = f"{_1w_start.strftime('%a')} {_1w_start.month}/{_1w_start.day}"
+    _meth_1m_start = f"{_1m_start.month}/{_1m_start.day}"
+
     body += (
         f'<tr><td style="padding:16px 30px 12px;">'
         f'<div style="font-size:10px;color:{_GRAY};line-height:1.4;border-top:1px solid {_BORDER};padding-top:10px;">'
-        f'<b>Methodology:</b> Data as of <b>{date_str}</b>. '
+        f'<b>Methodology:</b> '
         f'Fund flows = [Shares Outstanding(t) - Shares Outstanding(t-1)] x NAV(t). '
         f'All US ETP flows carry a <b>one-day lag</b> (issuers report shares outstanding with a one-day delay). '
-        f'1W sums daily flows over the 5 trading days ending one day prior to the pull date '
-        f'(e.g., pulled Tue 3/31 evening reflects Tue 3/25 through Mon 3/30). '
+        f'1W sums daily flows over 5 trading days ending one day prior to the pull date '
+        f'(e.g., pulled {_meth_pull_day} reflects {_meth_1w_start} through {_meth_lag_day}). '
         f'1M looks back one calendar month from one day prior to pull date '
-        f'(e.g., pulled Tue 3/31 reflects Feb 28 through Mon 3/30). '
+        f'(e.g., pulled {_meth_pull_day} reflects {_meth_1m_start} through {_meth_lag_day}). '
         f'Values in USD millions. Source: Bloomberg.'
         f'</div></td></tr>'
     )

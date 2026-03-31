@@ -72,7 +72,7 @@ def _fmt_currency(val: float) -> str:
         return f"{sign}${av / 1_000:,.1f}B"
     if av >= 1:
         return f"{sign}${av:,.1f}M"
-    return f"{sign}${av:.2f}M"
+    return f"{sign}${av:.1f}M"
 
 
 def _fmt_flow(val: float) -> str:
