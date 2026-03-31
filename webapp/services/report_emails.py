@@ -1608,6 +1608,16 @@ def build_autocall_email(dashboard_url: str = "", db=None) -> tuple[str, list]:
         body += _flow_bars(top10, bot10, n=10)
 
     html = _wrap_email(title, _NAVY, body, dashboard_url, date_str)
+    # Strip footer — this is an external report
+    html = html.replace(
+        f'<!-- Footer -->\n<tr><td style="padding:16px 30px;border-top:1px solid {_BORDER};text-align:center;">\n'
+        f'  <div style="font-size:11px;color:{_GRAY};">\n'
+        f'    REX Financial Intelligence Hub &middot; Data sourced from Bloomberg L.P. and REX Shares, LLC\n'
+        f'  </div>\n'
+        f'  <div style="font-size:10px;color:{_GRAY};margin-top:4px;font-style:italic;">\n'
+        f'    Note: ETN data reflects proprietary share/price data where available. Bloomberg-reported ETN figures may differ.\n'
+        f'  </div>\n'
+        f'</td></tr>', '')
     return html, []
 
 
