@@ -1625,9 +1625,10 @@ def build_autocall_email(dashboard_url: str = "", db=None) -> tuple[str, list]:
         f'<tr><td style="padding:16px 30px 12px;">'
         f'<div style="font-size:10px;color:{_GRAY};line-height:1.4;border-top:1px solid {_BORDER};padding-top:10px;">'
         f'<b>Methodology:</b> Weekly flows ("1W") measure the net change between Monday closes '
-        f'(e.g., Monday 3/23 close to Monday 3/30 close). If Monday is a non-trading day, the last '
-        f'available trading day is used. Monthly flows follow the same convention over calendar months. '
-        f'AUM and flow data sourced from Bloomberg L.P.'
+        f'(e.g., Monday 3/23 close to Monday 3/30 close). Monthly flows ("1M") measure the net change '
+        f'from the last trading day of the prior month to the last trading day of the current month '
+        f'(e.g., Feb 28 close to Mar 31 close). If a reference date falls on a non-trading day, '
+        f'the last available trading day is used. AUM and flow data sourced from Bloomberg L.P.'
         f'</div></td></tr>'
     )
 
