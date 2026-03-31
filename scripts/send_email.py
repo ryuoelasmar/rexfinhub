@@ -133,8 +133,16 @@ WEEKLY_REPORTS = [
     ("REX ETP Leverage & Inverse Report", "li_report", _build_li),
     ("REX ETP Income Report", "income_report", _build_income),
     ("REX ETP Flow Report", "flow_report", _build_flow),
-    ("REX Autocallable ETF Report", "autocall_report", _build_autocall),
 ]
+
+# Autocall report has its own recipient list (external distribution)
+AUTOCALL_REPORT = ("Autocallable ETF Weekly Update", "autocall_report", _build_autocall)
+
+def _load_autocall_recipients() -> list[str]:
+    path = PROJECT_ROOT / "config" / "autocall_recipients.txt"
+    if path.exists():
+        return [l.strip() for l in path.read_text().splitlines() if l.strip() and not l.startswith("#")]
+    return []
 
 
 def do_daily(preview: bool):
@@ -187,6 +195,22 @@ def do_weekly(preview: bool):
             else:
                 ok = _send_via_smtp(html, subject)
                 print(f"  {'Sent' if ok else 'FAILED'}: {subject}")
+
+        # Autocall report (separate recipient list — external distribution)
+        base_title, filename, builder = AUTOCALL_REPORT
+        subject = f"{base_title}: {date}"
+        print(f"\n  Building {subject}...")
+        html = builder(db)
+        if preview:
+            _save_and_open(html, filename)
+        else:
+            autocall_recipients = _load_autocall_recipients()
+            if autocall_recipients:
+                from etp_tracker.email_alerts import _send_html_digest
+                ok = _send_html_digest(html, autocall_recipients, subject_override=subject)
+                print(f"  {'Sent' if ok else 'FAILED'}: {subject} -> {len(autocall_recipients)} recipients")
+            else:
+                print(f"  SKIP: no autocall recipients configured")
     finally:
         db.close()
 

@@ -1540,14 +1540,6 @@ def build_autocall_email(dashboard_url: str = "", db=None) -> tuple[str, list]:
 
     body = ""
 
-    # Data date line
-    body += (
-        f'<tr><td style="padding:12px 30px 0;">'
-        f'<div style="font-size:11px;color:{_GRAY};font-style:italic;">'
-        f'Data as of {date_str}</div>'
-        f'</td></tr>'
-    )
-
     # Highlights
     bullets = []
     aum_str = kpis.get("total_aum", "--")
@@ -1660,7 +1652,8 @@ def build_autocall_email(dashboard_url: str = "", db=None) -> tuple[str, list]:
     body += (
         f'<tr><td style="padding:16px 30px 12px;">'
         f'<div style="font-size:10px;color:{_GRAY};line-height:1.4;border-top:1px solid {_BORDER};padding-top:10px;">'
-        f'<b>Methodology:</b> Fund flows = [Shares Outstanding(t) - Shares Outstanding(t-1)] x NAV(t). '
+        f'<b>Methodology:</b> Data as of <b>{date_str}</b>. '
+        f'Fund flows = [Shares Outstanding(t) - Shares Outstanding(t-1)] x NAV(t). '
         f'Daily flows carry a <b>one-day lag</b> (US ETP issuers report shares outstanding with a one-day delay). '
         f'Weekly ("1W") and monthly ("1M") flows are rolling calendar windows '
         f'(1W = one calendar week back from pull date; 1M = one calendar month back). '
