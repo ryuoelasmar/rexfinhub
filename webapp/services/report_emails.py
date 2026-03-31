@@ -1656,8 +1656,8 @@ def build_autocall_email(dashboard_url: str = "", db=None) -> tuple[str, list]:
         f'Fund flows = [Shares Outstanding(t) - Shares Outstanding(t-1)] x NAV(t). '
         f'All US ETP flows carry a <b>one-day lag</b> (issuers report shares outstanding with a one-day delay). '
         f'1W sums daily flows over 5 trading days ending one day prior to pull date. '
-        f'1M looks back to the same calendar date one month prior (month-end snaps to month-end, '
-        f'similar to EDATE), also lagged one day. '
+        f'1M looks back to the same calendar date one month prior '
+        f'(if the prior month has fewer days, it snaps to month-end), also lagged one day. '
         f'Values in USD millions. Source: Bloomberg L.P.'
         f'</div></td></tr>'
     )
