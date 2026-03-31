@@ -271,10 +271,10 @@ def main():
     except Exception as e:
         log(f"  Archive failed (cache preserved on C:): {e}")
 
-    # Step 6: Upload to Render (only if something changed)
+    # Step 6: Upload to Render (always — filings, notes, or trust changes)
     has_changes = new_trusts > 0 or new_filings > 0 or new_notes > 0
-    if has_changes:
-        log(f"\n[6/6] Uploading to Render...")
+    if True:  # Always upload so site stays current
+        log(f"\n[6/6] Uploading to Render{' (changes detected)' if has_changes else ' (keep-alive)'}...")
         try:
             import sqlite3
             import gzip
@@ -335,8 +335,36 @@ def main():
             log(f"  Upload failed: can't reach Render (network issue)")
         except Exception as e:
             log(f"  Upload failed: {e}")
-    else:
-        log(f"\n[6/6] No changes — skipping Render upload")
+
+        # Also upload structured notes DB
+        try:
+            import gzip
+            import requests
+            notes_db = PROJECT_ROOT / "data" / "structured_notes.db"
+            if notes_db.exists():
+                notes_gz = str(notes_db) + ".upload.gz"
+                with open(notes_db, "rb") as _fin:
+                    with gzip.open(notes_gz, "wb", compresslevel=6) as _fout:
+                        while True:
+                            _chunk = _fin.read(1024 * 1024)
+                            if not _chunk:
+                                break
+                            _fout.write(_chunk)
+                api_key = _load_env("API_KEY")
+                headers = {"X-API-Key": api_key} if api_key else {}
+                with open(notes_gz, "rb") as _f:
+                    resp = requests.post(
+                        f"{RENDER_API_URL}/db/upload-notes",
+                        files={"file": ("structured_notes.db.gz", _f, "application/gzip")},
+                        headers=headers, timeout=600,
+                    )
+                if resp.status_code == 200:
+                    log(f"  Notes DB uploaded ({Path(notes_gz).stat().st_size / 1e6:.0f} MB)")
+                else:
+                    log(f"  Notes upload failed: HTTP {resp.status_code}")
+                Path(notes_gz).unlink(missing_ok=True)
+        except Exception as e:
+            log(f"  Notes upload failed: {e}")
 
     elapsed = time.time() - start
     log(f"\n=== Rapid Sync done in {elapsed:.0f}s ===")
