@@ -1561,8 +1561,44 @@ def build_autocall_email(dashboard_url: str = "", db=None) -> tuple[str, list]:
         bullets.append(f"Category leader: {leader.get('issuer', '?')} ({leader.get('aum_fmt', '--')} AUM, {leader.get('flow_1w_fmt', '--')} 1W flow)")
     body += _key_highlights_box(bullets)
 
-    # Category + REX KPIs
-    body += _section_title(f"Autocallable ETF Category")
+    # Compute REX flow rank and market share rank
+    _flow_rank = _share_rank = None
+    if issuers and rex_s.get("count", 0) > 0:
+        for i, iss in enumerate(sorted(issuers, key=lambda x: x.get("flow_1w", 0), reverse=True)):
+            if iss.get("is_rex", False):
+                _flow_rank = i + 1
+                break
+        for i, iss in enumerate(sorted(issuers, key=lambda x: x.get("market_share", 0), reverse=True)):
+            if iss.get("is_rex", False):
+                _share_rank = i + 1
+                break
+
+    rank_badges = ""
+    if _flow_rank is not None:
+        fc = _GREEN if _flow_rank <= 3 else _GRAY
+        rank_badges += (
+            f'<span style="display:inline-block;margin-left:10px;padding:2px 8px;'
+            f'border-radius:4px;font-size:11px;font-weight:700;color:{fc};'
+            f'background:{_LIGHT};border:1px solid {_BORDER};">'
+            f'Flow #{_flow_rank}</span>'
+        )
+    if _share_rank is not None:
+        sc = _GREEN if _share_rank <= 3 else _GRAY
+        rank_badges += (
+            f'<span style="display:inline-block;margin-left:6px;padding:2px 8px;'
+            f'border-radius:4px;font-size:11px;font-weight:700;color:{sc};'
+            f'background:{_LIGHT};border:1px solid {_BORDER};">'
+            f'Share #{_share_rank}</span>'
+        )
+
+    # Category + REX KPIs with rank badges
+    body += (
+        f'<tr><td style="padding:18px 30px 5px;">'
+        f'<div style="font-size:16px;font-weight:700;color:{_NAVY};margin:0 0 8px 0;'
+        f'padding-bottom:6px;border-bottom:2px solid {suite_color};">'
+        f'Autocallable ETF Category{rank_badges}</div>'
+        f'</td></tr>'
+    )
     rex_row = None
     if rex_s.get("count", 0) > 0:
         rex_row = [
