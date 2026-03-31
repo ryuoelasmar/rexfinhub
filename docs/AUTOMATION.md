@@ -1,173 +1,67 @@
-# Pipeline Automation (Windows Task Scheduler)
+# REX FinHub Automation
 
-Fully automated pipeline execution using Windows Task Scheduler with wake timers. $0/mo.
-
-## How It Works
-
-Two scheduled tasks run `scripts/run_all_pipelines.py` on weekdays:
-
-| Task | Time | Purpose |
-|------|------|---------|
-| `REX_Morning_Pipeline` | 8:00 AM | Catch overnight SEC filings |
-| `REX_Evening_Pipeline` | 5:30 PM | Process Bloomberg data finalized by 5 PM |
-
-Each run executes:
-1. **SEC pipeline** -- fetch filings, extract funds, sync to DB, rescore screener
-2. **Market pipeline** -- process bbg_data.xlsx (skips automatically if file unchanged)
-3. **Upload DB** -- push SQLite to Render
-4. **Email digest** -- send daily brief to subscribers
-
-The PC wakes from sleep, runs everything, then goes back to sleep.
-
-## Daily Workflow
-
-```
-  YOU (manual)                    AUTOMATED
-  ============                    =========
-
-  [morning]
-       |                    8:00 AM -- PC wakes from sleep
-       |                         |
-       |                    run_all_pipelines.py
-       |                      -> SEC pipeline (overnight filings)
-       |                      -> Market pipeline (skips if no new data)
-       |                      -> Upload DB to Render
-       |                      -> Email digest
-       |                         |
-       |                    PC goes back to sleep
-       |
-  Update Bloomberg data
-  in OneDrive / data/
-       |
-  By 5:00 PM -- data finalized
-       |
-       |                    5:30 PM -- PC wakes from sleep
-       |                         |
-       |                    run_all_pipelines.py
-       |                      -> SEC pipeline (afternoon filings)
-       |                      -> Market pipeline (processes new bbg_data)
-       |                      -> Upload DB to Render
-       |                      -> Email digest
-       |                         |
-       |                    PC goes back to sleep
-       |
-  [evening]                 Website on Render has fresh data
-```
-
-## Setup (One-Time)
-
-### 1. Create Scheduled Tasks
-
-Run PowerShell **as Administrator**:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File C:\Projects\rexfinhub\scripts\setup_scheduler.ps1
-```
-
-This creates both `REX_Morning_Pipeline` and `REX_Evening_Pipeline` tasks.
-
-### 2. Verify Wake Timers Are Enabled
-
-Windows must allow wake timers for the PC to wake from sleep:
-
-1. Open **Power Options** (Win+R, `powercfg.cpl`)
-2. Click **Change plan settings** > **Change advanced power settings**
-3. Expand **Sleep** > **Allow wake timers**
-4. Set to **Enable** (both on battery and plugged in)
-
-### 3. Verify Tasks Were Created
-
-```powershell
-Get-ScheduledTask -TaskName "REX_*" | Format-Table TaskName, State
-```
-
-## Running Manually
+## Quick Reference
 
 ```bash
-# Full run (all pipelines)
-python scripts/run_all_pipelines.py
+# Check everything
+python scripts/automation_review.py
 
-# Skip specific steps
-python scripts/run_all_pipelines.py --skip-sec
-python scripts/run_all_pipelines.py --skip-market
-python scripts/run_all_pipelines.py --skip-email
+# Preview today's reports at 5PM
+python scripts/send_email.py preview all
 
-# Force market pipeline even if bbg_data unchanged
-python scripts/run_all_pipelines.py --force-market
+# Send manually
+python scripts/send_email.py send daily
+python scripts/send_email.py send weekly          # Weekly + LI + Income + Flow + Autocall
 
-# Or trigger via Task Scheduler
-Start-ScheduledTask -TaskName "REX_Morning_Pipeline"
+# Full pipeline
+python scripts/run_daily.py
 ```
 
-## Log Files
+## What to Tell Claude
 
-All runs log to `logs/pipeline_YYYYMMDD_HHMM.log` (tee to both console and file).
+Run `/status` or say: "Run automation review and check everything"
 
-```bash
-# View most recent log
-ls -t logs/pipeline_*.log | head -1 | xargs cat
+Claude should run `python scripts/automation_review.py` and check:
+1. All 3 scheduled tasks are Ready
+2. Fund filings, notes, market data are fresh (today's date)
+3. D: drive connected and in sync
+4. Render site healthy
+5. Daily archive exists for today
+6. Bloomberg file updated after 5PM
+7. No errors in watcher/rapid sync logs
 
-# Tail a running log
-tail -f logs/pipeline_$(date +%Y%m%d)_*.log
-```
+## Schedule
 
-## Task Scheduler Settings
+| When | What | Emails |
+|------|------|--------|
+| Every 30 min | Watcher (new filings/trusts) | none |
+| Every 2 hours | Rapid sync (scrape + upload to site) | none |
+| Mon-Fri 6:00 PM | Full pipeline + archive + emails | Daily (every day) + Weekly bundle (Monday) |
 
-Both tasks use these settings:
+## Daily Pipeline (6PM Mon-Fri)
 
-| Setting | Value | Why |
-|---------|-------|-----|
-| WakeToRun | Yes | Wakes PC from sleep at scheduled time |
-| AllowStartIfOnBatteries | Yes | Runs on laptop too |
-| DontStopIfGoingOnBatteries | Yes | Won't kill mid-run if unplugged |
-| StartWhenAvailable | Yes | If PC was off, runs when it wakes |
-| ExecutionTimeLimit | 1 hour | Safety kill switch |
-| MultipleInstances | IgnoreNew | Won't double-run |
+1. Trust universe sync (SEC submissions.zip)
+2. SEC filings + structured notes (parallel)
+3. DB sync
+4. Archive C: -> D:
+5. Market data + ETN overrides baked into DB
+6. Screener cache
+7. Daily archive (9 files, ~37MB -> C: + D:)
+8. Classification
+9. Upload etp_tracker.db + structured_notes.db + screener cache to Render
+10. Send emails
 
-## Troubleshooting
+## Storage
 
-### PC doesn't wake from sleep
+Each day saves 9 files (~37MB) to both drives:
+- `data/DASHBOARD/exports/screener_snapshots/YYYY-MM-DD/` (C: primary)
+- `D:/sec-data/archives/screener/YYYY-MM-DD/` (D: cold backup)
 
-1. Check wake timers are enabled (see Setup step 2)
-2. Some machines disable wake timers in BIOS -- check BIOS settings
-3. Hibernate (S4) does NOT support wake timers, only Sleep (S3) does
-4. Verify: `powercfg /waketimers` shows the scheduled tasks
+Contents: Bloomberg file, ETP data, stock data, market master, screener cache, evaluator, results CSV, report metadata, autocall ranks.
 
-### Pipeline runs but market data is stale
+## Flow Methodology
 
-The market pipeline skips if `bbg_data.xlsx` hasn't changed since the last run:
-```
-  Data unchanged since last run (2026-02-25T17:00:00)
-  Use --force to re-process. Exiting.
-```
-
-This is expected. To force a re-run: `python scripts/run_all_pipelines.py --force-market`
-
-### Task Scheduler shows "Last Run Result: 0x1"
-
-Check the log file for errors. Common causes:
-- Python not on PATH (Task Scheduler uses system PATH, not user PATH)
-- Missing dependencies (`pip install -r requirements.txt`)
-- Network issues (SEC or Render unreachable)
-
-Fix PATH issue by using full Python path in setup_scheduler.ps1:
-```powershell
-$PythonExe = "C:\Python313\python.exe"  # or wherever your Python is
-```
-
-### Removing the scheduled tasks
-
-```powershell
-Unregister-ScheduledTask -TaskName "REX_Morning_Pipeline" -Confirm:$false
-Unregister-ScheduledTask -TaskName "REX_Evening_Pipeline" -Confirm:$false
-```
-
-## Why Not VPS?
-
-| Option | Cost | Pros | Cons |
-|--------|------|------|------|
-| **Windows Task Scheduler** | **$0/mo** | **Free, has HTTP cache (13GB), has OneDrive** | **Requires PC to sleep (not off)** |
-| VPS (Hetzner/DO) | $4-6/mo | Always on | No OneDrive, must sync cache, monthly cost |
-| GitHub Actions | Free | No server | No persistent HTTP cache, limited minutes |
-
-The HTTP cache alone (~13GB) makes local execution preferable. The SEC pipeline reads from cached responses, so incremental runs complete in seconds.
+All US ETP flows lag by 1 day. Pulled Tue evening:
+- 1W = Tue-Mon (5 trading days ending 1 day before pull)
+- 1M = rolling 1 month back from 1 day before pull
+- 1D = previous day's activity

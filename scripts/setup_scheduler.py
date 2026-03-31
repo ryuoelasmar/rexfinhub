@@ -37,6 +37,13 @@ TASKS = [
         "start_time": "08:00",
     },
     {
+        "name": "ETP_Preview",
+        "desc": "Preview reports in Chrome at 5PM for review before sending",
+        "command": f'"{PYTHON}" "{PROJECT_ROOT / "scripts" / "send_email.py"}" preview all',
+        "schedule": "/sc weekly /d MON,TUE,WED,THU,FRI",
+        "start_time": "17:00",
+    },
+    {
         "name": "ETP_DailySync",
         "desc": "Full daily pipeline + reports: Mon-Fri 6PM (daily email every day, weekly bundle Monday)",
         "command": f'"{PYTHON}" "{PROJECT_ROOT / "scripts" / "run_daily.py"}"',
