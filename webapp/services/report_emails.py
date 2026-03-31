@@ -563,11 +563,10 @@ def _horizontal_bar_chart(items: list[dict], value_key: str = "market_share",
 
 
 def _flow_bars(inflows: list[dict], outflows: list[dict], n: int = 10) -> str:
-    """Bi-directional flow chart with dynamic zero-point.
+    """Unified flow bar chart — one chart, inflows right of zero, outflows left.
 
-    - All positive: 0 on left, largest inflow on right
-    - All negative: largest outflow on left, 0 on right
-    - Mixed: largest outflow on left, largest inflow on right, 0 in between
+    Zero line is consistent across all rows. Bar sizes are proportional to
+    the absolute max flow. No minimum bar size override — truly proportional.
     """
     top_in = sorted([f for f in inflows[:n] if f.get("flow_1w", 0) > 0],
                     key=lambda f: f["flow_1w"], reverse=True)
@@ -578,45 +577,46 @@ def _flow_bars(inflows: list[dict], outflows: list[dict], n: int = 10) -> str:
 
     max_pos = max((f["flow_1w"] for f in top_in), default=0)
     max_neg = max((abs(f["flow_1w"]) for f in top_out), default=0)
-    total_range = max_pos + max_neg
-    if total_range == 0:
-        total_range = 1
 
-    # Bar area as percentage of the inner table width
-    bar_area = 100  # use full width of the bar cell
-    if max_neg == 0:
-        zero_pct = 0  # all positive: zero at left edge
+    # Zero position: proportion of negative space in the total range
+    # If no negatives, zero is at left edge (0%). If no positives, zero at right (100%).
+    if max_neg == 0 and max_pos == 0:
+        return ""
+    elif max_neg == 0:
+        zero_pct = 0
     elif max_pos == 0:
-        zero_pct = bar_area  # all negative: zero at right edge
+        zero_pct = 100
     else:
-        zero_pct = max_neg / total_range * bar_area
+        zero_pct = max_neg / (max_pos + max_neg) * 100
 
-    def _bar_row(f: dict) -> str:
+    def _bar_row(f: dict, label: str = "") -> str:
         flow = f.get("flow_1w", 0)
         ticker = _esc(f["ticker"])
         fmt = _esc(f["flow_1w_fmt"])
         is_pos = flow >= 0
-        bar_len = abs(flow) / total_range * bar_area
-        bar_len = max(bar_len, 1.5)
         color = _GREEN if is_pos else _RED
-        txt_color = _GREEN if is_pos else _RED
+
+        # Bar length proportional to max of the same sign
+        if is_pos and max_pos > 0:
+            bar_pct = flow / max_pos * (100 - zero_pct)
+        elif not is_pos and max_neg > 0:
+            bar_pct = abs(flow) / max_neg * zero_pct
+        else:
+            bar_pct = 0
 
         if is_pos:
-            # Bar goes right from zero: [left_pad][zero|green_bar][right_pad]
-            left = zero_pct
-            right = bar_area - zero_pct - bar_len
-            bar = (f'<td style="width:{max(left, 0):.1f}%;font-size:0;">&nbsp;</td>'
-                   f'<td style="width:{bar_len:.1f}%;background:{color};height:14px;'
+            # Green bar grows right from zero line
+            bar = (f'<td style="width:{zero_pct:.1f}%;font-size:0;">&nbsp;</td>'
+                   f'<td style="width:{max(bar_pct, 0.5):.1f}%;background:{color};height:14px;'
                    f'border-radius:0 3px 3px 0;font-size:0;">&nbsp;</td>'
-                   f'<td style="width:{max(right, 0):.1f}%;font-size:0;">&nbsp;</td>')
+                   f'<td style="width:{max(100 - zero_pct - bar_pct, 0):.1f}%;font-size:0;">&nbsp;</td>')
         else:
-            # Bar goes left from zero: [left_pad][red_bar|zero][right_pad]
-            left = zero_pct - bar_len
-            right = bar_area - zero_pct
-            bar = (f'<td style="width:{max(left, 0):.1f}%;font-size:0;">&nbsp;</td>'
-                   f'<td style="width:{bar_len:.1f}%;background:{color};height:14px;'
+            # Red bar grows left from zero line
+            left_pad = zero_pct - bar_pct
+            bar = (f'<td style="width:{max(left_pad, 0):.1f}%;font-size:0;">&nbsp;</td>'
+                   f'<td style="width:{max(bar_pct, 0.5):.1f}%;background:{color};height:14px;'
                    f'border-radius:3px 0 0 3px;font-size:0;">&nbsp;</td>'
-                   f'<td style="width:{max(right, 0):.1f}%;font-size:0;">&nbsp;</td>')
+                   f'<td style="width:{100 - zero_pct:.1f}%;font-size:0;">&nbsp;</td>')
 
         return (f'<tr>'
                 f'<td style="padding:2px 0;font-size:11px;color:{_NAVY};width:65px;'
@@ -624,18 +624,20 @@ def _flow_bars(inflows: list[dict], outflows: list[dict], n: int = 10) -> str:
                 f'<td style="padding:2px 4px;">'
                 f'<table cellpadding="0" cellspacing="0" border="0" width="100%" '
                 f'style="border-collapse:collapse;"><tr>{bar}</tr></table></td>'
-                f'<td style="padding:2px 4px;font-size:11px;color:{txt_color};text-align:right;'
+                f'<td style="padding:2px 4px;font-size:11px;color:{color};text-align:right;'
                 f'white-space:nowrap;width:70px;font-weight:600;">{fmt}</td></tr>')
 
     rows = ""
+    # Inflows header
     if top_in:
         rows += (f'<tr><td colspan="3" style="padding:4px 0 2px;font-size:10px;'
                  f'font-weight:600;color:{_GREEN};text-transform:uppercase;'
                  f'letter-spacing:0.5px;">Inflows</td></tr>')
         for f in top_in:
             rows += _bar_row(f)
+    # Outflows header (no extra spacing — one unified chart)
     if top_out:
-        rows += (f'<tr><td colspan="3" style="padding:6px 0 2px;font-size:10px;'
+        rows += (f'<tr><td colspan="3" style="padding:2px 0 2px;font-size:10px;'
                  f'font-weight:600;color:{_RED};text-transform:uppercase;'
                  f'letter-spacing:0.5px;">Outflows</td></tr>')
         for f in top_out:
