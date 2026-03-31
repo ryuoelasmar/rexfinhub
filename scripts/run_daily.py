@@ -410,16 +410,20 @@ def main():
     changed_trusts = None
 
     if run_all:
-        # === Step 0: Sync trust universe from SEC ===
-        print("\n[0/10] Syncing trust universe from SEC...")
+        # === Step 0: Sync trust universe (skip if ZIP is fresh — ran at 3:45 PM) ===
         try:
-            from scripts.sync_trust_universe import sync_universe
-            cache_dir = _resolve_cache_dir()
-            universe = sync_universe(skip_download=False, prime_cache_dir=cache_dir)
-            if universe["new_trusts"]:
-                print(f"  ** {universe['new_trusts']} new trust(s) added — pipeline will scrape them **")
-            if universe["cache_primed"]:
-                print(f"  ** Primed {universe['cache_primed']} cache files for new trusts **")
+            from scripts.sync_trust_universe import ZIP_CACHE, ZIP_FALLBACK
+            zip_path = ZIP_CACHE if ZIP_CACHE.parent.exists() else ZIP_FALLBACK
+            zip_age = (time.time() - zip_path.stat().st_mtime) / 3600 if zip_path.exists() else 999
+            if zip_age < 4:
+                print(f"\n[0/12] Trust universe: ZIP is {zip_age:.0f}h old (ran at 3:45), skipping")
+            else:
+                print(f"\n[0/12] Syncing trust universe from SEC...")
+                from scripts.sync_trust_universe import sync_universe
+                cache_dir = _resolve_cache_dir()
+                universe = sync_universe(skip_download=False, prime_cache_dir=cache_dir)
+                if universe["new_trusts"]:
+                    print(f"  ** {universe['new_trusts']} new trust(s) added **")
         except Exception as e:
             print(f"  Universe sync failed (non-fatal): {e}")
 

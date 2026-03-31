@@ -37,6 +37,13 @@ TASKS = [
         "start_time": "08:00",
     },
     {
+        "name": "ETP_TrustSync",
+        "desc": "Trust universe sync from SEC submissions.zip (3:45 PM daily)",
+        "command": f'"{PYTHON}" "{PROJECT_ROOT / "scripts" / "sync_trust_universe.py"}"',
+        "schedule": "/sc weekly /d MON,TUE,WED,THU,FRI",
+        "start_time": "15:45",
+    },
+    {
         "name": "ETP_Preview",
         "desc": "Preview reports in Chrome at 5PM for review before sending",
         "command": f'"{PYTHON}" "{PROJECT_ROOT / "scripts" / "send_email.py"}" preview all',
@@ -45,7 +52,7 @@ TASKS = [
     },
     {
         "name": "ETP_DailySync",
-        "desc": "Full daily pipeline + reports: Mon-Fri 6PM (daily email every day, weekly bundle Monday)",
+        "desc": "Full pipeline + reports at 6PM (skips trust universe — already done at 3:45)",
         "command": f'"{PYTHON}" "{PROJECT_ROOT / "scripts" / "run_daily.py"}"',
         "schedule": "/sc weekly /d MON,TUE,WED,THU,FRI",
         "start_time": "18:00",
