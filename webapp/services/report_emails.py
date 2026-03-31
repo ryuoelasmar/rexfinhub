@@ -658,7 +658,7 @@ def _issuer_share_bars(issuers: list[dict], n: int = 6) -> str:
                    f'<span style="display:inline-block;width:8px;height:8px;'
                    f'background:{color};border-radius:2px;margin-right:3px;'
                    f'vertical-align:middle;"></span>'
-                   f'{name} ({share:.0f}%)</td>')
+                   f'{name} ({share:.1f}%)</td>')
 
     other_share = 100 - sum(iss.get("market_share", 0) for iss in top)
     if other_share > 1:
@@ -669,7 +669,7 @@ def _issuer_share_bars(issuers: list[dict], n: int = 6) -> str:
                    f'<span style="display:inline-block;width:8px;height:8px;'
                    f'background:{_BORDER};border-radius:2px;margin-right:3px;'
                    f'vertical-align:middle;"></span>'
-                   f'Other ({other_share:.0f}%)</td>')
+                   f'Other ({other_share:.1f}%)</td>')
 
     return (
         f'<tr><td style="padding:8px 30px 4px;">'
@@ -708,7 +708,7 @@ def _flow_share_bar(issuers: list[dict], n: int = 6) -> str:
             f'<span style="display:inline-block;width:8px;height:8px;'
             f'background:{color};border-radius:2px;margin-right:3px;'
             f'vertical-align:middle;"></span>'
-            f'{name} ({share:.0f}%)</td>'
+            f'{name} ({share:.1f}%)</td>'
         )
 
     other_share = 100 - sum(iss.get("market_share", 0) for iss in top)
@@ -723,7 +723,7 @@ def _flow_share_bar(issuers: list[dict], n: int = 6) -> str:
             f'<span style="display:inline-block;width:8px;height:8px;'
             f'background:{_BORDER};border-radius:2px;margin-right:3px;'
             f'vertical-align:middle;"></span>'
-            f'Other ({other_share:.0f}%)</td>'
+            f'Other ({other_share:.1f}%)</td>'
         )
 
     return (
@@ -1553,27 +1553,26 @@ def build_autocall_email(dashboard_url: str = "", db=None) -> tuple[str, list]:
         bullets.append(f"Landscape leader: {leader.get('issuer', '?')} ({leader.get('aum_fmt', '--')} AUM, {leader.get('flow_1w_fmt', '--')} 1W flow)")
     body += _key_highlights_box(bullets)
 
-    # Compute REX ranks + flow capture
-    _flow_rank = _share_rank = None
-    _flow_capture = None
+    # Compute REX ranks
+    _share_rank = _flow_1w_rank = _flow_1m_rank = None
     if issuers and rex_s.get("count", 0) > 0:
-        for i, iss in enumerate(sorted(issuers, key=lambda x: x.get("flow_1w", 0), reverse=True)):
-            if iss.get("is_rex", False):
-                _flow_rank = i + 1
-                break
         for i, iss in enumerate(sorted(issuers, key=lambda x: x.get("market_share", 0), reverse=True)):
             if iss.get("is_rex", False):
                 _share_rank = i + 1
                 break
-        cat_flow_raw = kpis.get("flow_1w_raw", 0)
-        rex_flow_raw = rex_s.get("flow_1w_raw", 0)
-        if cat_flow_raw and cat_flow_raw > 0:  # Only meaningful when category has net inflows
-            _flow_capture = rex_flow_raw / cat_flow_raw * 100
+        for i, iss in enumerate(sorted(issuers, key=lambda x: x.get("flow_1w", 0), reverse=True)):
+            if iss.get("is_rex", False):
+                _flow_1w_rank = i + 1
+                break
+        for i, iss in enumerate(sorted(issuers, key=lambda x: x.get("flow_1m", 0) if x.get("flow_1m") is not None else x.get("flow_ytd", 0), reverse=True)):
+            if iss.get("is_rex", False):
+                _flow_1m_rank = i + 1
+                break
 
     # Landscape section title
     body += _section_title("Autocallable ETF Landscape", suite_color)
 
-    # REX positioning: Share Rank, Flow Rank, Flow Capture
+    # REX positioning: Share Rank, 1W Flow Rank, 1M Flow Rank
     if rex_s.get("count", 0) > 0:
         _metrics = []
         if _share_rank is not None:
@@ -1583,19 +1582,19 @@ def build_autocall_email(dashboard_url: str = "", db=None) -> tuple[str, list]:
                 f'<div style="font-size:18px;font-weight:700;color:{sc};">#{_share_rank}</div>'
                 f'<div style="font-size:8px;color:{_GRAY};text-transform:uppercase;">Share Rank</div></td>'
             )
-        if _flow_rank is not None:
-            fc = _GREEN if _flow_rank <= 3 else _GRAY
+        if _flow_1w_rank is not None:
+            fc = _GREEN if _flow_1w_rank <= 3 else _GRAY
             _metrics.append(
                 f'<td style="padding:6px 10px;text-align:center;">'
-                f'<div style="font-size:18px;font-weight:700;color:{fc};">#{_flow_rank}</div>'
-                f'<div style="font-size:8px;color:{_GRAY};text-transform:uppercase;">Flow Rank</div></td>'
+                f'<div style="font-size:18px;font-weight:700;color:{fc};">#{_flow_1w_rank}</div>'
+                f'<div style="font-size:8px;color:{_GRAY};text-transform:uppercase;">1W Flow Rank</div></td>'
             )
-        if _flow_capture is not None:
-            cap_color = _GREEN if _flow_capture >= 0 else _RED
+        if _flow_1m_rank is not None:
+            mc = _GREEN if _flow_1m_rank <= 3 else _GRAY
             _metrics.append(
                 f'<td style="padding:6px 10px;text-align:center;">'
-                f'<div style="font-size:18px;font-weight:700;color:{cap_color};">{_flow_capture:+.1f}%</div>'
-                f'<div style="font-size:8px;color:{_GRAY};text-transform:uppercase;">Flow Capture</div></td>'
+                f'<div style="font-size:18px;font-weight:700;color:{mc};">#{_flow_1m_rank}</div>'
+                f'<div style="font-size:8px;color:{_GRAY};text-transform:uppercase;">1M Flow Rank</div></td>'
             )
         if _metrics:
             body += (
