@@ -29,8 +29,8 @@ sys.path.insert(0, str(PROJECT_ROOT))
 ZIP_CACHE = Path("D:/sec-data/submissions.zip")
 ZIP_FALLBACK = PROJECT_ROOT / "temp" / "submissions.zip"
 
-# Form types that identify ETF/ETP/crypto filers (NOT 10-K/10-Q which match every company)
-TARGET_FORMS = ("485", "N-1A", "S-1", "S-3")
+# Form types that identify ETF/ETP filers only (S-1/S-3 handled by watcher with scoring)
+TARGET_FORMS = ("485", "N-1A")
 
 # Forms that indicate specific regulatory acts
 _485_FORMS = {"485APOS", "485BPOS", "485BXT", "497", "497J", "497K", "N-1A"}
@@ -164,7 +164,7 @@ def sync_universe(skip_download: bool = False, dry_run: bool = False,
                 trust = Trust(
                     cik=cik,
                     name=name,
-                    slug=_slugify(name),
+                    slug=_slugify(name) + f"-{cik}",
                     is_active=True,
                     source="sec_universe",
                     entity_type=classification["entity_type"],
