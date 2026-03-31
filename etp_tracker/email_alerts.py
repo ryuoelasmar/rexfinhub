@@ -1341,19 +1341,21 @@ def _gather_daily_data(db_session, since_date: str | None = None,
         .order_by(Trust.is_rex.desc(), Filing.filing_date.desc())
     ).all()
 
-    # Group by trust/form/date, classify each fund
+    # Group by trust (one entry per trust, all forms combined)
     from collections import defaultdict
-    _fg_map: dict[tuple, dict] = {}
+    _fg_map: dict[str, dict] = {}
     for r in filing_rows:
-        key = (r.trust_name or "", r.form or "", str(r.filing_date) if r.filing_date else "")
+        key = r.trust_name or ""
         if key not in _fg_map:
             _fg_map[key] = {
-                "trust_name": key[0],
-                "form": key[1],
-                "filing_date": key[2],
+                "trust_name": key,
+                "forms": set(),
+                "filing_date": str(r.filing_date) if r.filing_date else "",
                 "is_rex": r.is_rex,
                 "funds": [],
             }
+        if r.form:
+            _fg_map[key]["forms"].add(r.form)
         sname = (r.series_name or "").strip()
         if sname:
             _fg_map[key]["funds"].append(sname)
@@ -1383,7 +1385,7 @@ def _gather_daily_data(db_session, since_date: str | None = None,
 
         filing_groups.append({
             "trust_name": g["trust_name"],
-            "form": g["form"],
+            "form": ", ".join(sorted(g["forms"])) if isinstance(g.get("forms"), set) else g.get("form", ""),
             "filing_date": g["filing_date"],
             "is_rex": g["is_rex"],
             "total_funds": len(unique_funds),
