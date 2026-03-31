@@ -1651,52 +1651,6 @@ def build_autocall_email(dashboard_url: str = "", db=None) -> tuple[str, list]:
     if top10 or bot10:
         body += _flow_bars(top10, bot10, n=10)
 
-    # Pipeline: pending autocallable products from SEC filings
-    try:
-        from webapp.models import FundStatus as _FS, Trust as _T
-        from sqlalchemy import select as _sel
-        _pending = db.execute(
-            _sel(_FS.fund_name, _FS.effective_date, _T.name.label("trust_name"))
-            .join(_T, _T.id == _FS.trust_id)
-            .where(_FS.fund_name.ilike("%autocall%"))
-            .where(_FS.status == "PENDING")
-            .order_by(_T.name, _FS.fund_name)
-        ).all()
-        if _pending:
-            _rows_html = ""
-            _prev_trust = ""
-            for p in _pending:
-                trust_label = p.trust_name if p.trust_name != _prev_trust else ""
-                _prev_trust = p.trust_name
-                eff = str(p.effective_date)[:10] if p.effective_date else "TBD"
-                _rows_html += (
-                    f'<tr>'
-                    f'<td style="padding:4px 8px;border-bottom:1px solid {_BORDER};font-size:11px;color:{_GRAY};">'
-                    f'{_esc(trust_label)}</td>'
-                    f'<td style="padding:4px 8px;border-bottom:1px solid {_BORDER};font-size:11px;">'
-                    f'{_esc(p.fund_name[:50])}</td>'
-                    f'<td style="padding:4px 8px;border-bottom:1px solid {_BORDER};font-size:11px;'
-                    f'text-align:right;color:{_ORANGE};font-weight:600;">{eff}</td>'
-                    f'</tr>'
-                )
-            body += (
-                f'<tr><td style="padding:18px 30px 5px;">'
-                f'<div style="font-size:14px;font-weight:700;color:{_NAVY};margin:0 0 8px 0;'
-                f'padding-bottom:6px;border-bottom:2px solid {_ORANGE};">'
-                f'Filing Pipeline ({len(_pending)} pending)</div>'
-                f'</td></tr>'
-                f'<tr><td style="padding:0 30px 10px;">'
-                f'<table width="100%" cellpadding="0" cellspacing="0" border="0">'
-                f'<tr style="font-size:9px;color:{_GRAY};text-transform:uppercase;">'
-                f'<td style="padding:4px 8px;">Trust</td>'
-                f'<td style="padding:4px 8px;">Fund Name</td>'
-                f'<td style="padding:4px 8px;text-align:right;">Expected</td></tr>'
-                f'{_rows_html}'
-                f'</table></td></tr>'
-            )
-    except Exception:
-        pass
-
     # Market share line chart — ON HOLD
     # To re-enable: see git commit e2b5ae1 for the full chart code.
     # Shows category AUM since CAIE launch (Jun 2025) + REX share from ATCL (Feb 2026).
