@@ -469,8 +469,26 @@ def main():
         except Exception as e:
             print(f"  Archive failed: {e}")
 
+        # === Bloomberg file freshness check ===
+        print("\n[5/12] Checking Bloomberg file freshness...")
+        try:
+            from screener.config import DATA_FILE as _bbg
+            _bbg_mtime = datetime.fromtimestamp(_bbg.stat().st_mtime)
+            _bbg_age = (datetime.now() - _bbg_mtime).total_seconds() / 3600
+            _bbg_is_today = _bbg_mtime.date() == datetime.now().date()
+            print(f"  File: {_bbg.name}")
+            print(f"  Modified: {_bbg_mtime.strftime('%Y-%m-%d %H:%M')} ({_bbg_age:.1f}h ago)")
+            print(f"  Source: {'OneDrive' if 'MasterFiles' in str(_bbg) else 'Local fallback'}")
+            if not _bbg_is_today:
+                print(f"  WARNING: Bloomberg file is from {_bbg_mtime.strftime('%m/%d')} — not today!")
+                print(f"  Reports will use stale data. Check OneDrive sync.")
+            else:
+                print(f"  OK: fresh data from today")
+        except Exception as e:
+            print(f"  Bloomberg check failed: {e}")
+
         # === Market data + screener cache ===
-        print("\n[5/10] Market Data + Screener Cache...")
+        print("\n[6/12] Market Data + Screener Cache...")
         try:
             run_market_sync()
         except Exception as e:
