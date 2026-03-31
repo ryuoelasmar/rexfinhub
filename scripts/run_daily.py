@@ -497,27 +497,63 @@ def main():
         print("\n[9/10] Uploading screener cache to Render...")
         upload_screener_cache_to_render()
 
-        print("\n[10/11] Uploading DB to Render...")
+        print("\n[10/12] Uploading DB to Render...")
         upload_db_to_render()
 
+        print("\n[11/12] Uploading structured notes DB to Render...")
+        try:
+            notes_db = PROJECT_ROOT / "data" / "structured_notes.db"
+            if notes_db.exists():
+                import gzip as _gz
+                import requests as _req
+                _gz_path = str(notes_db) + ".upload.gz"
+                with open(notes_db, "rb") as _fin:
+                    with _gz.open(_gz_path, "wb", compresslevel=6) as _fout:
+                        while True:
+                            _chunk = _fin.read(1024 * 1024)
+                            if not _chunk:
+                                break
+                            _fout.write(_chunk)
+                _api_key = _load_api_key()
+                _headers = {"X-API-Key": _api_key} if _api_key else {}
+                with open(_gz_path, "rb") as _f:
+                    _resp = _req.post(
+                        f"{RENDER_API_URL}/db/upload-notes",
+                        files={"file": ("structured_notes.db.gz", _f, "application/gzip")},
+                        headers=_headers, timeout=600,
+                    )
+                if _resp.status_code == 200:
+                    _mb = Path(_gz_path).stat().st_size / 1e6
+                    print(f"  Uploaded notes DB ({_mb:.0f} MB)")
+                else:
+                    print(f"  Notes upload failed: {_resp.status_code}")
+                Path(_gz_path).unlink(missing_ok=True)
+            else:
+                print("  No structured_notes.db found")
+        except Exception as e:
+            print(f"  Notes upload failed (non-fatal): {e}")
+
         # === Send email reports ===
-        print("\n[11/11] Sending email reports...")
+        print("\n[12/12] Sending email reports...")
         try:
             import subprocess
             day_of_week = datetime.now().strftime("%A")
-            # Daily report every day
-            print("  Sending daily report...")
-            subprocess.run(
-                [sys.executable, str(PROJECT_ROOT / "scripts" / "send_email.py"), "send", "daily", "--force"],
-                cwd=str(PROJECT_ROOT), timeout=300,
-            )
-            # Weekly + L&I + Income + Flow on Monday only
-            if day_of_week == "Monday":
-                print("  Monday -- sending weekly bundle (Weekly + L&I + Income + Flow)...")
+            if day_of_week in ("Saturday", "Sunday"):
+                print(f"  {day_of_week} -- skipping email reports")
+            else:
+                # Daily report Mon-Fri
+                print("  Sending daily report...")
                 subprocess.run(
-                    [sys.executable, str(PROJECT_ROOT / "scripts" / "send_email.py"), "send", "weekly", "--force"],
+                    [sys.executable, str(PROJECT_ROOT / "scripts" / "send_email.py"), "send", "daily", "--force"],
                     cwd=str(PROJECT_ROOT), timeout=300,
                 )
+                # Weekly + L&I + Income + Flow on Monday only
+                if day_of_week == "Monday":
+                    print("  Monday -- sending weekly bundle (Weekly + L&I + Income + Flow)...")
+                    subprocess.run(
+                        [sys.executable, str(PROJECT_ROOT / "scripts" / "send_email.py"), "send", "weekly", "--force"],
+                        cwd=str(PROJECT_ROOT), timeout=300,
+                    )
         except Exception as e:
             print(f"  Email send failed (non-fatal): {e}")
 

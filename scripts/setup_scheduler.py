@@ -38,9 +38,9 @@ TASKS = [
     },
     {
         "name": "ETP_DailySync",
-        "desc": "Full daily pipeline: ZIP sync, SEC scrape, market, archive, upload, send all reports",
+        "desc": "Full daily pipeline + reports: Mon-Fri 6PM (daily email every day, weekly bundle Monday)",
         "command": f'"{PYTHON}" "{PROJECT_ROOT / "scripts" / "run_daily.py"}"',
-        "schedule": "/sc daily",
+        "schedule": "/sc weekly /d MON,TUE,WED,THU,FRI",
         "start_time": "18:00",
     },
 ]
