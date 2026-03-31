@@ -1507,7 +1507,7 @@ def build_autocall_email(dashboard_url: str = "", db=None) -> tuple[str, list]:
     External report — no internal dashboard links.
     """
     dashboard_url = ""  # External report — never link to internal site
-    title = "Autocallable ETF Category Weekly Update"
+    title = "Autocallable ETF Weekly Update"
     from webapp.services.report_data import get_flow_report
     data = get_flow_report(db)
 
@@ -1615,99 +1615,10 @@ def build_autocall_email(dashboard_url: str = "", db=None) -> tuple[str, list]:
     if top10 or bot10:
         body += _flow_bars(top10, bot10, n=10)
 
-    # Market share line chart — since CAIE launch (June 2025)
-    try:
-        import json as _json
-        from urllib.parse import quote as _quote
-        from webapp.services.market_data import _load_master, _apply_etn_overrides
-        import pandas as _pd
-        from dateutil.relativedelta import relativedelta
-
-        _master = _load_master(db)
-        _apply_etn_overrides(_master)
-        _auto_all = _master[_master["fund_name"].fillna("").str.contains("autocall", case=False, na=False)]
-        _auto_rex = _auto_all[_auto_all["is_rex"] == True]
-
-        # CAIE launched June 2025 = ~9 months ago. Only show from M-9 onward.
-        # REX ATCL launched Feb 2026 = ~1 month ago. Show REX as null before that.
-        _now = datetime.now()
-        _labels = []
-        _total_aum = []
-        _rex_share = []
-        for m in range(9, -1, -1):  # M-9 (Jun 2025) through M-0 (now)
-            col = f"t_w4.aum_{m}" if m > 0 else "t_w4.aum"
-            if col not in _auto_all.columns:
-                continue
-            t = _pd.to_numeric(_auto_all[col], errors="coerce").fillna(0).sum()
-            r = _pd.to_numeric(_auto_rex[col], errors="coerce").fillna(0).sum()
-            if t < 1:  # Skip months before any product existed
-                continue
-            _total_aum.append(round(t, 1))
-            # Only show REX share from Feb 2026 (ATCL launch) = M-1 or M-0
-            if m <= 1:
-                _rex_share.append(round(r / t * 100, 2) if t > 0 else 0)
-            else:
-                _rex_share.append(None)  # null = gap in chart
-            month_date = _now - relativedelta(months=m)
-            _labels.append(month_date.strftime("%b %Y"))
-
-        if len(_labels) > 2:
-            _chart = {
-                "type": "line",
-                "data": {
-                    "labels": _labels,
-                    "datasets": [
-                        {
-                            "label": "Category AUM ($M)",
-                            "data": _total_aum,
-                            "borderColor": _NAVY,
-                            "backgroundColor": _NAVY + "20",
-                            "fill": True,
-                            "tension": 0.3,
-                            "pointRadius": 3,
-                            "borderWidth": 2,
-                            "yAxisID": "y",
-                        },
-                        {
-                            "label": "REX Market Share (%)",
-                            "data": _rex_share,
-                            "borderColor": _REX_GREEN,
-                            "backgroundColor": _REX_GREEN,
-                            "fill": False,
-                            "tension": 0.3,
-                            "pointRadius": 4,
-                            "borderWidth": 2.5,
-                            "borderDash": [5, 3],
-                            "yAxisID": "y1",
-                            "spanGaps": False,
-                        },
-                    ],
-                },
-                "options": {
-                    "responsive": True,
-                    "interaction": {"mode": "index", "intersect": False},
-                    "scales": {
-                        "x": {"ticks": {"font": {"size": 10}, "color": "#6b7280"}, "grid": {"display": False}},
-                        "y": {"title": {"display": True, "text": "AUM ($M)", "font": {"size": 11}, "color": "#6b7280"},
-                               "ticks": {"font": {"size": 10}, "color": "#6b7280"}, "grid": {"color": "#f3f4f6"}},
-                        "y1": {"position": "right", "min": 0, "max": 5,
-                                "title": {"display": True, "text": "REX Share (%)", "font": {"size": 11}, "color": _REX_GREEN},
-                                "ticks": {"font": {"size": 10}, "color": _REX_GREEN, "stepSize": 1}, "grid": {"drawOnChartArea": False}},
-                    },
-                    "plugins": {"legend": {"display": True, "labels": {"font": {"size": 11}, "usePointStyle": True}}},
-                },
-            }
-            _chart_url = f"https://quickchart.io/chart?c={_quote(_json.dumps(_chart, separators=(',', ':')))}&w=600&h=250&bkg=%23ffffff&v=4"
-            body += (
-                f'<tr><td style="padding:18px 30px 8px;">'
-                f'<div style="font-size:11px;font-weight:600;color:{_GRAY};text-transform:uppercase;'
-                f'letter-spacing:0.5px;margin-bottom:8px;">Autocallable ETF Category Growth (Since CAIE Launch)</div>'
-                f'<img src="{_chart_url}" width="600" height="250" alt="Market Share Chart" '
-                f'style="display:block;width:100%;max-width:600px;height:auto;border-radius:6px;" />'
-                f'</td></tr>'
-            )
-    except Exception:
-        pass
+    # Market share line chart — ON HOLD
+    # To re-enable: see git commit e2b5ae1 for the full chart code.
+    # Shows category AUM since CAIE launch (Jun 2025) + REX share from ATCL (Feb 2026).
+    # Y1 axis capped at 5%. Uses QuickChart.io for email-safe rendering.
 
     # Bloomberg methodology note
     body += (
