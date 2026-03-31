@@ -367,22 +367,49 @@ def _gather_market_snapshot(db=None) -> dict | None:
                 continue
 
         # Market pulse: index proxies (1D total returns)
+        # Use yfinance for accurate daily returns (Bloomberg 1D can lag)
         market_pulse = {}
         try:
             _PULSE_TICKERS = [
-                ("SPY US", "S&P 500"), ("QQQ US", "NASDAQ"), ("DIA US", "Dow"),
-                ("IWM US", "Russell 2000"), ("IBIT US", "Bitcoin"), ("GLD US", "Gold"),
+                ("SPY US", "SPY", "S&P 500"), ("QQQ US", "QQQ", "NASDAQ"),
+                ("DIA US", "DIA", "Dow"), ("IWM US", "IWM", "Russell 2000"),
+                ("IBIT US", "IBIT", "Bitcoin"), ("GLD US", "GLD", "Gold"),
             ]
-            for _ptk, _plbl in _PULSE_TICKERS:
-                _prow = master[master["ticker"] == _ptk]
-                if not _prow.empty:
-                    _pret = float(_prow.iloc[0].get("t_w3.total_return_1day", 0))
-                    market_pulse[_plbl] = {"return_1d": _pret, "return_1d_fmt": f"{_pret:+.2f}%"}
+            # Try yfinance first for accurate 1D returns
+            _yf_returns = {}
+            try:
+                import yfinance as yf
+                from datetime import date as _date_cls, timedelta as _td
+                _end = _date_cls.today() + _td(days=1)
+                _start = _date_cls.today() - _td(days=5)
+                for _ptk_bbg, _ptk_yf, _plbl in _PULSE_TICKERS:
+                    try:
+                        _hist = yf.download(_ptk_yf, start=str(_start), end=str(_end), progress=False, auto_adjust=False)
+                        if len(_hist) >= 2:
+                            _prev = float(_hist["Close"].values.flatten()[-2])
+                            _last = float(_hist["Close"].values.flatten()[-1])
+                            if _prev > 0:
+                                _yf_returns[_plbl] = (_last - _prev) / _prev * 100
+                    except Exception:
+                        pass
+                if _yf_returns:
+                    pass  # yfinance returns loaded
+            except ImportError:
+                pass  # yfinance not installed, fall back to Bloomberg
+
+            for _ptk_bbg, _ptk_yf, _plbl in _PULSE_TICKERS:
+                if _plbl in _yf_returns:
+                    _pret = _yf_returns[_plbl]
+                else:
+                    _prow = master[master["ticker"] == _ptk_bbg]
+                    _pret = float(_prow.iloc[0].get("t_w3.total_return_1day", 0)) if not _prow.empty else 0
+                market_pulse[_plbl] = {"return_1d": _pret, "return_1d_fmt": f"{_pret:+.2f}%"}
             # Industry totals (for ETP Market Overview, not Market Pulse)
             _all_dedup = master.drop_duplicates(subset=["ticker"], keep="first") if "ticker" in master.columns else master
-            _ind_aum = float(_all_dedup["t_w4.aum"].sum()) if "t_w4.aum" in _all_dedup.columns else 0
-            _ind_flow_1d = float(_all_dedup["t_w4.fund_flow_1day"].sum()) if "t_w4.fund_flow_1day" in _all_dedup.columns else 0
-            _ind_flow_1w = float(_all_dedup["t_w4.fund_flow_1week"].sum()) if "t_w4.fund_flow_1week" in _all_dedup.columns else 0
+            import pandas as _pd
+            _ind_aum = float(_pd.to_numeric(_all_dedup["t_w4.aum"], errors="coerce").fillna(0).sum()) if "t_w4.aum" in _all_dedup.columns else 0
+            _ind_flow_1d = float(_pd.to_numeric(_all_dedup["t_w4.fund_flow_1day"], errors="coerce").fillna(0).sum()) if "t_w4.fund_flow_1day" in _all_dedup.columns else 0
+            _ind_flow_1w = float(_pd.to_numeric(_all_dedup["t_w4.fund_flow_1week"], errors="coerce").fillna(0).sum()) if "t_w4.fund_flow_1week" in _all_dedup.columns else 0
             _ind_count = len(_all_dedup)
             market_pulse["_industry"] = {
                 "aum": _ind_aum, "aum_fmt": f"${_ind_aum/1000:,.1f}B" if _ind_aum >= 1000 else f"${_ind_aum:,.0f}M",
@@ -392,8 +419,9 @@ def _gather_market_snapshot(db=None) -> dict | None:
                 "flow_1w_positive": _ind_flow_1w >= 0,
                 "count": _ind_count,
             }
-        except Exception:
-            pass
+        except Exception as _pulse_err:
+            import logging as _logging
+            _logging.getLogger(__name__).error("Market pulse failed: %s", _pulse_err)
 
         # Daily movers: top 5 inflows + top 3 outflows by 1D flow
         daily_movers = {"inflows": [], "outflows": []}
@@ -437,7 +465,9 @@ def _gather_market_snapshot(db=None) -> dict | None:
             "market_pulse": market_pulse,
             "data_as_of": data_as_of,
         }
-    except Exception:
+    except Exception as _snap_err:
+        import logging as _logging
+        _logging.getLogger(__name__).error("Market snapshot failed: %s", _snap_err)
         return None
 
 

@@ -141,18 +141,25 @@ def _build_from_split_sheets(xl: pd.ExcelFile) -> pd.DataFrame:
 
     w1 = _read_sheet(xl, "w1").rename(columns=W1_COL_MAP)
     w1 = w1.dropna(subset=["ticker"])
+    w1 = w1.drop_duplicates(subset=["ticker"], keep="first")
 
     w2 = _read_sheet(xl, "w2").rename(columns=W2_COL_MAP)
     if "Fund Name" in w2.columns:
         w2 = w2.drop(columns=["Fund Name"])
+    if "ticker" in w2.columns:
+        w2 = w2.drop_duplicates(subset=["ticker"], keep="first")
 
     w3 = _read_sheet(xl, "w3").rename(columns=W3_COL_MAP)
     if "Fund Name" in w3.columns:
         w3 = w3.drop(columns=["Fund Name"])
+    if "ticker" in w3.columns:
+        w3 = w3.drop_duplicates(subset=["ticker"], keep="first")
 
     w4 = _read_sheet(xl, "w4").rename(columns=W4_FLOW_COL_MAP)
     if "Fund Name" in w4.columns:
         w4 = w4.drop(columns=["Fund Name"])
+    if "ticker" in w4.columns:
+        w4 = w4.drop_duplicates(subset=["ticker"], keep="first")
     # AUM is the first non-flow, non-ticker column
     for col in w4.columns:
         if col not in W4_FLOW_COL_MAP.values() and col not in ("ticker", "Fund Name"):

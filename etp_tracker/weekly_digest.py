@@ -907,15 +907,40 @@ def _render_market_pulse_weekly(master: pd.DataFrame) -> str:
         return ""
 
     _PROXIES = [
-        ("SPY US", "S&P 500"), ("QQQ US", "NASDAQ"), ("DIA US", "Dow"),
-        ("IWM US", "Russell 2000"), ("IBIT US", "Bitcoin"), ("GLD US", "Gold"),
+        ("SPY US", "SPY", "S&P 500"), ("QQQ US", "QQQ", "NASDAQ"),
+        ("DIA US", "DIA", "Dow"), ("IWM US", "IWM", "Russell 2000"),
+        ("IBIT US", "IBIT", "Bitcoin"), ("GLD US", "GLD", "Gold"),
     ]
+
+    # Try yfinance for accurate 1W returns
+    _yf_returns = {}
+    try:
+        import yfinance as yf
+        from datetime import date, timedelta
+        _end = date.today() + timedelta(days=1)
+        _start = date.today() - timedelta(days=10)
+        for _bbg, _yf, _lbl in _PROXIES:
+            try:
+                _hist = yf.download(_yf, start=str(_start), end=str(_end), progress=False, auto_adjust=False)
+                if len(_hist) >= 6:
+                    _wk_ago = float(_hist["Close"].values.flatten()[-6])
+                    _last = float(_hist["Close"].values.flatten()[-1])
+                    if _wk_ago > 0:
+                        _yf_returns[_lbl] = (_last - _wk_ago) / _wk_ago * 100
+            except Exception:
+                pass
+    except ImportError:
+        pass
+
     cells = []
-    for ticker, label in _PROXIES:
-        row = master[master["ticker"] == ticker]
-        if row.empty:
-            continue
-        ret = float(row.iloc[0].get(ret_col, 0))
+    for bbg_ticker, yf_ticker, label in _PROXIES:
+        if label in _yf_returns:
+            ret = _yf_returns[label]
+        else:
+            row = master[master["ticker"] == bbg_ticker]
+            if row.empty:
+                continue
+            ret = float(row.iloc[0].get(ret_col, 0))
         color = _GREEN if ret >= 0 else _RED
         cells.append(
             f'<td width="16%" style="{_cell}">'
