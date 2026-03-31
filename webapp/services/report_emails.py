@@ -1504,7 +1504,9 @@ def build_autocall_email(dashboard_url: str = "", db=None) -> tuple[str, list]:
 
     Shows the Autocallable category: KPIs, issuer comparison, market share,
     flow bars. Designed for weekly distribution to ATCL partners.
+    External report — no internal dashboard links.
     """
+    dashboard_url = ""  # External report — never link to internal site
     from webapp.services.report_data import get_flow_report
     data = get_flow_report(db)
 
