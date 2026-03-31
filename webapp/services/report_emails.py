@@ -1706,12 +1706,12 @@ def build_autocall_email(dashboard_url: str = "", db=None) -> tuple[str, list]:
     body += (
         f'<tr><td style="padding:16px 30px 12px;">'
         f'<div style="font-size:10px;color:{_GRAY};line-height:1.4;border-top:1px solid {_BORDER};padding-top:10px;">'
-        f'<b>Methodology:</b> Fund flows are calculated as [Shares Outstanding(t) - Shares Outstanding(t-1)] x NAV(t). '
-        f'US ETP flows are reported with a <b>one-day lag</b> (shares outstanding reported by issuers with a one-day delay). '
-        f'Weekly flows ("1W") measure net creations/redemptions between Monday closes '
-        f'(e.g., Mon 3/23 to Mon 3/30). Monthly flows ("1M") measure a rolling one-month window '
-        f'from today (e.g., ~Mar 1 to Mar 30). '
-        f'Values displayed in USD millions. Source: Bloomberg L.P.'
+        f'<b>Methodology:</b> Fund flows = [Shares Outstanding(t) - Shares Outstanding(t-1)] x NAV(t). '
+        f'Daily flows carry a <b>one-day lag</b> (US ETP issuers report shares outstanding with a one-day delay). '
+        f'Weekly ("1W") and monthly ("1M") flows are rolling calendar windows '
+        f'(1W = one calendar week back from pull date; 1M = one calendar month back). '
+        f'Data pulled Monday evening reflects 1W/1M as of that Monday; 1D reflects Friday. '
+        f'Values in USD millions. Source: Bloomberg L.P.'
         f'</div></td></tr>'
     )
 
