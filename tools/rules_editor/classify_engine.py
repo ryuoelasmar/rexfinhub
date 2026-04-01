@@ -377,7 +377,7 @@ def _resolve_thematic_attrs(name: str, row: pd.Series, c: Classification) -> dic
         ("Space & Aerospace", r"\b(SPACE|AEROSPACE)\b"),
         ("Defense", r"\b(DEFENSE|DEFENCE|MILITARY)\b"),
         ("Cannabis and Psychedelics", r"\b(CANNABIS|MARIJUANA|PSYCHEDELIC)\b"),
-        ("Metaverse & Gaming", r"\b(METAVERSE|GAMING|ESPORTS)\b"),
+        ("Metaverse & Gaming", r"\b(METAVERSE|GAMING|ESPORTS|VIDEO\s*GAME)\b"),
         ("Fintech", r"\b(FINTECH|FINANCIAL\s*TECH)\b"),
         ("Infrastructure", r"\b(INFRASTRUCTURE|5G)\b"),
         ("Water", r"\b(WATER|CLEAN\s*WATER)\b"),
@@ -385,6 +385,12 @@ def _resolve_thematic_attrs(name: str, row: pd.Series, c: Classification) -> dic
         ("ESG", r"\b(ESG|SUSTAINABLE|SUSTAINABILITY|RESPONSIBLE)\b"),
         ("Blockchain & Crypto", r"\b(BLOCKCHAIN)\b"),
         ("Consumer", r"\b(CONSUMER\s*TREND|MILLENNI|GEN\s*Z)\b"),
+        ("Nuclear", r"\b(NUCLEAR|URANIUM)\b"),
+        ("Quantum Computing", r"\b(QUANTUM)\b"),
+        ("Agriculture", r"\b(AGRICULTURE|AGRI\s*BUSINESS|AGRI\s*TECH|FARM)\b"),
+        ("Natural Resources", r"\b(NATURAL\s*RESOURCE)\b"),
+        ("Sports", r"\b(SPORTS|ESPORTS|SPORT\s*BETTING)\b"),
+        ("Housing", r"\b(HOUSING|HOME\s*BUILD|HOMEBUILDER[S]?)\b"),
     ]
     n = name.upper()
     for theme, pattern in theme_patterns:
