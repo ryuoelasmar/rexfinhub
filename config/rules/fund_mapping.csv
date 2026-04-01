@@ -130,7 +130,6 @@ JPMO US,CC,1,manual
 KGLD US,CC,1,manual
 KLIP US,CC,1,manual
 KNG US,CC,1,manual
-KQQQ US,CC,1,manual
 LFGY US,CC,1,manual
 LLII US,CC,1,manual
 LQDW US,CC,1,manual
@@ -173,7 +172,6 @@ PLTY US,CC,1,manual
 PLYY US,CC,1,manual
 PVEX US,CC,1,manual
 PYPY US,CC,1,manual
-QBUL US,CC,1,manual
 QBY US,CC,1,manual
 QCLR US,CC,1,manual
 QDTE US,CC,1,manual
@@ -222,7 +220,6 @@ SRHR US,CC,1,manual
 TCAL US,CC,1,manual
 TDAQ US,CC,1,manual
 TDVI US,CC,1,manual
-TESL US,CC,1,manual
 TLTP US,CC,1,manual
 TLTW US,CC,1,manual
 TLTX US,CC,1,manual
@@ -281,8 +278,6 @@ YMAG US,CC,1,manual
 YMAX US,CC,1,manual
 YQQQ US,CC,1,manual
 YSPY US,CC,1,manual
-ACEI US,CC,1,manual
-ACII US,CC,1,manual
 CAIE US,CC,1,manual
 CAIQ US,CC,1,manual
 PAYH US,CC,1,manual
@@ -356,8 +351,6 @@ MNRS US,Crypto,1,manual
 NCIQ US,Crypto,1,manual
 NODE US,Crypto,1,manual
 OBTC US,Crypto,1,manual
-OOQB US,Crypto,1,manual
-OOSB US,Crypto,1,manual
 QETH US,Crypto,1,manual
 QSOL US,Crypto,1,manual
 SATO US,Crypto,1,manual
@@ -2271,7 +2264,6 @@ OOSB US,LI,1,auto
 ACEI US,Defined,1,auto
 ACII US,Defined,1,auto
 QBUL US,Defined,1,auto
-SPYH US,Defined,1,auto
 BITQ US,Crypto,1,auto
 CRPT US,Crypto,1,auto
 DECO US,Crypto,1,auto
