@@ -187,15 +187,18 @@ def write_classifications(
 ) -> int:
     """Write auto-classification results to mkt_fund_classification (full refresh).
 
+    Also updates strategy, strategy_confidence, and underlier_type columns in
+    mkt_master_data so the master table has unified classification data.
+
     Args:
         classifications: list of Classification objects from auto_classify.
         run_id: pipeline run ID.
 
     Returns number of rows written.
     """
-    from webapp.models import MktFundClassification
+    from webapp.models import MktFundClassification, MktMasterData
 
-    # Clear existing data
+    # Clear existing classification data
     session.query(MktFundClassification).delete()
 
     count = 0
@@ -233,6 +236,27 @@ def write_classifications(
 
     session.flush()
     log.info("mkt_fund_classification: %d rows written", count)
+
+    # Sync classification columns back to mkt_master_data
+    # Build a lookup: ticker -> (strategy, confidence, underlier_type)
+    class_lookup = {
+        c.ticker: (c.strategy, c.confidence, c.underlier_type)
+        for c in classifications
+    }
+
+    updated = 0
+    for master_row in session.query(MktMasterData).all():
+        if master_row.ticker in class_lookup:
+            strategy, confidence, underlier_type = class_lookup[master_row.ticker]
+            master_row.strategy = strategy
+            master_row.strategy_confidence = confidence
+            master_row.underlier_type = underlier_type
+            updated += 1
+
+    if updated:
+        session.flush()
+    log.info("mkt_master_data: %d rows updated with classification data", updated)
+
     return count
 
 

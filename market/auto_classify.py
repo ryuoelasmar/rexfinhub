@@ -7,6 +7,9 @@ outcome_type, is_singlestock, fund_name) to auto-suggest:
   - key attributes (direction, leverage_amount, underlier, duration, credit_quality, etc.)
   - confidence level (HIGH, MEDIUM, LOW)
 
+CSV rules (fund_mapping.csv) override auto-classify when present.
+Call classify_all() for the unified pipeline: auto-classify -> CSV override.
+
 This module is standalone -- no webapp dependencies.
 """
 from __future__ import annotations
@@ -14,6 +17,7 @@ from __future__ import annotations
 import logging
 import re
 from dataclasses import dataclass, field
+from pathlib import Path
 
 import pandas as pd
 
@@ -72,31 +76,49 @@ def classify_fund(row: pd.Series) -> Classification:
             attributes=attrs,
         )
 
-    # --- Rule 2: Crypto ---
-    if is_crypto_val.lower() == "cryptocurrency":
-        _extract_crypto_attrs(name, is_ss_val, attrs)
+    # --- Rule 1b: Defined Outcome keyword fallback (BBG field empty) ---
+    detected_outcome = _detect_outcome_keywords(text)
+    if detected_outcome:
+        attrs["outcome_type"] = detected_outcome
         return Classification(
             ticker=ticker,
-            strategy="Crypto",
-            confidence="HIGH",
-            reason=f"is_crypto=Cryptocurrency",
-            underlier_type="Crypto Spot" if _is_spot_crypto(name) else "Crypto Index",
-            attributes=attrs,
-        )
-    if _has_crypto_keywords(text):
-        _extract_crypto_attrs(name, is_ss_val, attrs)
-        return Classification(
-            ticker=ticker,
-            strategy="Crypto",
+            strategy="Defined Outcome",
             confidence="MEDIUM",
-            reason="crypto keywords in fund name",
-            underlier_type="Crypto Spot" if _is_spot_crypto(name) else "Crypto Index",
+            reason=f"outcome keywords: {detected_outcome}",
+            underlier_type=_resolve_underlier_type(is_ss_val, ticker, name),
             attributes=attrs,
         )
+
+    # --- Rule 2: Crypto (non-leveraged only; leveraged crypto -> Rule 3 L&I) ---
+    if not uses_lev:
+        if is_crypto_val.lower() == "cryptocurrency":
+            _extract_crypto_attrs(name, is_ss_val, attrs)
+            return Classification(
+                ticker=ticker,
+                strategy="Crypto",
+                confidence="HIGH",
+                reason="is_crypto=Cryptocurrency",
+                underlier_type="Crypto Spot" if _is_spot_crypto(name) else "Crypto Index",
+                attributes=attrs,
+            )
+        if _has_crypto_keywords(text):
+            _extract_crypto_attrs(name, is_ss_val, attrs)
+            return Classification(
+                ticker=ticker,
+                strategy="Crypto",
+                confidence="MEDIUM",
+                reason="crypto keywords in fund name",
+                underlier_type="Crypto Spot" if _is_spot_crypto(name) else "Crypto Index",
+                attributes=attrs,
+            )
 
     # --- Rule 3: Leveraged & Inverse (uses_leverage=1) ---
     if uses_lev:
         _extract_leverage_attrs(name, lev_amount, is_ss_val, attrs)
+
+        # Also tag crypto attributes if it's a leveraged crypto product
+        if is_crypto_val.lower() == "cryptocurrency" or _has_crypto_keywords(text):
+            _extract_crypto_attrs(name, is_ss_val, attrs)
 
         # Check if it's also an income/covered call product
         if _has_income_keywords(text):
@@ -104,7 +126,7 @@ def classify_fund(row: pd.Series) -> Classification:
                 ticker=ticker,
                 strategy="Income / Covered Call",
                 confidence="HIGH",
-                reason=f"uses_leverage=1 + income keywords",
+                reason="uses_leverage=1 + income keywords",
                 underlier_type=_resolve_underlier_type(is_ss_val, ticker, name),
                 attributes=attrs,
             )
@@ -113,7 +135,7 @@ def classify_fund(row: pd.Series) -> Classification:
             ticker=ticker,
             strategy="Leveraged & Inverse",
             confidence="HIGH",
-            reason=f"uses_leverage=1",
+            reason="uses_leverage=1",
             underlier_type=_resolve_underlier_type(is_ss_val, ticker, name),
             attributes=attrs,
         )
@@ -270,6 +292,10 @@ def classify_fund(row: pd.Series) -> Classification:
 def classify_all(etp_combined: pd.DataFrame) -> list[Classification]:
     """Classify all funds in the ETP dataset.
 
+    Pipeline: auto-classify each fund, then apply CSV rule overrides.
+    CSV rules are authoritative -- if a fund is in fund_mapping.csv,
+    its CSV category wins over auto-classify.
+
     Returns list of Classification objects, one per ticker.
     """
     results = []
@@ -281,13 +307,81 @@ def classify_all(etp_combined: pd.DataFrame) -> list[Classification]:
         seen.add(ticker)
         results.append(classify_fund(row))
 
+    # Apply CSV rule overrides (CSV is authoritative)
+    results = apply_csv_overrides(results)
+
     # Summary
     strategy_counts = {}
     for c in results:
         strategy_counts[c.strategy] = strategy_counts.get(c.strategy, 0) + 1
-    log.info("Auto-classified %d funds: %s", len(results), strategy_counts)
+    log.info("Classified %d funds (after overrides): %s", len(results), strategy_counts)
 
     return results
+
+
+def apply_csv_overrides(
+    classifications: list[Classification],
+    rules_dir: Path | None = None,
+) -> list[Classification]:
+    """Override auto-classifications with manually curated CSV rules.
+
+    CSV rules are authoritative -- if a fund is in fund_mapping.csv,
+    its CSV category wins over auto-classify.
+
+    Args:
+        classifications: list of Classification objects from classify_fund().
+        rules_dir: directory containing fund_mapping.csv. Defaults to
+            config/rules/ then data/rules/.
+
+    Returns the same list with overridden strategy/confidence/reason.
+    """
+    if rules_dir is None:
+        rules_dir = Path(__file__).resolve().parent.parent / "config" / "rules"
+
+    # Load fund_mapping.csv
+    mapping_path = rules_dir / "fund_mapping.csv"
+    if not mapping_path.exists():
+        rules_dir = Path(__file__).resolve().parent.parent / "data" / "rules"
+        mapping_path = rules_dir / "fund_mapping.csv"
+    if not mapping_path.exists():
+        log.warning("No fund_mapping.csv found, skipping CSV overrides")
+        return classifications
+
+    fund_map = pd.read_csv(mapping_path, engine="python", on_bad_lines="skip")
+
+    # Map etp_category to strategy
+    CAT_TO_STRATEGY = {
+        "LI": "Leveraged & Inverse",
+        "CC": "Income / Covered Call",
+        "Crypto": "Crypto",
+        "Defined": "Defined Outcome",
+        "Thematic": "Thematic",
+    }
+
+    csv_map: dict[str, str] = {}
+    for _, row in fund_map.iterrows():
+        ticker = str(row.get("ticker", "")).strip()
+        cat = str(row.get("etp_category", "")).strip()
+        if ticker and cat in CAT_TO_STRATEGY:
+            csv_map[ticker] = CAT_TO_STRATEGY[cat]
+
+    # Apply overrides
+    overridden = 0
+    for c in classifications:
+        if c.ticker in csv_map:
+            new_strategy = csv_map[c.ticker]
+            if c.strategy != new_strategy:
+                old_strategy = c.strategy
+                c.strategy = new_strategy
+                c.confidence = "HIGH"
+                c.reason = f"CSV override: {old_strategy} -> {c.strategy}"
+                overridden += 1
+
+    log.info(
+        "CSV overrides applied: %d of %d funds overridden",
+        overridden, len(classifications),
+    )
+    return classifications
 
 
 def classify_to_dataframe(etp_combined: pd.DataFrame) -> pd.DataFrame:
@@ -420,6 +514,12 @@ def _extract_income_attrs(name: str, is_ss_val, attrs: dict) -> None:
         attrs["income_strategy"] = "Covered Call"
     elif re.search(r"\b(BUYWRITE|BUY-WRITE)\b", name):
         attrs["income_strategy"] = "Buy-Write"
+    elif re.search(r"\b(WEEKLYPAY|WEEKLY\s*PAY|WEEKLY\s*DISTRIBUTION)\b", name):
+        attrs["income_strategy"] = "Weekly Distribution"
+    elif re.search(r"\bYIELD\s*PREMIUM\b", name):
+        attrs["income_strategy"] = "Premium Income"
+    elif re.search(r"\bCOLLARED\b", name):
+        attrs["income_strategy"] = "Collar"
     elif re.search(r"\bDIVIDEND\b", name):
         attrs["income_strategy"] = "Dividend"
     else:
@@ -530,11 +630,35 @@ def _extract_thematic_attrs(name: str, attrs: dict) -> None:
 # Keyword detectors
 # ---------------------------------------------------------------------------
 
+def _detect_outcome_keywords(text: str) -> str:
+    """Detect defined outcome product type from fund name keywords.
+
+    Returns the outcome type string, or empty string if not detected.
+    Only matches specific defined outcome keywords -- does NOT match
+    generic "HEDGED EQUITY" (most are currency-hedged international funds).
+    """
+    if re.search(r"\b(BUFFER|BUFFERED)\b", text):
+        return "Buffer"
+    if re.search(r"\bFLOOR\b", text):
+        return "Floor"
+    if re.search(r"\bACCELERATOR\b", text):
+        return "Accelerator"
+    if re.search(r"\bBARRIER\b", text):
+        return "Barrier"
+    if re.search(r"\bSTEP[\s-]*UP\b", text):
+        return "Step-Up"
+    if re.search(r"\bLADDERED\s+OVERLAY\b", text):
+        return "Ladder"
+    return ""
+
+
 def _has_income_keywords(text: str) -> bool:
     return bool(re.search(
         r"\b(COVERED\s*CALL|OPTION\s*INCOME|PREMIUM\s*INCOME|YIELDMAX|YIELDBOOST|"
         r"BUYWRITE|BUY[\s-]*WRITE|EQUITY\s*PREMIUM|0DTE|ODTE|AUTOCALLABLE|"
-        r"INCOME\s*STRATEGY|OPTION\s*OVERLAY)\b",
+        r"INCOME\s*STRATEGY|OPTION\s*OVERLAY|"
+        r"WEEKLYPAY|WEEKLY\s*PAY|WEEKLY\s*DISTRIBUTION|"
+        r"YIELD\s*PREMIUM|COLLARED|TARGET\s+\d+\s*\w*\s*INCOME)\b",
         text
     ))
 
@@ -542,7 +666,8 @@ def _has_income_keywords(text: str) -> bool:
 def _has_strong_income_keywords(text: str) -> bool:
     return bool(re.search(
         r"\b(COVERED\s*CALL|YIELDMAX|YIELDBOOST|0DTE|ODTE|BUYWRITE|BUY[\s-]*WRITE|"
-        r"AUTOCALLABLE|OPTION\s*INCOME\s*STRATEGY)\b",
+        r"AUTOCALLABLE|OPTION\s*INCOME\s*STRATEGY|"
+        r"WEEKLYPAY|WEEKLY\s*PAY|WEEKLY\s*DISTRIBUTION|YIELD\s*PREMIUM|COLLARED)\b",
         text
     ))
 
