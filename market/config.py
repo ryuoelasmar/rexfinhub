@@ -3,42 +3,18 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from webapp.services.bbg_file import get_bloomberg_file
+
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 # ---------------------------------------------------------------------------
 # Data file resolution -- single source of truth: bloomberg_daily_file.xlsm
+# Centralized in webapp.services.bbg_file
 # ---------------------------------------------------------------------------
-# Primary: OneDrive MASTER Data folder (synced, Ryu updates here)
-_ONEDRIVE_BBG_DAILY = Path(
-    r"C:\Users\RyuEl-Asmar\REX Financial LLC"
-    r"\REX Financial LLC - MasterFiles"
-    r"\MASTER Data\bloomberg_daily_file.xlsm"
-)
-_FALLBACK_BBG_DAILY = PROJECT_ROOT / "data" / "DASHBOARD" / "bloomberg_daily_file.xlsm"
-
-# Resolution order: OneDrive daily -> local daily
-def _resolve_data_file() -> Path:
-    """Return the freshest accessible Bloomberg file."""
-    import logging
-    _log = logging.getLogger(__name__)
-    accessible = []
-    for candidate in [_ONEDRIVE_BBG_DAILY, _FALLBACK_BBG_DAILY]:
-        if candidate.exists():
-            try:
-                with open(candidate, "rb") as f:
-                    f.read(4)
-                accessible.append(candidate)
-            except PermissionError:
-                continue
-    if not accessible:
-        return _FALLBACK_BBG_DAILY
-    chosen = max(accessible, key=lambda p: p.stat().st_mtime)
-    from datetime import datetime
-    mtime = datetime.fromtimestamp(chosen.stat().st_mtime).strftime("%Y-%m-%d %H:%M")
-    _log.info("Market data file: %s (modified %s)", chosen.name, mtime)
-    return chosen
-
-DATA_FILE = _resolve_data_file()
+try:
+    DATA_FILE = get_bloomberg_file()
+except FileNotFoundError:
+    DATA_FILE = PROJECT_ROOT / "data" / "DASHBOARD" / "bloomberg_daily_file.xlsm"
 
 # Rules: config/rules/ is git-tracked and NOT hidden by the persistent disk.
 # data/rules/ is the legacy location (hidden on Render by the persistent disk mount).

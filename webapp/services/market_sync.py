@@ -247,6 +247,9 @@ def sync_market_data(
     run.ts_rows_written = ts_rows
     db.commit()
 
+    # Step 8: Update .last_market_run.json marker
+    _update_last_run_marker(run_id, master_rows)
+
     log.info("Market sync complete: %d master, %d TS, %d reports",
              master_rows, ts_rows, len(report_keys))
 
@@ -255,6 +258,32 @@ def sync_market_data(
         "ts_rows": ts_rows,
         "report_keys": report_keys,
     }
+
+
+# ---------------------------------------------------------------------------
+# Last-run marker
+# ---------------------------------------------------------------------------
+def _update_last_run_marker(run_id: int, row_count: int) -> None:
+    """Write .last_market_run.json with the actual file used and its metadata."""
+    from market.config import LAST_RUN_FILE
+    from webapp.services.bbg_file import get_bloomberg_file
+
+    try:
+        data_file = get_bloomberg_file()
+        marker = {
+            "data_file": str(data_file),
+            "file_mtime": datetime.fromtimestamp(data_file.stat().st_mtime).isoformat(),
+            "file_size": data_file.stat().st_size,
+            "run_at": datetime.utcnow().isoformat(),
+            "run_id": run_id,
+            "row_count": row_count,
+        }
+        LAST_RUN_FILE.parent.mkdir(parents=True, exist_ok=True)
+        with open(LAST_RUN_FILE, "w") as f:
+            json.dump(marker, f, indent=2)
+        log.info("Updated %s (run_id=%d)", LAST_RUN_FILE.name, run_id)
+    except Exception as e:
+        log.warning("Failed to update last_market_run marker: %s", e)
 
 
 # ---------------------------------------------------------------------------

@@ -36,36 +36,14 @@ import pandas as pd
 
 # ---------------------------------------------------------------------------
 # Data file resolution -- single source of truth: bloomberg_daily_file.xlsm
+# Centralized in webapp.services.bbg_file
 # ---------------------------------------------------------------------------
-_ONEDRIVE_BBG_DAILY = Path(
-    r"C:\Users\RyuEl-Asmar\REX Financial LLC"
-    r"\REX Financial LLC - MasterFiles"
-    r"\MASTER Data\bloomberg_daily_file.xlsm"
-)
-_LOCAL_BBG_DAILY = Path("data/DASHBOARD/bloomberg_daily_file.xlsm")
+from webapp.services.bbg_file import get_bloomberg_file
 
-def _resolve_engine_data_file() -> Path:
-    """Return the freshest accessible Bloomberg file."""
-    import logging
-    _log = logging.getLogger(__name__)
-    accessible = []
-    for p in (_ONEDRIVE_BBG_DAILY, _LOCAL_BBG_DAILY):
-        if p.exists():
-            try:
-                with open(p, "rb") as f:
-                    f.read(4)
-                accessible.append(p)
-            except PermissionError:
-                continue
-    if not accessible:
-        return _LOCAL_BBG_DAILY
-    chosen = max(accessible, key=lambda p: p.stat().st_mtime)
-    from datetime import datetime
-    mtime = datetime.fromtimestamp(chosen.stat().st_mtime).strftime("%Y-%m-%d %H:%M")
-    _log.info("Data file resolved: %s (modified %s)", chosen.name, mtime)
-    return chosen
-
-DATA_FILE = _resolve_engine_data_file()
+try:
+    DATA_FILE = get_bloomberg_file()
+except FileNotFoundError:
+    DATA_FILE = Path("data/DASHBOARD/bloomberg_daily_file.xlsm")  # safe default
 
 
 def data_available() -> bool:

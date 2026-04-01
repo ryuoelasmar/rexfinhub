@@ -1,38 +1,15 @@
 """Screener configuration: scoring weights, thresholds, file paths."""
 from pathlib import Path
 
+from webapp.services.bbg_file import get_bloomberg_file
+
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
-# Single data source: bloomberg_daily_file.xlsm
-_ONEDRIVE_BBG_DAILY = Path(
-    r"C:\Users\RyuEl-Asmar\REX Financial LLC"
-    r"\REX Financial LLC - MasterFiles"
-    r"\MASTER Data\bloomberg_daily_file.xlsm"
-)
-_LOCAL_BBG_DAILY = PROJECT_ROOT / "data" / "DASHBOARD" / "bloomberg_daily_file.xlsm"
-
-def _resolve_data_file() -> Path:
-    """Return the freshest accessible Bloomberg file."""
-    import logging
-    _log = logging.getLogger(__name__)
-    accessible = []
-    for p in (_ONEDRIVE_BBG_DAILY, _LOCAL_BBG_DAILY):
-        if p.exists():
-            try:
-                with open(p, "rb") as f:
-                    f.read(4)
-                accessible.append(p)
-            except PermissionError:
-                continue
-    if not accessible:
-        return _LOCAL_BBG_DAILY
-    chosen = max(accessible, key=lambda p: p.stat().st_mtime)
-    from datetime import datetime
-    mtime = datetime.fromtimestamp(chosen.stat().st_mtime).strftime("%Y-%m-%d %H:%M")
-    _log.info("Screener data file: %s (modified %s)", chosen.name, mtime)
-    return chosen
-
-DATA_FILE = _resolve_data_file()
+# Single data source: bloomberg_daily_file.xlsm (centralized in bbg_file)
+try:
+    DATA_FILE = get_bloomberg_file()
+except FileNotFoundError:
+    DATA_FILE = PROJECT_ROOT / "data" / "DASHBOARD" / "bloomberg_daily_file.xlsm"
 REPORTS_DIR = PROJECT_ROOT / "reports"
 
 # --- Scoring weights (data-driven from correlation analysis, n=64 underliers) ---
