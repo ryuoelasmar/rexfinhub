@@ -211,6 +211,34 @@ def main():
 
     # Step 4b: Classify new funds
     log("\n[4b/6] Classifying new funds...")
+    # Phase 1: Unified auto-classify on full ETP dataset
+    try:
+        from webapp.services.data_engine import build_all
+        from market.auto_classify import classify_all
+        from market.db_writer import write_classifications, create_pipeline_run
+        from webapp.database import init_db, SessionLocal
+
+        init_db()
+        db_cls = SessionLocal()
+        try:
+            result = build_all()
+            etp = result.get("master", None)
+            if etp is not None and not etp.empty:
+                classifications = classify_all(etp)
+                run_id = create_pipeline_run(db_cls, source_file="rapid_classify")
+                n_written = write_classifications(db_cls, classifications, run_id=run_id)
+                db_cls.commit()
+                log(f"  Unified classify: {n_written} funds classified")
+            else:
+                log("  No ETP data for classification")
+        finally:
+            db_cls.close()
+    except ImportError as e:
+        log(f"  Unified classify not available ({e}), skipping")
+    except Exception as e:
+        log(f"  Unified classify failed: {e}")
+
+    # Phase 2: Scan for NEW unmapped funds and auto-approve HIGH/MEDIUM to CSVs
     try:
         from tools.rules_editor.classify_engine import scan_unmapped, apply_classifications
         import shutil

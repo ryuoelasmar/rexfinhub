@@ -1,23 +1,23 @@
 ticker,map_crypto_type,map_crypto_underlier
-BTC US,Spot Single Asset,BTC only
-ETH US,Spot Single Asset,alt-coin only (ETH)
-ETHW US,Spot Single Asset,alt-coin only (ETH)
+BTC US,Spot Single Asset,Bitcoin
+ETH US,Spot Single Asset,Ethereum
+ETHW US,Spot Single Asset,Ethereum
 BITQ US,Equity,multi-token crypto
-ETHV US,Spot Single Asset,alt-coin only (ETH)
+ETHV US,Spot Single Asset,Ethereum
 FDIG US,Equity,multi-token crypto
-BTCW US,Spot Single Asset,BTC only
+BTCW US,Spot Single Asset,Bitcoin
 STCE US,Equity,multi-token crypto
-WGMI US,Equity,BTC only
+WGMI US,Equity,Bitcoin
 NCIQ US,Spot Multi-asset; passive,multi-token crypto
 CRPT US,Equity,multi-token crypto
-EETH US,Derivatives-based; futures-based,alt-coin only (ETH)
-EZET US,Spot Single Asset,alt-coin only (ETH)
+EETH US,Derivatives-based; futures-based,Ethereum
+EZET US,Spot Single Asset,Ethereum
 SPBC US,Hybrid (spot/multi + derivatives),crypto + traditional asset
 HECO US,Hybrid (spot/multi + derivatives),multi-token crypto
-MAXI US,Derivatives-based; income,BTC only
+MAXI US,Derivatives-based; income,Bitcoin
 BTF US,Derivatives-based; futures-based,multi-token crypto
 BITS US,Hybrid (spot/multi + derivatives),multi-token crypto
-TETH US,Spot Single Asset,alt-coin only (ETH)
+TETH US,Spot Single Asset,Ethereum
 NODE US,Equity,multi-token crypto
 BITC US,Derivatives-based; futures-based,crypto + traditional asset
 BETH US,Derivatives-based; futures-based,multi-token crypto
@@ -26,80 +26,80 @@ BETE US,Derivatives-based; futures-based,multi-token crypto
 SATO US,Equity,multi-token crypto
 DECO US,Hybrid (spot/multi + derivatives),multi-token crypto
 AETH US,Derivatives-based; futures-based,crypto + traditional asset
-BTRN US,Derivatives-based; futures-based,BTC only
+BTRN US,Derivatives-based; futures-based,Bitcoin
 BBB US,Hybrid (spot/multi + derivatives),crypto + traditional asset
-MNRS US,Equity,BTC only
+MNRS US,Equity,Bitcoin
 BTOP US,Derivatives-based; futures-based,crypto + traditional asset
 WTIP US,Hybrid (spot/multi + derivatives),crypto + traditional asset
-HBTC US,Derivatives-based; futures-based,BTC only
+HBTC US,Derivatives-based; futures-based,Bitcoin
 OOSB US,Hybrid (spot/multi + derivatives),crypto + traditional asset
-SOLZ US,Spot Single Asset,alt-coin only (SOL)
-DOJE US,Spot Single Asset,alt-coin only (DOGE)
-XRPI US,Spot Single Asset,alt-coin only (XRP)
-BCHG US,Spot Single Asset,alt-coin only (BCH)
+SOLZ US,Spot Single Asset,Solana
+DOJE US,Spot Single Asset,Dogecoin
+XRPI US,Spot Single Asset,XRP
+BCHG US,Spot Single Asset,Bitcoin Cash
 BITW US,Spot Multi-asset; passive,multi-token crypto
-BTCFX US,Derivatives-based; futures-based,BTC only
-LTCN US,Spot Single Asset,alt-coin only (LTC)
+BTCFX US,Derivatives-based; futures-based,Bitcoin
+LTCN US,Spot Single Asset,Litecoin
 DEFG US,Spot Multi-asset; thematic,multi-token crypto
-MANA US,Spot Single Asset,alt-coin only (MANA)
+MANA US,Spot Single Asset,Decentraland
 DIME US,Spot Multi-asset; thematic,multi-token crypto
 TXBC US,Spot Multi-asset; passive,multi-token crypto
 TTOP US,Spot Multi-asset; passive,multi-token crypto
 STBQ US,Equity,multi-token crypto
 TKNQ US,Equity,multi-token crypto
 OOQB US,Hybrid (spot/multi + derivatives),crypto + traditional asset
-IBIT US,Spot Single Asset,BTC only
-ETHA US,Spot Single Asset,alt-coin only (ETH)
-FBTC US,Spot Single Asset,BTC only
-GBTC US,Spot Single Asset,BTC only
-ARKB US,Spot Single Asset,BTC only
-ETHE US,Spot Single Asset,alt-coin only (ETH)
-BITB US,Spot Single Asset,BTC only
-FETH US,Spot Single Asset,alt-coin only (ETH)
-BITO US,Derivatives-based; futures-based,BTC only
-HODL US,Spot Single Asset,BTC only
-BRRR US,Spot Single Asset,BTC only
-BTCO US,Spot Single Asset,BTC only
-EZBC US,Spot Single Asset,BTC only
-QETH US,Spot Single Asset,alt-coin only (ETH)
-DEFI US,Spot Single Asset,BTC only
+IBIT US,Spot Single Asset,Bitcoin
+ETHA US,Spot Single Asset,Ethereum
+FBTC US,Spot Single Asset,Bitcoin
+GBTC US,Spot Single Asset,Bitcoin
+ARKB US,Spot Single Asset,Bitcoin
+ETHE US,Spot Single Asset,Ethereum
+BITB US,Spot Single Asset,Bitcoin
+FETH US,Spot Single Asset,Ethereum
+BITO US,Derivatives-based; futures-based,Bitcoin
+HODL US,Spot Single Asset,Bitcoin
+BRRR US,Spot Single Asset,Bitcoin
+BTCO US,Spot Single Asset,Bitcoin
+EZBC US,Spot Single Asset,Bitcoin
+QETH US,Spot Single Asset,Ethereum
+DEFI US,Spot Single Asset,Bitcoin
 EZPZ US,Spot Multi-asset; passive,multi-token crypto
-SSK US,Spot Single Asset,alt-coin only (SOL)
-XRPR US,Spot Single Asset,alt-coin only (XRP)
+SSK US,Spot Single Asset,Solana
+XRPR US,Spot Single Asset,XRP
 GDLC US,Spot Multi-asset; passive,multi-token crypto
-ETCG US,Spot Single Asset,alt-coin only (ETC)
-OBTC US,Spot Single Asset,BTC only
-ESK US,Spot Single Asset,alt-coin only (ETH)
-FILG US,Spot Single Asset,alt-coin only (FIL)
-GBAT US,Spot Single Asset,alt-coin only (BAT)
-GLIV US,Spot Single Asset,alt-coin only (LPT)
-GLNK US,Spot Single Asset,alt-coin only (LINK)
-GSNR US,Spot Single Asset,alt-coin only (NEAR)
-GSOL US,Spot Single Asset,alt-coin only (SOL)
-BSOL US,Spot Single Asset,alt-coin only (SOL)
+ETCG US,Spot Single Asset,Ethereum Classic
+OBTC US,Spot Single Asset,Bitcoin
+ESK US,Spot Single Asset,Ethereum
+FILG US,Spot Single Asset,Filecoin
+GBAT US,Spot Single Asset,Basic Attention Token
+GLIV US,Spot Single Asset,Livepeer
+GLNK US,Spot Single Asset,Chainlink
+GSNR US,Spot Single Asset,NEAR Protocol
+GSOL US,Spot Single Asset,Solana
+BSOL US,Spot Single Asset,Solana
 HBR US,Spot Single Asset,alt-coin only (HBAR)
-LTCC US,Spot Single Asset,alt-coin only (LTC)
-XRPC US,Spot Single Asset,alt-coin only (XRP)
-XRP US,Spot Single Asset,alt-coin only (XRP)
-TSOL US,Spot Single Asset,alt-coin only (SOL)
-GXRP US,Spot Single Asset,alt-coin only (XRP)
-XRPZ US,Spot Single Asset,alt-coin only (XRP)
-FSOL US,Spot Single Asset,alt-coin only (SOL)
-VSOL US,Spot Single Asset,alt-coin only (SOL)
-GDOG US,Spot Single Asset,alt-coin only (DOGE)
-SOLC US,Spot Single Asset,alt-coin only (SOL)
-SOEZ US,Spot Single Asset,alt-coin only (SOL)
-BWOW US,Spot Single Asset,alt-coin only (DOGE)
-QSOL US,Spot Single Asset,alt-coin only (SOL)
-TOXR US,Spot Single Asset,alt-coin only (XRP)
-CLNK US,Spot Single Asset,alt-coin only (LINK)
+LTCC US,Spot Single Asset,Litecoin
+XRPC US,Spot Single Asset,XRP
+XRP US,Spot Single Asset,XRP
+TSOL US,Spot Single Asset,Solana
+GXRP US,Spot Single Asset,XRP
+XRPZ US,Spot Single Asset,XRP
+FSOL US,Spot Single Asset,Solana
+VSOL US,Spot Single Asset,Solana
+GDOG US,Spot Single Asset,Dogecoin
+SOLC US,Spot Single Asset,Solana
+SOEZ US,Spot Single Asset,Solana
+BWOW US,Spot Single Asset,Dogecoin
+QSOL US,Spot Single Asset,Solana
+TOXR US,Spot Single Asset,XRP
+CLNK US,Spot Single Asset,Chainlink
 VAVX US,Spot Single Asset,alt-coin only (AVAX)
 BPRO US,Hybrid (spot/multi + derivatives),crypto + traditional asset
 KRYP US,Spot Multi-asset; passive,multi-token crypto
-TDOG US,Spot Single Asset,alt-coin only (DOGE)
+TDOG US,Spot Single Asset,Dogecoin
 GSUI US,Spot Single Asset,alt-coin only (SUI)
 SUIS US,Spot Single Asset,alt-coin only (SUI)
-BCOR US,Equity,BTC only
+BCOR US,Equity,Bitcoin
 EEE US,Derivatives-based; futures-based,crypto + traditional asset
 GLDB US,Derivatives-based; futures-based,crypto + traditional asset
 SSS US,Derivatives-based; futures-based,crypto + traditional asset

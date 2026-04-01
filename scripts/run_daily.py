@@ -40,6 +40,26 @@ CACHE_ARCHIVE = Path("D:/sec-data/cache/rexfinhub")  # D: USB — cold storage, 
 NOTES_PROJECT = Path("C:/Projects/structured-notes")
 
 
+def _market_synced_today() -> bool:
+    """Check if market data was already synced from Bloomberg today (e.g. by watcher)."""
+    from webapp.database import init_db, SessionLocal
+    from sqlalchemy import text
+    from datetime import date
+
+    init_db()
+    db = SessionLocal()
+    try:
+        today_str = date.today().isoformat()
+        row = db.execute(text(
+            "SELECT id FROM mkt_pipeline_runs "
+            "WHERE source_file != 'auto' AND started_at >= :today "
+            "ORDER BY id DESC LIMIT 1"
+        ), {"today": today_str}).fetchone()
+        return row is not None
+    finally:
+        db.close()
+
+
 def _load_env(key: str) -> str:
     """Load a value from config/.env or environment."""
     env_val = os.environ.get(key, "")
@@ -234,11 +254,39 @@ def run_market_sync():
 # Step 5: Classification (new funds, rex funds, exclusions)
 # ===================================================================
 def run_classification():
-    """Scan for unmapped funds, auto-classify HIGH/MEDIUM confidence."""
+    """Run unified auto-classification on full ETP data, then scan for NEW unmapped funds."""
+    # Phase 1: Unified auto-classify on full ETP dataset
+    try:
+        from webapp.services.data_engine import build_all
+        from market.auto_classify import classify_all
+        from market.db_writer import write_classifications, create_pipeline_run
+        from webapp.database import init_db, SessionLocal
+
+        init_db()
+        db = SessionLocal()
+        try:
+            result = build_all()
+            etp = result.get("master", None)
+            if etp is not None and not etp.empty:
+                classifications = classify_all(etp)
+                run_id = create_pipeline_run(db, source_file="daily_classify")
+                n_written = write_classifications(db, classifications, run_id=run_id)
+                db.commit()
+                print(f"  Unified classify: {n_written} funds classified")
+            else:
+                print("  No ETP data for classification")
+        finally:
+            db.close()
+    except ImportError as e:
+        print(f"  Unified classify not available ({e}), skipping")
+    except Exception as e:
+        print(f"  Unified classify failed: {e}")
+
+    # Phase 2: Scan for NEW unmapped funds and auto-approve HIGH/MEDIUM to CSVs
     try:
         from tools.rules_editor.classify_engine import scan_unmapped, apply_classifications
     except ImportError:
-        print("  classify_engine not available, skipping.")
+        print("  classify_engine not available, skipping CSV scan.")
         return 0
 
     result = scan_unmapped(since_days=30)
@@ -266,7 +314,7 @@ def run_classification():
                 shutil.copy2(src, dst)
         print(f"  Classified {len(approved)} funds ({len(candidates) - len(approved)} LOW confidence skipped)")
     else:
-        print(f"  {len(candidates)} candidates all LOW confidence — skipped")
+        print(f"  {len(candidates)} candidates all LOW confidence -- skipped")
 
     return len(approved)
 
@@ -490,7 +538,10 @@ def main():
         # === Market data + screener cache ===
         print("\n[6/12] Market Data + Screener Cache...")
         try:
-            run_market_sync()
+            if _market_synced_today():
+                print("  Market data already synced today (by Bloomberg watcher), skipping")
+            else:
+                run_market_sync()
         except Exception as e:
             print(f"  Market sync failed: {e}")
 
@@ -555,16 +606,15 @@ def main():
         except Exception as e:
             print(f"  Notes upload failed (non-fatal): {e}")
 
-        # === Wait until 6:00 PM to send emails ===
+        # === Wait until 5:30 PM to send emails ===
         print("\n[12/12] Sending email reports...")
         try:
             import subprocess
-            target_hour = 18  # 6:00 PM
             now_dt = datetime.now()
-            if now_dt.hour < target_hour:
-                wait_until = now_dt.replace(hour=target_hour, minute=0, second=0, microsecond=0)
-                wait_secs = (wait_until - now_dt).total_seconds()
-                print(f"  Pipeline done. Waiting until 6:00 PM to send ({wait_secs / 60:.0f} min)...")
+            target = now_dt.replace(hour=17, minute=30, second=0, microsecond=0)
+            if now_dt < target:
+                wait_secs = (target - now_dt).total_seconds()
+                print(f"  Pipeline done. Waiting until 5:30 PM to send ({wait_secs / 60:.0f} min)...")
                 time.sleep(wait_secs)
             day_of_week = datetime.now().strftime("%A")
             if day_of_week in ("Saturday", "Sunday"):

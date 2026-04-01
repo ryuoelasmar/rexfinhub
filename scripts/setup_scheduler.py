@@ -1,10 +1,12 @@
 """
 Set up all Windows Task Scheduler jobs for automated pipeline.
 
-Creates 3 scheduled tasks:
-  1. ETP_Watcher       — every 30 min, polls EDGAR for new filings/trusts
-  2. ETP_RapidSync     — every 2 hours (8am-10pm), scrapes + uploads to Render
-  3. ETP_DailySync     — once daily at 6am, full pipeline (ZIP sync, market, archive)
+Creates 5 scheduled tasks:
+  1. ETP_Watcher         -- every 30 min, polls EDGAR for new filings/trusts
+  2. ETP_RapidSync       -- every 2 hours (8am-10pm), scrapes + uploads to Render
+  3. ETP_TrustSync       -- 3:45 PM weekdays, trust universe sync from SEC
+  4. ETP_DailySync       -- 5:00 PM weekdays, full pipeline (finishes ~5:30, emails at 5:30)
+  5. ETP_BloombergWatch  -- 4:00-5:00 PM weekdays, detect fresh Bloomberg + trigger sync
 
 Run as Administrator:
     python scripts/setup_scheduler.py
@@ -45,10 +47,17 @@ TASKS = [
     },
     {
         "name": "ETP_DailySync",
-        "desc": "Full pipeline at 5:00 PM — finishes by ~5:45, sends emails at 6:00",
+        "desc": "Full pipeline at 5:00 PM -- finishes by ~5:25, sends emails at 5:30",
         "command": f'"{PYTHON}" "{PROJECT_ROOT / "scripts" / "run_daily.py"}"',
         "schedule": "/sc weekly /d MON,TUE,WED,THU,FRI",
         "start_time": "17:00",
+    },
+    {
+        "name": "ETP_BloombergWatch",
+        "desc": "Watch for fresh Bloomberg file and trigger market sync (4:00-5:00 PM)",
+        "command": f'"{PYTHON}" "{PROJECT_ROOT / "scripts" / "watch_bloomberg.py"}"',
+        "schedule": "/sc daily /mo 1 /ri 5 /du 01:00",  # repeat every 5 min for 1 hour
+        "start_time": "16:00",
     },
 ]
 
