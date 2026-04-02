@@ -97,8 +97,8 @@ const COLUMNS=[
   ["total_return_1year","1Y Rtn","Returns","pct",true],["total_return_3year","3Y Rtn","Returns","pct",false],
   ["annualized_yield","Yield","Returns","pct",false],
   ["average_vol_30day","30D Vol","Trading","vol",true],["open_interest","Open Int","Trading","vol",true],
-  ["short_interest","Short Int","Trading","pct2",false],["bid_ask_spread","Bid-Ask","Trading","pct2",false],
-  ["premium_discount","Prem/Disc","Trading","pct2",false],["nav_tracking_error","Track Err","Trading","pct2",false],
+  ["percent_short_interest","Short Int","Trading","pct2",false],["average_bidask_spread","Bid-Ask","Trading","pct2",false],
+  ["percentage_premium","Prem/Disc","Trading","pct2",false],["nav_tracking_error","Track Err","Trading","pct2",false],
   ["expense_ratio","Exp Ratio","Costs","pct2",false],["management_fee","Mgmt Fee","Costs","pct2",false],
   ["inception_date","Inception","Info",null,false],["underlying_index","Index","Info",null,false],
   ["is_singlestock","Underlier","Info",null,false],["uses_leverage","Leveraged","Info",null,false],
@@ -108,7 +108,7 @@ const COLUMNS=[
 const PRESETS={
   performance:["ticker","fund_name","rex_suite","aum","total_return_1day","total_return_1week","total_return_1month","total_return_3month","total_return_ytd","total_return_1year","average_vol_30day","open_interest"],
   flows:["ticker","fund_name","rex_suite","aum","fund_flow_1day","fund_flow_1week","fund_flow_1month","fund_flow_3month","fund_flow_ytd","total_return_1day"],
-  trading:["ticker","fund_name","rex_suite","aum","average_vol_30day","open_interest","short_interest","bid_ask_spread","premium_discount","expense_ratio","management_fee"],
+  trading:["ticker","fund_name","rex_suite","aum","average_vol_30day","open_interest","percent_short_interest","average_bidask_spread","percentage_premium","expense_ratio","management_fee"],
   all:COLUMNS.map(c=>c[0]),
 };
 

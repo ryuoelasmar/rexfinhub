@@ -397,7 +397,7 @@ def screener_data_api(
         "total_return_3month, total_return_6month, total_return_ytd, total_return_1year, "
         "total_return_3year, annualized_yield, "
         "expense_ratio, management_fee, average_vol_30day, open_interest, "
-        "short_interest, bid_ask_spread, nav_tracking_error, premium_discount, "
+        "percent_short_interest, average_bidask_spread, nav_tracking_error, percentage_premium, "
         "fund_flow_1day, fund_flow_1week, fund_flow_1month, fund_flow_3month, "
         "fund_flow_6month, fund_flow_ytd, fund_flow_1year, "
         "inception_date, fund_type, asset_class_focus, underlying_index, "
