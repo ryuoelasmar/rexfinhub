@@ -413,6 +413,7 @@ def screener_data_api(
     rows = db.execute(sa_text(query)).fetchall()
     col_names = [c.strip() for c in cols.split(",")]
 
+    import math
     funds = []
     for row in rows:
         d = {}
@@ -420,7 +421,10 @@ def screener_data_api(
             val = row[i]
             if val is None:
                 d[col] = None
-            elif isinstance(val, (int, float)):
+            elif isinstance(val, float):
+                # JSON can't serialize NaN or Infinity
+                d[col] = None if (math.isnan(val) or math.isinf(val)) else round(val, 6)
+            elif isinstance(val, int):
                 d[col] = val
             else:
                 d[col] = str(val)
