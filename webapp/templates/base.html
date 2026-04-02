@@ -425,7 +425,7 @@
     </div>
 
     <!-- Standalone Links -->
-    <a href="/downloads/" {% if request.url.path.startswith('/downloads') %}class="active"{% endif %}>Exports</a>
+    <a href="/downloads/" {% if request.url.path.startswith('/downloads') %}class="active"{% endif %}>Data</a>
     {% if request.session.get("is_admin") %}<a href="/admin/" {% if request.url.path.startswith('/admin') %}class="active"{% endif %}>Admin</a>{% endif %}
     {% block nav_extra %}{% endblock %}
   </div>
@@ -508,7 +508,7 @@
       <a href="/notes/" class="footer-link">Structured Notes</a>
       <a href="/notes/issuers" class="footer-link">Issuer Dashboard</a>
       <a href="/notes/search" class="footer-link">Product Search</a>
-      <a href="/downloads/" class="footer-link">Data Exports</a>
+      <a href="/downloads/" class="footer-link">Data &amp; API</a>
       <a href="/digest/subscribe" class="footer-link">Email Digest</a>
     </div>
   </div>

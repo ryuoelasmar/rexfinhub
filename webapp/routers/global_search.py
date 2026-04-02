@@ -34,7 +34,7 @@ _SITE_PAGES = [
     {"name": "13F Institutional Holders", "url": "/holdings/", "keywords": "holdings 13f institutional holders ownership"},
     {"name": "Institutional Crossover", "url": "/holdings/crossover", "keywords": "holdings crossover institutional overlap"},
     {"name": "Analytics", "url": "/analytics", "keywords": "analytics trends data"},
-    {"name": "Exports & Downloads", "url": "/downloads/", "keywords": "exports downloads csv data"},
+    {"name": "Data & API", "url": "/downloads/", "keywords": "exports downloads csv data api screener"},
 ]
 
 
