@@ -8,6 +8,7 @@ Routes:
 from __future__ import annotations
 
 import calendar as cal_mod
+import json
 import logging
 from collections import defaultdict
 from datetime import date, timedelta
@@ -255,6 +256,26 @@ def compare_view(
         except Exception:
             log.exception("Error loading compare data")
 
+    # Fetch total return data from TotalRealReturns
+    total_returns = None
+    if ticker_list:
+        try:
+            from scripts.scrape_total_returns import scrape as scrape_returns
+            tr_result = scrape_returns(ticker_list)
+            if "error" not in tr_result and tr_result.get("dates"):
+                total_returns = {
+                    "dates_json": json.dumps(tr_result["dates"]),
+                    "series": {},
+                    "stats": tr_result.get("stats", {}),
+                    "date_range": tr_result.get("date_range", []),
+                }
+                for sym in ticker_list:
+                    if sym in tr_result.get("growth_series", {}):
+                        total_returns["series"][sym] = tr_result["growth_series"][sym]
+                total_returns["series_json"] = json.dumps(total_returns["series"])
+        except Exception:
+            log.exception("Error fetching total returns")
+
     return templates.TemplateResponse("market/compare.html", {
         "request": request,
         "active_tab": "compare",
@@ -263,4 +284,5 @@ def compare_view(
         "ticker_list": ticker_list,
         "fund_data": fund_data,
         "totalrealreturns_url": totalrealreturns_url,
+        "total_returns": total_returns,
     })

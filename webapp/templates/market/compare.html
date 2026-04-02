@@ -61,6 +61,74 @@
 </div>
 {% endif %}
 
+{# --- Total Returns Chart + Drawdown --- #}
+{% if total_returns and total_returns.series %}
+<div class="chart-box" style="margin-bottom:20px; margin-top:20px;">
+  <div class="chart-title">Total Return (Dividends Reinvested) — Growth of $10,000</div>
+  <canvas id="totalReturnChart" height="220"></canvas>
+</div>
+
+<div class="chart-box" style="margin-bottom:20px;">
+  <div class="chart-title">Return Statistics</div>
+  <table class="data-table" style="font-variant-numeric:tabular-nums; font-size:13px;">
+    <thead>
+      <tr>
+        <th style="text-align:left;">Metric</th>
+        {% for sym in ticker_list %}
+        {% if total_returns.stats.get(sym) %}
+        <th style="text-align:right;">{{ sym }}</th>
+        {% endif %}
+        {% endfor %}
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td style="font-weight:600;">Overall Return</td>
+        {% for sym in ticker_list %}{% if total_returns.stats.get(sym) %}
+        <td style="text-align:right; color:{{ '#006100' if (total_returns.stats[sym].overall_return or 0) >= 0 else '#9C0006' }};">{{ "{:+.2f}%".format(total_returns.stats[sym].overall_return or 0) }}</td>
+        {% endif %}{% endfor %}
+      </tr>
+      <tr>
+        <td style="font-weight:600;">Annualized</td>
+        {% for sym in ticker_list %}{% if total_returns.stats.get(sym) %}
+        <td style="text-align:right;">{{ "{:+.2f}%/yr".format(total_returns.stats[sym].annualized_return or 0) }}</td>
+        {% endif %}{% endfor %}
+      </tr>
+      <tr>
+        <td style="font-weight:600;">Growth of $10K</td>
+        {% for sym in ticker_list %}{% if total_returns.stats.get(sym) %}
+        <td style="text-align:right;">${{ "{:,.0f}".format(total_returns.stats[sym].growth_of_10k or 0) }}</td>
+        {% endif %}{% endfor %}
+      </tr>
+      <tr>
+        <td style="font-weight:600;">Current Drawdown</td>
+        {% for sym in ticker_list %}{% if total_returns.stats.get(sym) %}
+        <td style="text-align:right; color:#9C0006;">{{ "{:.2f}%".format(total_returns.stats[sym].current_drawdown or 0) }}</td>
+        {% endif %}{% endfor %}
+      </tr>
+      <tr>
+        <td style="font-weight:600;">Worst Drawdown</td>
+        {% for sym in ticker_list %}{% if total_returns.stats.get(sym) %}
+        <td style="text-align:right; color:#9C0006;">{{ "{:.2f}%".format(total_returns.stats[sym].worst_drawdown or 0) }}<br><span style="font-size:10px; color:#888;">{{ total_returns.stats[sym].worst_drawdown_date or '' }}</span></td>
+        {% endif %}{% endfor %}
+      </tr>
+      {% if total_returns.stats.get(ticker_list[0], {}).get('annual_returns') %}
+      {% set years = total_returns.stats[ticker_list[0]].annual_returns.keys()|list|sort(reverse=true) %}
+      {% for year in years[:5] %}
+      <tr>
+        <td style="font-weight:600;">{{ year }}{% if loop.first %} (YTD){% endif %}</td>
+        {% for sym in ticker_list %}{% if total_returns.stats.get(sym) %}
+        {% set val = total_returns.stats[sym].get('annual_returns', {}).get(year) %}
+        <td style="text-align:right; color:{{ '#006100' if (val or 0) >= 0 else '#9C0006' }};">{{ "{:+.2f}%".format(val) if val is not none else '--' }}</td>
+        {% endif %}{% endfor %}
+      </tr>
+      {% endfor %}
+      {% endif %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
 {# --- Comparison Table --- #}
 <div class="table-responsive" style="margin-top:20px;">
   <table class="data-table" style="table-layout:fixed; font-variant-numeric:tabular-nums;">
@@ -328,5 +396,71 @@ document.addEventListener('DOMContentLoaded', function() {
   showFlowPeriod('1w');
 })();
 </script>
+{% endif %}
+
+{% if total_returns and total_returns.series %}
+<script>
+(function() {
+  const dates = {{ total_returns.dates_json|safe }};
+  const series = {{ total_returns.series_json|safe }};
+  const colors = ['#1F3864', '#2E75B6', '#059669', '#d97706', '#9333ea', '#dc2626', '#0891b2', '#65a30d', '#be185d', '#6366f1'];
+
+  // Subsample dates for labels (every ~20th point)
+  const step = Math.max(1, Math.floor(dates.length / 20));
+  const labels = dates.map((d, i) => i % step === 0 ? d.slice(5) : '');
+
+  // Build datasets — convert to $10K growth
+  const datasets = [];
+  let colorIdx = 0;
+  for (const [sym, vals] of Object.entries(series)) {
+    const baseVal = vals[0] || 1;
+    const data10k = vals.map(v => (v / baseVal) * 10000);
+    datasets.push({
+      label: sym,
+      data: data10k,
+      borderColor: colors[colorIdx % colors.length],
+      backgroundColor: 'transparent',
+      borderWidth: 2,
+      pointRadius: 0,
+      tension: 0.1,
+    });
+    colorIdx++;
+  }
+
+  new Chart(document.getElementById('totalReturnChart'), {
+    type: 'line',
+    data: { labels: dates, datasets: datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { position: 'top', labels: { usePointStyle: true, padding: 12, font: { size: 12 } } },
+        tooltip: {
+          callbacks: {
+            title: (items) => items[0].label,
+            label: (item) => `${item.dataset.label}: $${item.raw.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0})}`
+          }
+        },
+        datalabels: { display: false }
+      },
+      scales: {
+        x: {
+          ticks: { maxTicksLimit: 15, font: { size: 10 }, maxRotation: 0 },
+          grid: { display: false }
+        },
+        y: {
+          ticks: {
+            callback: (v) => '$' + (v >= 10000 ? (v/1000).toFixed(0) + 'K' : v.toLocaleString()),
+            font: { size: 11 }
+          },
+          grid: { color: 'rgba(0,0,0,0.05)' }
+        }
+      }
+    }
+  });
+})();
+</script>
+{% endif %}
 {% endif %}
 {% endblock %}
