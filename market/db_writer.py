@@ -18,7 +18,7 @@ def create_pipeline_run(session: Session, source_file: str) -> int:
     from webapp.models import MktPipelineRun
 
     run = MktPipelineRun(
-        started_at=datetime.utcnow(),
+        started_at=datetime.now(),
         status="running",
         source_file=source_file,
     )
@@ -46,7 +46,7 @@ def finish_pipeline_run(
 
     run = session.get(MktPipelineRun, run_id)
     if run:
-        run.finished_at = datetime.utcnow()
+        run.finished_at = datetime.now()
         run.status = status
         run.etp_rows_read = etp_rows_read
         run.master_rows_written = master_rows_written
