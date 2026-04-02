@@ -370,40 +370,63 @@ def share_timeline_view(request: Request, cat: str = Query(default="")):
 def rex_performance_view(
     request: Request,
     db: Session = Depends(get_db),
-    suite: str = Query(default="All"),
 ):
-    """REX Performance -- per-suite fund tables with competitors and sparklines."""
+    """REX Performance -- interactive screener with column picker and filters."""
     svc = _svc()
     available = svc.data_available(db)
-    if not available:
-        return templates.TemplateResponse("market/rex_performance.html", {
-            "request": request,
-            "available": False,
-            "active_tab": "rex-performance",
-            "data_as_of": svc.get_data_as_of(db),
-        })
-    try:
-        suite_arg = suite if suite != "All" else None
-        data = svc.get_rex_performance(db, suite=suite_arg)
-        return templates.TemplateResponse("market/rex_performance.html", {
-            "request": request,
-            "available": True,
-            "active_tab": "rex-performance",
-            "summary": data["summary"],
-            "suites": data["suites"],
-            "suite_filter": suite,
-            "suite_names": svc.REX_SUITES,
-            "data_as_of": svc.get_data_as_of(db),
-        })
-    except Exception as e:
-        log.error("REX Performance view error: %s", e, exc_info=True)
-        return templates.TemplateResponse("market/rex_performance.html", {
-            "request": request,
-            "available": False,
-            "active_tab": "rex-performance",
-            "error": str(e),
-            "data_as_of": svc.get_data_as_of(db),
-        })
+    return templates.TemplateResponse("market/rex_performance.html", {
+        "request": request,
+        "available": available,
+        "active_tab": "rex-performance",
+        "data_as_of": svc.get_data_as_of(db),
+    })
+
+
+@router.get("/api/screener-data")
+def screener_data_api(
+    db: Session = Depends(get_db),
+    scope: str = Query(default="all"),  # all, rex, competitors
+):
+    """Return all active fund data as JSON for the interactive screener."""
+    from sqlalchemy import text as sa_text
+
+    cols = (
+        "ticker, fund_name, issuer_display, aum, market_status, "
+        "etp_category, category_display, is_rex, rex_suite, "
+        "total_return_1day, total_return_1week, total_return_1month, "
+        "total_return_3month, total_return_6month, total_return_ytd, total_return_1year, "
+        "total_return_3year, annualized_yield, "
+        "expense_ratio, management_fee, average_vol_30day, open_interest, "
+        "short_interest, bid_ask_spread, nav_tracking_error, premium_discount, "
+        "fund_flow_1day, fund_flow_1week, fund_flow_1month, fund_flow_3month, "
+        "fund_flow_6month, fund_flow_ytd, fund_flow_1year, "
+        "inception_date, fund_type, asset_class_focus, underlying_index, "
+        "is_singlestock, uses_leverage, leverage_amount, outcome_type, is_crypto, "
+        "strategy, underlier_type, cusip"
+    )
+    query = f"SELECT {cols} FROM mkt_master_data WHERE market_status = 'ACTV'"
+    if scope == "rex":
+        query += " AND is_rex = 1"
+    elif scope == "competitors":
+        query += " AND is_rex = 0"
+
+    rows = db.execute(sa_text(query)).fetchall()
+    col_names = [c.strip() for c in cols.split(",")]
+
+    funds = []
+    for row in rows:
+        d = {}
+        for i, col in enumerate(col_names):
+            val = row[i]
+            if val is None:
+                d[col] = None
+            elif isinstance(val, (int, float)):
+                d[col] = val
+            else:
+                d[col] = str(val)
+        funds.append(d)
+
+    return {"funds": funds, "count": len(funds)}
 
 
 @router.get("/underlier")

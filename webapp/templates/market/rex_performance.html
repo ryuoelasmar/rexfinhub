@@ -1,321 +1,197 @@
-{% set active_tab = 'rex-performance' %}
-{% extends base_template|default("market/base.html") %}
-
-{% block title %}REX Performance — REX Financial Intelligence Hub{% endblock %}
+{% extends "market/base.html" %}
+{% block title %}ETP Screener - REX Financial{% endblock %}
 
 {% block market_content %}
-<div class="market-breadcrumb">
-  <a href="/">Home</a><span class="sep">/</span>
-  <a href="/market/rex">Market</a><span class="sep">/</span>
-  <span>REX Performance</span>
-</div>
+<style>
+  .screener-wrap { display:flex; gap:0; min-height:calc(100vh - 140px); }
+  .screener-sidebar { width:220px; min-width:220px; background:#f8f9fa; border-right:1px solid #ddd; padding:10px; overflow-y:auto; font-size:12px; }
+  .screener-sidebar h3 { font-size:12px; font-weight:700; margin:0 0 6px; color:#1F3864; text-transform:uppercase; letter-spacing:.5px; }
+  .screener-sidebar hr { border:none; border-top:1px solid #ddd; margin:8px 0; }
+  .col-group-title { font-weight:600; color:#555; margin:6px 0 2px; font-size:11px; }
+  .col-check { display:flex; align-items:center; gap:4px; padding:1px 0; }
+  .col-check input { margin:0; width:13px; height:13px; }
+  .col-check label { cursor:pointer; font-size:11px; color:#333; white-space:nowrap; }
+  .screener-filters { display:flex; gap:8px; padding:6px 12px; background:#f0f2f5; border-bottom:1px solid #ddd; flex-wrap:wrap; align-items:center; }
+  .screener-filters select, .screener-filters input { font-size:12px; padding:4px 8px; border:1px solid #ccc; border-radius:4px; }
+  .screener-filters input[type=text] { width:180px; }
+  .filter-label { font-size:11px; color:#666; font-weight:600; }
+  .btn-sm { font-size:11px; padding:3px 10px; border:1px solid #1F3864; background:#1F3864; color:#fff; border-radius:3px; cursor:pointer; }
+  .btn-sm:hover { background:#2E75B6; }
+  .btn-sm.outline { background:transparent; color:#1F3864; }
+  .btn-sm.outline:hover { background:#e8edf3; }
+  .screener-main { flex:1; overflow:auto; }
+  .screener-table { width:100%; border-collapse:collapse; font-size:12px; }
+  .screener-table th { position:sticky; top:0; z-index:2; background:#1F3864; color:#fff; padding:5px 8px; text-align:right; cursor:pointer; white-space:nowrap; font-weight:600; font-size:11px; user-select:none; }
+  .screener-table th:first-child, .screener-table th:nth-child(2) { text-align:left; }
+  .screener-table th:hover { background:#2E75B6; }
+  .screener-table th .sort-arrow { font-size:9px; margin-left:2px; opacity:.5; }
+  .screener-table th.sorted .sort-arrow { opacity:1; }
+  .screener-table td { padding:4px 8px; border-bottom:1px solid #eee; text-align:right; white-space:nowrap; }
+  .screener-table td:first-child { text-align:left; font-weight:600; color:#1F3864; }
+  .screener-table td:nth-child(2) { text-align:left; max-width:220px; overflow:hidden; text-overflow:ellipsis; }
+  .screener-table tr:hover { background:#f0f4ff; }
+  .screener-table tr.rex-row { background:#f0f7ed; }
+  .screener-table tr.rex-row:hover { background:#e2efda; }
+  .pos { color:#006100; } .neg { color:#9C0006; }
+  .rex-badge { background:#1F3864; color:#fff; padding:1px 5px; border-radius:3px; font-size:10px; font-weight:600; }
+  .kpi-bar { display:flex; gap:16px; padding:6px 12px; background:#fff; border-bottom:1px solid #ddd; font-size:12px; }
+  .kpi-item { display:flex; gap:4px; } .kpi-label { color:#888; } .kpi-value { font-weight:700; color:#1F3864; }
+  .preset-btn { font-size:10px; padding:2px 7px; margin:1px; border:1px solid #bbb; background:#fff; border-radius:3px; cursor:pointer; }
+  .preset-btn:hover, .preset-btn.active { background:#1F3864; color:#fff; border-color:#1F3864; }
+</style>
 
-{% if summary %}
-
-{# -- KPI Hero Cards -- #}
-<div class="kpi-row" style="margin-bottom:20px;">
-  <div class="kpi-card">
-    <div class="kpi-label">Total REX AUM</div>
-    <div class="kpi-value">{{ summary.total_aum_fmt }}</div>
-  </div>
-  <div class="kpi-card">
-    <div class="kpi-label">Active Products</div>
-    <div class="kpi-value">{{ summary.active_count }}</div>
-  </div>
-  <div class="kpi-card">
-    <div class="kpi-label">Best 1D Performer</div>
-    {% if summary.best_performer %}
-    <div class="kpi-value positive" style="font-size:var(--text-md);">
-      <a href="/market/compare?tickers={{ summary.best_performer.ticker|replace(' US','')|urlencode }}"
-         style="color:inherit; text-decoration:none; font-weight:600;">{{ summary.best_performer.ticker }}</a>
-    </div>
-    <div style="font-size:0.72rem;" class="positive">{{ summary.best_performer.ret_1d_fmt }}</div>
-    {% else %}
-    <div class="kpi-value" style="font-size:var(--text-md);">--</div>
-    {% endif %}
-  </div>
-  <div class="kpi-card">
-    <div class="kpi-label">Worst 1D Performer</div>
-    {% if summary.worst_performer %}
-    <div class="kpi-value negative" style="font-size:var(--text-md);">
-      <a href="/market/compare?tickers={{ summary.worst_performer.ticker|replace(' US','')|urlencode }}"
-         style="color:inherit; text-decoration:none; font-weight:600;">{{ summary.worst_performer.ticker }}</a>
-    </div>
-    <div style="font-size:0.72rem;" class="negative">{{ summary.worst_performer.ret_1d_fmt }}</div>
-    {% else %}
-    <div class="kpi-value" style="font-size:var(--text-md);">--</div>
-    {% endif %}
-  </div>
-</div>
-
-{# -- Suite Filter Pills -- #}
-<div class="filter-bar" style="display:flex; gap:8px; margin-bottom:20px; align-items:center; flex-wrap:wrap;">
-  <span class="filter-bar-label">Suite:</span>
-  <button class="pill suite-pill {% if not suite_filter or suite_filter == 'All' %}active{% endif %}"
-          data-suite="All" onclick="filterSuite('All')">All</button>
-  {% for sn in suite_names %}
-  {% set has_data = suites|selectattr('name', 'equalto', sn)|list|length > 0 %}
-  {% if has_data %}
-  <button class="pill suite-pill {% if suite_filter == sn %}active{% endif %}"
-          data-suite="{{ sn }}" onclick="filterSuite('{{ sn }}')">{{ sn }}</button>
-  {% endif %}
-  {% endfor %}
-</div>
-
-{# -- Per-Suite Sections -- #}
-{% for suite in suites %}
-<div class="perf-suite-section" data-suite-name="{{ suite.name }}" style="margin-bottom:32px;">
-  <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
-    <h2 class="section-title" style="border:none; margin:0; padding:0;">
-      {{ suite.name }}
-    </h2>
-    <div style="display:flex; gap:16px; align-items:center; font-size:0.82rem;">
-      <span style="color:var(--gray-500);">REX AUM: <strong style="color:var(--gray-900);">{{ suite.rex_aum_fmt }}</strong></span>
-      {% if suite.competitors %}
-      <span style="color:var(--gray-500);">Peer AUM: <strong style="color:var(--gray-900);">{{ suite.peer_aum_fmt }}</strong></span>
-      {% endif %}
-      <span style="color:var(--gray-500);">{{ suite.total_count }} products</span>
-    </div>
-  </div>
-
-  <div class="table-responsive">
-  <table class="data-table perf-table" data-suite="{{ suite.name }}">
-    <thead>
-      <tr>
-        <th class="sortable" onclick="sortPerfTable(this, 0)" style="min-width:70px;">Ticker</th>
-        <th class="sortable" onclick="sortPerfTable(this, 1)" style="min-width:160px;">Name</th>
-        <th class="sortable" onclick="sortPerfTable(this, 2)" style="text-align:right;">AUM</th>
-        <th class="sortable" onclick="sortPerfTable(this, 3)" style="text-align:right;">30D Vol</th>
-        <th class="sortable" onclick="sortPerfTable(this, 4)" style="text-align:right;">OI</th>
-        <th class="sortable" onclick="sortPerfTable(this, 5)" style="text-align:right;">1D</th>
-        <th class="sortable" onclick="sortPerfTable(this, 6)" style="text-align:right;">1W</th>
-        <th class="sortable" onclick="sortPerfTable(this, 7)" style="text-align:right;">1M</th>
-        <th class="sortable" onclick="sortPerfTable(this, 8)" style="text-align:right;">3M</th>
-        <th class="sortable" onclick="sortPerfTable(this, 9)" style="text-align:right;">YTD</th>
-        <th class="sortable" onclick="sortPerfTable(this, 10)" style="text-align:right;">1Y</th>
-        <th style="text-align:center; min-width:90px;">AUM Trend</th>
-        <th style="text-align:center; min-width:60px;"></th>
-      </tr>
-    </thead>
-    <tbody>
-      {# REX funds first #}
-      {% for f in suite.rex_funds %}
-      <tr class="rex-highlight" data-is-rex="1"
-          style="border-left:3px solid #1E40AF;">
-        <td class="ticker-cell">
-          <a href="/market/compare?tickers={{ f.ticker|replace(' US','')|urlencode }}"
-             style="color:var(--blue); text-decoration:none; font-weight:600;">{{ f.ticker }}</a>
-        </td>
-        <td class="name-cell" title="{{ f.fund_name }}">{{ f.fund_name|truncate(40, true) }}</td>
-        <td class="num-cell" data-sort="{{ f.aum }}">{{ f.aum_fmt }}</td>
-        <td class="num-cell" data-sort="{{ f.vol_30d }}">{{ f.vol_30d_fmt }}</td>
-        <td class="num-cell" data-sort="{{ f.open_interest }}">{{ f.open_interest_fmt }}</td>
-        <td class="num-cell {{ 'positive' if f.ret_1d is not none and f.ret_1d > 0 else 'negative' if f.ret_1d is not none and f.ret_1d < 0 else '' }}"
-            data-sort="{{ f.ret_1d if f.ret_1d is not none else '' }}">{{ f.ret_1d_fmt }}</td>
-        <td class="num-cell {{ 'positive' if f.ret_1w is not none and f.ret_1w > 0 else 'negative' if f.ret_1w is not none and f.ret_1w < 0 else '' }}"
-            data-sort="{{ f.ret_1w if f.ret_1w is not none else '' }}">{{ f.ret_1w_fmt }}</td>
-        <td class="num-cell {{ 'positive' if f.ret_1m is not none and f.ret_1m > 0 else 'negative' if f.ret_1m is not none and f.ret_1m < 0 else '' }}"
-            data-sort="{{ f.ret_1m if f.ret_1m is not none else '' }}">{{ f.ret_1m_fmt }}</td>
-        <td class="num-cell {{ 'positive' if f.ret_3m is not none and f.ret_3m > 0 else 'negative' if f.ret_3m is not none and f.ret_3m < 0 else '' }}"
-            data-sort="{{ f.ret_3m if f.ret_3m is not none else '' }}">{{ f.ret_3m_fmt }}</td>
-        <td class="num-cell {{ 'positive' if f.ret_ytd is not none and f.ret_ytd > 0 else 'negative' if f.ret_ytd is not none and f.ret_ytd < 0 else '' }}"
-            data-sort="{{ f.ret_ytd if f.ret_ytd is not none else '' }}">{{ f.ret_ytd_fmt }}</td>
-        <td class="num-cell {{ 'positive' if f.ret_1y is not none and f.ret_1y > 0 else 'negative' if f.ret_1y is not none and f.ret_1y < 0 else '' }}"
-            data-sort="{{ f.ret_1y if f.ret_1y is not none else '' }}">{{ f.ret_1y_fmt }}</td>
-        <td style="text-align:center; padding:4px;">
-          <canvas class="sparkline-canvas" width="80" height="25"
-                  data-values="{{ f.sparkline|tojson }}"></canvas>
-        </td>
-        <td style="text-align:center;">
-          <a href="/market/compare?tickers={{ f.ticker|replace(' US','')|urlencode }}"
-             style="font-size:0.72rem; color:var(--blue); text-decoration:none;">Compare</a>
-        </td>
-      </tr>
-      {% endfor %}
-      {# Competitor separator #}
-      {% if suite.competitors %}
-      <tr class="comp-separator">
-        <td colspan="13" style="padding:6px 8px; font-size:0.72rem; text-transform:uppercase;
-            letter-spacing:0.05em; color:var(--gray-500); background:var(--gray-50);
-            border-bottom:1px solid var(--gray-200); font-weight:600;">
-          Competitors ({{ suite.competitors|length }})
-        </td>
-      </tr>
-      {% endif %}
-      {# Competitor funds #}
-      {% for f in suite.competitors %}
-      <tr data-is-rex="0">
-        <td class="ticker-cell">
-          <a href="/market/compare?tickers={{ f.ticker|replace(' US','')|urlencode }}"
-             style="color:var(--gray-700); text-decoration:none; font-weight:500;">{{ f.ticker }}</a>
-          {% if f.is_key_comp %}
-          <span style="display:inline-block; font-size:0.6rem; background:#DBEAFE; color:#1E40AF;
-                padding:1px 4px; border-radius:3px; margin-left:4px; font-weight:600; vertical-align:middle;">KEY</span>
-          {% endif %}
-        </td>
-        <td class="name-cell" title="{{ f.fund_name }}">{{ f.fund_name|truncate(40, true) }}</td>
-        <td class="num-cell" data-sort="{{ f.aum }}">{{ f.aum_fmt }}</td>
-        <td class="num-cell" data-sort="{{ f.vol_30d }}">{{ f.vol_30d_fmt }}</td>
-        <td class="num-cell" data-sort="{{ f.open_interest }}">{{ f.open_interest_fmt }}</td>
-        <td class="num-cell {{ 'positive' if f.ret_1d is not none and f.ret_1d > 0 else 'negative' if f.ret_1d is not none and f.ret_1d < 0 else '' }}"
-            data-sort="{{ f.ret_1d if f.ret_1d is not none else '' }}">{{ f.ret_1d_fmt }}</td>
-        <td class="num-cell {{ 'positive' if f.ret_1w is not none and f.ret_1w > 0 else 'negative' if f.ret_1w is not none and f.ret_1w < 0 else '' }}"
-            data-sort="{{ f.ret_1w if f.ret_1w is not none else '' }}">{{ f.ret_1w_fmt }}</td>
-        <td class="num-cell {{ 'positive' if f.ret_1m is not none and f.ret_1m > 0 else 'negative' if f.ret_1m is not none and f.ret_1m < 0 else '' }}"
-            data-sort="{{ f.ret_1m if f.ret_1m is not none else '' }}">{{ f.ret_1m_fmt }}</td>
-        <td class="num-cell {{ 'positive' if f.ret_3m is not none and f.ret_3m > 0 else 'negative' if f.ret_3m is not none and f.ret_3m < 0 else '' }}"
-            data-sort="{{ f.ret_3m if f.ret_3m is not none else '' }}">{{ f.ret_3m_fmt }}</td>
-        <td class="num-cell {{ 'positive' if f.ret_ytd is not none and f.ret_ytd > 0 else 'negative' if f.ret_ytd is not none and f.ret_ytd < 0 else '' }}"
-            data-sort="{{ f.ret_ytd if f.ret_ytd is not none else '' }}">{{ f.ret_ytd_fmt }}</td>
-        <td class="num-cell {{ 'positive' if f.ret_1y is not none and f.ret_1y > 0 else 'negative' if f.ret_1y is not none and f.ret_1y < 0 else '' }}"
-            data-sort="{{ f.ret_1y if f.ret_1y is not none else '' }}">{{ f.ret_1y_fmt }}</td>
-        <td style="text-align:center; padding:4px;">
-          <canvas class="sparkline-canvas" width="80" height="25"
-                  data-values="{{ f.sparkline|tojson }}"></canvas>
-        </td>
-        <td style="text-align:center;">
-          {# Link to compare this comp vs the first REX fund in the suite #}
-          {% if suite.rex_funds %}
-          <a href="/market/compare?tickers={{ suite.rex_funds[0].ticker|replace(' US','')|urlencode }},{{ f.ticker|replace(' US','')|urlencode }}"
-             style="font-size:0.72rem; color:var(--blue); text-decoration:none;">Compare</a>
-          {% endif %}
-        </td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-  </div>
-</div>
-{% endfor %}
-
+{% if not available %}
+<div style="padding:40px; text-align:center; color:#888;">No market data available. Run market sync first.</div>
 {% else %}
-<div class="alert alert-warning">No REX performance data available.</div>
-{% endif %}
-{% endblock %}
 
-{% block market_scripts %}
+<div class="kpi-bar">
+  <div class="kpi-item"><span class="kpi-label">Showing:</span> <span class="kpi-value" id="kpiCount">-</span></div>
+  <div class="kpi-item"><span class="kpi-label">Total AUM:</span> <span class="kpi-value" id="kpiAUM">-</span></div>
+  <div class="kpi-item"><span class="kpi-label">Data:</span> <span class="kpi-value">{{ data_as_of or '-' }}</span></div>
+</div>
+
+<div class="screener-filters">
+  <span class="filter-label">Scope:</span>
+  <select id="fScope"><option value="rex" selected>REX Only</option><option value="all">All ETPs</option><option value="competitors">Competitors</option></select>
+  <span class="filter-label">Category:</span>
+  <select id="fCategory"><option value="">All</option></select>
+  <span class="filter-label">Suite:</span>
+  <select id="fSuite"><option value="">All</option></select>
+  <span class="filter-label">Search:</span>
+  <input type="text" id="fSearch" placeholder="Ticker or name...">
+  <button class="btn-sm" onclick="exportCSV()">Export CSV</button>
+  <button class="btn-sm outline" onclick="resetFilters()">Reset</button>
+</div>
+
+<div class="screener-wrap">
+  <div class="screener-sidebar">
+    <h3>Columns</h3>
+    <div style="margin-bottom:6px;">
+      <button class="preset-btn" onclick="selectPreset('performance')">Performance</button>
+      <button class="preset-btn" onclick="selectPreset('flows')">Flows</button>
+      <button class="preset-btn" onclick="selectPreset('trading')">Trading</button>
+      <button class="preset-btn" onclick="selectPreset('all')">All</button>
+    </div>
+    <hr>
+    <div id="colChecks"></div>
+  </div>
+  <div class="screener-main">
+    <table class="screener-table"><thead><tr id="tableHead"></tr></thead><tbody id="tableBody"></tbody></table>
+  </div>
+</div>
+
 <script>
-// Suite filter: show/hide sections
-function filterSuite(name) {
-  var pills = document.querySelectorAll('.suite-pill');
-  pills.forEach(function(p) {
-    p.classList.toggle('active', p.getAttribute('data-suite') === name);
-  });
-  var sections = document.querySelectorAll('.perf-suite-section');
-  sections.forEach(function(s) {
-    if (name === 'All') {
-      s.style.display = '';
-    } else {
-      s.style.display = s.getAttribute('data-suite-name') === name ? '' : 'none';
-    }
-  });
+const COLUMNS=[
+  ["ticker","Ticker","Core",null,true],["fund_name","Name","Core",null,true],
+  ["issuer_display","Issuer","Core",null,false],["rex_suite","Suite","Core",null,true],
+  ["strategy","Strategy","Classification",null,false],["etp_category","Category","Classification",null,false],
+  ["category_display","Category Detail","Classification",null,false],["underlier_type","Underlier Type","Classification",null,false],
+  ["aum","AUM ($M)","Size","aum",true],
+  ["fund_flow_1day","1D Flow","Flows","flow",false],["fund_flow_1week","1W Flow","Flows","flow",false],
+  ["fund_flow_1month","1M Flow","Flows","flow",false],["fund_flow_3month","3M Flow","Flows","flow",false],
+  ["fund_flow_6month","6M Flow","Flows","flow",false],["fund_flow_ytd","YTD Flow","Flows","flow",false],
+  ["fund_flow_1year","1Y Flow","Flows","flow",false],
+  ["total_return_1day","1D Rtn","Returns","pct",true],["total_return_1week","1W Rtn","Returns","pct",true],
+  ["total_return_1month","1M Rtn","Returns","pct",true],["total_return_3month","3M Rtn","Returns","pct",true],
+  ["total_return_6month","6M Rtn","Returns","pct",false],["total_return_ytd","YTD Rtn","Returns","pct",true],
+  ["total_return_1year","1Y Rtn","Returns","pct",true],["total_return_3year","3Y Rtn","Returns","pct",false],
+  ["annualized_yield","Yield","Returns","pct",false],
+  ["average_vol_30day","30D Vol","Trading","vol",true],["open_interest","Open Int","Trading","vol",true],
+  ["short_interest","Short Int","Trading","pct2",false],["bid_ask_spread","Bid-Ask","Trading","pct2",false],
+  ["premium_discount","Prem/Disc","Trading","pct2",false],["nav_tracking_error","Track Err","Trading","pct2",false],
+  ["expense_ratio","Exp Ratio","Costs","pct2",false],["management_fee","Mgmt Fee","Costs","pct2",false],
+  ["inception_date","Inception","Info",null,false],["underlying_index","Index","Info",null,false],
+  ["is_singlestock","Underlier","Info",null,false],["uses_leverage","Leveraged","Info",null,false],
+  ["leverage_amount","Lev Amt","Info",null,false],["cusip","CUSIP","Info",null,false],
+];
+
+const PRESETS={
+  performance:["ticker","fund_name","rex_suite","aum","total_return_1day","total_return_1week","total_return_1month","total_return_3month","total_return_ytd","total_return_1year","average_vol_30day","open_interest"],
+  flows:["ticker","fund_name","rex_suite","aum","fund_flow_1day","fund_flow_1week","fund_flow_1month","fund_flow_3month","fund_flow_ytd","total_return_1day"],
+  trading:["ticker","fund_name","rex_suite","aum","average_vol_30day","open_interest","short_interest","bid_ask_spread","premium_discount","expense_ratio","management_fee"],
+  all:COLUMNS.map(c=>c[0]),
+};
+
+let allData=[],visibleCols=new Set(COLUMNS.filter(c=>c[4]).map(c=>c[0])),sortKey="aum",sortAsc=false;
+
+function buildSidebar(){
+  let h="",lg="";
+  for(const[key,label,group]of COLUMNS){
+    if(group!==lg){h+=`<div class="col-group-title">${group}</div>`;lg=group;}
+    h+=`<div class="col-check"><input type="checkbox" id="col_${key}" ${visibleCols.has(key)?"checked":""} onchange="toggleCol('${key}')"><label for="col_${key}">${label}</label></div>`;
+  }
+  document.getElementById("colChecks").innerHTML=h;
+}
+function toggleCol(k){visibleCols.has(k)?visibleCols.delete(k):visibleCols.add(k);render();}
+function selectPreset(n){visibleCols=new Set(PRESETS[n]);buildSidebar();render();}
+
+function fmt(v,t){
+  if(v===null||v===undefined||v===""||v==="None")return"-";
+  const n=parseFloat(v);if(isNaN(n))return v;
+  if(t==="aum")return n.toLocaleString(undefined,{minimumFractionDigits:1,maximumFractionDigits:1});
+  if(t==="pct")return`<span class="${n>=0?'pos':'neg'}">${n>=0?'+':''}${n.toFixed(2)}%</span>`;
+  if(t==="pct2")return n.toFixed(2)+"%";
+  if(t==="flow"){const c=n>=0?'pos':'neg';return Math.abs(n)>=1000?`<span class="${c}">${(n/1000).toFixed(1)}B</span>`:`<span class="${c}">${n.toFixed(1)}M</span>`;}
+  if(t==="vol"){if(Math.abs(n)>=1e6)return(n/1e6).toFixed(1)+"M";if(Math.abs(n)>=1e3)return(n/1e3).toFixed(0)+"K";return n.toFixed(0);}
+  return v;
 }
 
-// Column sorting for performance tables
-function sortPerfTable(th, colIdx) {
-  var table = th.closest('table');
-  var tbody = table.querySelector('tbody');
-  // Collect rows, separating REX rows, separator, and comp rows
-  var allRows = Array.from(tbody.querySelectorAll('tr'));
-  var rexRows = [];
-  var compRows = [];
-  var sepRow = null;
-
-  allRows.forEach(function(r) {
-    if (r.classList.contains('comp-separator')) {
-      sepRow = r;
-    } else if (r.getAttribute('data-is-rex') === '1') {
-      rexRows.push(r);
-    } else if (r.getAttribute('data-is-rex') === '0') {
-      compRows.push(r);
-    }
-  });
-
-  // Determine sort direction
-  var current = th.getAttribute('data-sort-dir') || 'none';
-  var dir = current === 'asc' ? 'desc' : 'asc';
-
-  // Clear all sort indicators in this table
-  table.querySelectorAll('th').forEach(function(h) { h.removeAttribute('data-sort-dir'); });
-  th.setAttribute('data-sort-dir', dir);
-
-  function getSortVal(row) {
-    var cells = row.querySelectorAll('td');
-    if (colIdx >= cells.length) return '';
-    var cell = cells[colIdx];
-    var ds = cell.getAttribute('data-sort');
-    if (ds !== null && ds !== '') return parseFloat(ds) || 0;
-    return cell.textContent.trim().toLowerCase();
-  }
-
-  function compare(a, b) {
-    var va = getSortVal(a);
-    var vb = getSortVal(b);
-    if (typeof va === 'number' && typeof vb === 'number') {
-      return dir === 'asc' ? va - vb : vb - va;
-    }
-    var sa = String(va), sb = String(vb);
-    if (dir === 'asc') return sa.localeCompare(sb);
-    return sb.localeCompare(sa);
-  }
-
-  rexRows.sort(compare);
-  compRows.sort(compare);
-
-  // Reassemble: rex rows first, then separator, then comp rows
-  tbody.innerHTML = '';
-  rexRows.forEach(function(r) { tbody.appendChild(r); });
-  if (sepRow) tbody.appendChild(sepRow);
-  compRows.forEach(function(r) { tbody.appendChild(r); });
+function getFiltered(){
+  let d=allData;
+  const cat=document.getElementById("fCategory").value,suite=document.getElementById("fSuite").value,search=document.getElementById("fSearch").value.toUpperCase();
+  if(cat)d=d.filter(r=>r.category_display===cat||r.etp_category===cat);
+  if(suite)d=d.filter(r=>r.rex_suite===suite);
+  if(search)d=d.filter(r=>(r.ticker||"").toUpperCase().includes(search)||(r.fund_name||"").toUpperCase().includes(search));
+  d.sort((a,b)=>{let av=a[sortKey],bv=b[sortKey];if(av==null)av=sortAsc?Infinity:-Infinity;if(bv==null)bv=sortAsc?Infinity:-Infinity;const an=parseFloat(av),bn=parseFloat(bv);if(!isNaN(an)&&!isNaN(bn))return sortAsc?an-bn:bn-an;return sortAsc?String(av||"").localeCompare(String(bv||"")):String(bv||"").localeCompare(String(av||""));});
+  return d;
 }
 
-// Draw sparklines with Chart.js
-document.addEventListener('DOMContentLoaded', function() {
-  var canvases = document.querySelectorAll('.sparkline-canvas');
-  canvases.forEach(function(cvs) {
-    var raw = cvs.getAttribute('data-values');
-    if (!raw) return;
-    var values;
-    try { values = JSON.parse(raw); } catch(e) { return; }
-    // Filter out leading zeros (pre-inception)
-    var startIdx = 0;
-    for (var i = 0; i < values.length; i++) {
-      if (values[i] > 0) { startIdx = i; break; }
-    }
-    values = values.slice(startIdx);
-    if (values.length < 2) return;
+function render(){
+  const cols=COLUMNS.filter(c=>visibleCols.has(c[0]));
+  let hh="";
+  for(const[key,label]of cols){const ar=key===sortKey?(sortAsc?"&#9650;":"&#9660;"):"&#8597;";hh+=`<th class="${key===sortKey?'sorted':''}" onclick="doSort('${key}')">${label} <span class="sort-arrow">${ar}</span></th>`;}
+  document.getElementById("tableHead").innerHTML=hh;
+  const filtered=getFiltered();
+  let bh="";
+  for(const row of filtered){
+    const isRex=row.is_rex===true||row.is_rex===1||row.is_rex==="1"||row.is_rex==="True";
+    bh+=`<tr class="${isRex?'rex-row':''}">`;
+    for(const[key,,,fmtType]of cols){let v=row[key];if(key==="ticker"&&isRex)v=`${v} <span class="rex-badge">REX</span>`;else if(fmtType)v=fmt(v,fmtType);else v=v||"-";bh+=`<td>${v}</td>`;}
+    bh+="</tr>";
+  }
+  document.getElementById("tableBody").innerHTML=bh;
+  const totalAUM=filtered.reduce((s,r)=>s+(parseFloat(r.aum)||0),0);
+  document.getElementById("kpiCount").textContent=filtered.length.toLocaleString()+" funds";
+  document.getElementById("kpiAUM").textContent="$"+(totalAUM>=1000?(totalAUM/1000).toFixed(1)+"B":totalAUM.toFixed(0)+"M");
+}
 
-    var ctx = cvs.getContext('2d');
-    var isUp = values[values.length - 1] >= values[0];
-    var lineColor = isUp ? '#059669' : '#F44336';
-    var fillColor = isUp ? 'rgba(5, 150, 105, 0.1)' : 'rgba(244, 67, 54, 0.1)';
+function doSort(k){if(sortKey===k)sortAsc=!sortAsc;else{sortKey=k;sortAsc=false;}render();}
+function resetFilters(){document.getElementById("fCategory").value="";document.getElementById("fSuite").value="";document.getElementById("fSearch").value="";render();}
 
-    new Chart(ctx, {
-      type: 'line',
-      data: {
-        labels: values.map(function(_, i) { return ''; }),
-        datasets: [{
-          data: values,
-          borderColor: lineColor,
-          backgroundColor: fillColor,
-          borderWidth: 1.5,
-          pointRadius: 0,
-          fill: true,
-          tension: 0.3
-        }]
-      },
-      options: {
-        responsive: false,
-        maintainAspectRatio: false,
-        plugins: { legend: { display: false }, tooltip: { enabled: false }, datalabels: { display: false } },
-        scales: {
-          x: { display: false },
-          y: { display: false }
-        },
-        animation: false
-      }
-    });
-  });
-});
+function exportCSV(){
+  const cols=COLUMNS.filter(c=>visibleCols.has(c[0])),filtered=getFiltered();
+  let csv=cols.map(c=>c[1]).join(",")+"\n";
+  for(const row of filtered){csv+=cols.map(([key])=>{let v=row[key];if(v==null)return"";v=String(v);if(v.includes(",")||v.includes('"'))v='"'+v.replace(/"/g,'""')+'"';return v;}).join(",")+"\n";}
+  const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));a.download="screener_export.csv";a.click();
+}
+
+async function init(){
+  const scope=document.getElementById("fScope").value;
+  const resp=await fetch(`/market/api/screener-data?scope=${scope}`);
+  const json=await resp.json();
+  allData=json.funds;
+  const cats=[...new Set(allData.map(r=>r.category_display).filter(Boolean))].sort();
+  const suites=[...new Set(allData.map(r=>r.rex_suite).filter(Boolean))].sort();
+  document.getElementById("fCategory").innerHTML='<option value="">All Categories</option>'+cats.map(c=>`<option value="${c}">${c}</option>`).join("");
+  document.getElementById("fSuite").innerHTML='<option value="">All Suites</option>'+suites.map(s=>`<option value="${s}">${s}</option>`).join("");
+  buildSidebar();render();
+}
+
+document.getElementById("fScope").addEventListener("change",init);
+document.getElementById("fCategory").addEventListener("change",render);
+document.getElementById("fSuite").addEventListener("change",render);
+document.getElementById("fSearch").addEventListener("input",render);
+init();
 </script>
+{% endif %}
 {% endblock %}

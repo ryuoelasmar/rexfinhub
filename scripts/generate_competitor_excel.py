@@ -462,82 +462,188 @@ def write_summary(wb: Workbook, df: pd.DataFrame):
 # ---------------------------------------------------------------------------
 
 def write_key_comps(wb: Workbook, df_all: pd.DataFrame, comp_groups: pd.DataFrame):
-    """Write Key Comps sheet with REX product vs top competitors side by side."""
+    """Write Key Comps sheet -- grouped by underlier for T-REX/G&I, top N for others."""
     ws = wb.create_sheet("Key Comps")
 
-    # Build lookup: ticker -> row data (as dict for safe truthiness checks)
+    # Build lookup
     ticker_lookup: dict[str, dict] = {}
     for _, row in df_all.iterrows():
         t = row["ticker"]
         if t not in ticker_lookup or row.get("is_rex", False):
             ticker_lookup[t] = row.to_dict()
 
-    # Also index by ticker without " US"/" LN" suffix for matching competitor_groups
-    ticker_clean_lookup: dict[str, dict] = {}
-    for t, row_dict in ticker_lookup.items():
-        clean = t.replace(" US", "").replace(" LN", "").strip()
-        ticker_clean_lookup[clean] = row_dict
+    # Get all active competitors with underlier info
+    db = SessionLocal()
+    try:
+        rows = db.execute(text(
+            "SELECT ticker, fund_name, issuer_display, cusip, aum, "
+            "  category_display, etp_category, is_rex, rex_suite, "
+            "  total_return_1day, total_return_1week, total_return_1month, "
+            "  total_return_3month, total_return_ytd, total_return_1year, "
+            "  average_vol_30day, open_interest, is_singlestock, map_li_underlier "
+            "FROM mkt_master_data WHERE market_status = 'ACTV'"
+        )).fetchall()
+    finally:
+        db.close()
 
-    # Group competitor_groups by (group_name, rex_ticker)
-    max_peers = 5
-    groups: dict[tuple[str, str], list[str]] = {}
-    for _, row in comp_groups.iterrows():
-        key = (row["group_name"], row["rex_ticker"])
-        if key not in groups:
-            groups[key] = []
-        groups[key].append(row["peer_ticker"])
+    comp_df = pd.DataFrame(rows, columns=[
+        "ticker", "fund_name", "issuer", "cusip", "aum",
+        "category_display", "etp_category", "is_rex", "rex_suite",
+        "return_1d", "return_1w", "return_1m", "return_3m", "return_ytd", "return_1y",
+        "avg_vol_30d", "open_interest", "is_singlestock", "map_li_underlier",
+    ])
+    comp_df["aum"] = pd.to_numeric(comp_df["aum"], errors="coerce").fillna(0)
+    comp_df["is_rex"] = comp_df["is_rex"].astype(bool)
 
-    # Headers
-    headers = ["Group", "REX Ticker", "REX Name", "REX AUM ($M)"]
-    for i in range(1, max_peers + 1):
-        headers.extend([f"Comp{i} Ticker", f"Comp{i} Name", f"Comp{i} AUM ($M)"])
+    # Get REX fund underliers
+    rex_df = comp_df[comp_df["is_rex"]].copy()
 
-    for col_idx, h in enumerate(headers, 1):
-        cell = ws.cell(row=1, column=col_idx, value=h)
-        cell.fill = HEADER_FILL
-        cell.font = HEADER_FONT
-        cell.alignment = Alignment(horizontal="center", wrap_text=True)
+    return_cols = {"return_1d", "return_1w", "return_1m", "return_ytd", "return_1y"}
+    current_row = 1
 
-    row_num = 2
-    for (group_name, rex_ticker), peers in groups.items():
-        # Find REX product data
-        rex_row = ticker_lookup.get(f"{rex_ticker} US") or ticker_clean_lookup.get(rex_ticker)
+    def _write_section_header(ws, row, title, ncols):
+        ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=ncols)
+        cell = ws.cell(row=row, column=1, value=title)
+        cell.fill = GROUP_FILL
+        cell.font = GROUP_FONT
+        cell.alignment = Alignment(horizontal="left", vertical="center")
+        ws.row_dimensions[row].height = 22
+        return row + 1
 
-        ws.cell(row=row_num, column=1, value=group_name)
-        ws.cell(row=row_num, column=2, value=rex_ticker)
-        if rex_row is not None:
-            ws.cell(row=row_num, column=3, value=rex_row.get("fund_name"))
-            aum_val = rex_row.get("aum")
-            if aum_val is not None and not pd.isna(aum_val):
-                ws.cell(row=row_num, column=4, value=aum_val).number_format = AUM_FORMAT
-        else:
-            ws.cell(row=row_num, column=3, value="(not in DB)")
+    def _write_col_headers(ws, row):
+        for col_idx, (header, _, _) in enumerate(SHEET1_COLUMNS, 1):
+            cell = ws.cell(row=row, column=col_idx, value=header)
+            cell.fill = HEADER_FILL
+            cell.font = HEADER_FONT
+            cell.alignment = Alignment(horizontal="center")
+        return row + 1
 
-        # Fill up to max_peers competitors
-        col = 5
-        unique_peers = list(dict.fromkeys(peers))[:max_peers]  # deduplicate, preserve order
-        for peer_ticker in unique_peers:
-            peer_row = ticker_lookup.get(f"{peer_ticker} US") or ticker_clean_lookup.get(peer_ticker)
-            ws.cell(row=row_num, column=col, value=peer_ticker)
-            if peer_row is not None:
-                ws.cell(row=row_num, column=col + 1, value=peer_row.get("fund_name"))
-                p_aum = peer_row.get("aum")
-                if p_aum is not None and not pd.isna(p_aum):
-                    ws.cell(row=row_num, column=col + 2, value=p_aum).number_format = AUM_FORMAT
-            else:
-                ws.cell(row=row_num, column=col + 1, value="(not in DB)")
-            col += 3
+    def _write_comp_rows(ws, row, comps, suite_label):
+        for i, (_, r) in enumerate(comps.iterrows()):
+            for col_idx, (_, field, fmt) in enumerate(SHEET1_COLUMNS, 1):
+                value = r.get(field)
+                if value is not None and pd.notna(value):
+                    pass
+                else:
+                    value = None
+                if field == "peer_suite":
+                    value = suite_label
+                if field in return_cols and value is not None:
+                    value = float(value) / 100.0
+                cell = ws.cell(row=row, column=col_idx, value=value)
+                if fmt:
+                    cell.number_format = fmt
+                if field in return_cols:
+                    _apply_return_font(cell, r.get(field))
+                if i % 2 == 1:
+                    cell.fill = ALT_ROW_FILL
+                cell.border = THIN_BORDER
+                if field not in return_cols:
+                    cell.font = Font(name="Calibri", size=10)
+            row += 1
+        return row
 
-        # Row styling
-        if (row_num - 2) % 2 == 1:
-            for c in range(1, len(headers) + 1):
-                ws.cell(row=row_num, column=c).fill = ALT_ROW_FILL
-        for c in range(1, len(headers) + 1):
-            ws.cell(row=row_num, column=c).border = THIN_BORDER
+    ncols = len(SHEET1_COLUMNS)
 
-        row_num += 1
+    # ── T-REX: Group by underlier ──
+    trex_rex = rex_df[rex_df["rex_suite"] == "T-REX"].copy()
+    trex_comps = comp_df[
+        (comp_df["category_display"] == "Leverage & Inverse - Single Stock") & (~comp_df["is_rex"])
+    ].copy()
 
-    _auto_fit_columns(ws, len(headers), row_num)
+    # Get unique underliers from REX T-REX products
+    for _, rex_row in trex_rex.sort_values("aum", ascending=False).iterrows():
+        underlier = rex_row.get("is_singlestock") or ""
+        if not underlier or str(underlier) == "nan":
+            continue
+        underlier_clean = str(underlier).replace(" US", "").replace(" Equity", "").strip()
+        rex_ticker = rex_row["ticker"]
+        rex_aum = float(rex_row["aum"] or 0)
+
+        # Find competitors with same underlier
+        matches = trex_comps[trex_comps["is_singlestock"].astype(str).str.contains(underlier_clean, na=False)]
+        matches = matches.sort_values("aum", ascending=False).head(5)
+        if matches.empty:
+            continue
+
+        current_row = _write_section_header(ws, current_row,
+            f"T-REX: {rex_ticker.replace(' US','')} ({underlier_clean}) -- REX ${rex_aum:,.0f}M vs {len(matches)} comps", ncols)
+        current_row = _write_col_headers(ws, current_row)
+        current_row = _write_comp_rows(ws, current_row, matches, f"T-REX ({underlier_clean})")
+        current_row += 1
+
+    # ── MicroSectors: Top 10 index/basket L&I ──
+    ms_comps = comp_df[
+        (comp_df["category_display"] == "Leverage & Inverse - Index/Basket/ETF Based") & (~comp_df["is_rex"])
+    ].sort_values("aum", ascending=False).head(10)
+    if not ms_comps.empty:
+        current_row = _write_section_header(ws, current_row,
+            f"MicroSectors: Top {len(ms_comps)} Index/Basket L&I Competitors", ncols)
+        current_row = _write_col_headers(ws, current_row)
+        current_row = _write_comp_rows(ws, current_row, ms_comps, "MicroSectors")
+        current_row += 1
+
+    # ── EPI: Top 10 income competitors ──
+    epi_tickers = {"JEPI US", "JEPQ US", "GPIX US", "QYLD US", "QQQI US", "IWMI US", "SPYI US"}
+    epi_comps = comp_df[
+        (comp_df["ticker"].isin(epi_tickers)) |
+        ((comp_df["category_display"].str.contains("Income", na=False)) & (~comp_df["is_rex"]))
+    ].copy()
+    epi_comps = epi_comps[~epi_comps["is_rex"]].sort_values("aum", ascending=False).head(10)
+    if not epi_comps.empty:
+        current_row = _write_section_header(ws, current_row,
+            f"Equity Premium Income: Top {len(epi_comps)} Competitors", ncols)
+        current_row = _write_col_headers(ws, current_row)
+        current_row = _write_comp_rows(ws, current_row, epi_comps, "EPI")
+        current_row += 1
+
+    # ── Growth & Income: Group by underlier ──
+    gi_rex = rex_df[rex_df["rex_suite"] == "Growth & Income"].copy()
+    gi_comps = comp_df[
+        (comp_df["category_display"] == "Income - Single Stock") & (~comp_df["is_rex"])
+    ].copy()
+    for _, rex_row in gi_rex.sort_values("aum", ascending=False).iterrows():
+        underlier = rex_row.get("is_singlestock") or ""
+        if not underlier or str(underlier) == "nan":
+            continue
+        underlier_clean = str(underlier).replace(" US", "").replace(" Equity", "").strip()
+        rex_ticker = rex_row["ticker"]
+        rex_aum = float(rex_row["aum"] or 0)
+        matches = gi_comps[gi_comps["is_singlestock"].astype(str).str.contains(underlier_clean, na=False)]
+        matches = matches.sort_values("aum", ascending=False).head(5)
+        if matches.empty:
+            continue
+        current_row = _write_section_header(ws, current_row,
+            f"Growth & Income: {rex_ticker.replace(' US','')} ({underlier_clean}) -- REX ${rex_aum:,.0f}M vs {len(matches)} comps", ncols)
+        current_row = _write_col_headers(ws, current_row)
+        current_row = _write_comp_rows(ws, current_row, matches, f"G&I ({underlier_clean})")
+        current_row += 1
+
+    # ── Autocallable: Top 5 ──
+    auto_comps = comp_df[
+        (comp_df["category_display"].str.contains("Income", na=False)) &
+        (comp_df["fund_name"].str.upper().str.contains("AUTOCALL", na=False)) &
+        (~comp_df["is_rex"])
+    ].sort_values("aum", ascending=False).head(5)
+    if not auto_comps.empty:
+        current_row = _write_section_header(ws, current_row,
+            f"Autocallable: Top {len(auto_comps)} Competitors", ncols)
+        current_row = _write_col_headers(ws, current_row)
+        current_row = _write_comp_rows(ws, current_row, auto_comps, "Autocallable")
+        current_row += 1
+
+    # ── Crypto: Top 10 ──
+    crypto_comps = comp_df[
+        (comp_df["etp_category"] == "Crypto") & (~comp_df["is_rex"])
+    ].sort_values("aum", ascending=False).head(10)
+    if not crypto_comps.empty:
+        current_row = _write_section_header(ws, current_row,
+            f"Crypto: Top {len(crypto_comps)} Competitors", ncols)
+        current_row = _write_col_headers(ws, current_row)
+        current_row = _write_comp_rows(ws, current_row, crypto_comps, "Crypto")
+        current_row += 1
+
+    _auto_fit_columns(ws, ncols, current_row)
     ws.freeze_panes = "A2"
 
 
@@ -649,20 +755,22 @@ def main():
 
     print("Assigning competitor suites...")
     df_comp = assign_competitor_suites(df)
-    # Filter to only rows with a peer_suite assignment
     df_comp = df_comp[df_comp["peer_suite"].notna()].copy()
-    print(f"  {len(df_comp)} competitor assignments across suites:")
-    for suite, cnt in df_comp["peer_suite"].value_counts().items():
-        rex_cnt = df_comp[(df_comp["peer_suite"] == suite) & (df_comp["is_rex"])].shape[0]
-        print(f"    {suite}: {cnt} products ({rex_cnt} REX)")
 
-    print("Building Excel workbook...")
+    # COMPETITORS ONLY — exclude REX products
+    df_comps_only = df_comp[~df_comp["is_rex"]].copy()
+    print(f"  {len(df_comps_only)} competitors across suites:")
+    for suite, cnt in df_comps_only["peer_suite"].value_counts().items():
+        print(f"    {suite}: {cnt}")
+
+    print("Building Excel workbook (competitors only, 2 sheets)...")
     wb = Workbook()
 
-    write_all_competitors(wb, df_comp)
-    write_summary(wb, df_comp)
+    # Sheet 1: Full competitor list (no REX products)
+    write_all_competitors(wb, df_comps_only)
+
+    # Sheet 2: Key comps per REX fund
     write_key_comps(wb, df, comp_groups)
-    write_rex_products(wb, df_comp)
 
     # Save
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
