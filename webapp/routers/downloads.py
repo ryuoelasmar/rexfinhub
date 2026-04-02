@@ -106,20 +106,14 @@ def downloads_page(request: Request, db: Session = Depends(get_db)):
     # Build a lookup of trust_files by trust_name for template use
     trust_files_map = {tf["trust_name"]: tf["files"] for tf in trust_files}
 
-    # API info
+    # API info — only expose data endpoints
     api_base = str(request.base_url).rstrip("/")
     api_endpoints = [
         {"method": "GET", "path": "/api/v1/etp/screener",
-         "desc": "Full ETP screener data (50+ fields per fund)",
-         "params": "scope=all|rex|competitors, ticker=NVDX US, category=LI|CC|Crypto, limit=100"},
+         "desc": "Full ETP screener data -- 50+ fields for every active ETF and ETN",
+         "params": "scope=all|rex|competitors, ticker=NVDX US,TSLL US, category=LI|CC|Crypto|Defined|Thematic, limit=100"},
         {"method": "GET", "path": "/api/v1/etp/rex-summary",
-         "desc": "REX fund summary (AUM, flows, top performer)",
-         "params": ""},
-        {"method": "GET", "path": "/api/v1/trusts",
-         "desc": "All monitored SEC trusts with fund counts",
-         "params": "active_only=true"},
-        {"method": "GET", "path": "/api/v1/health",
-         "desc": "Health check",
+         "desc": "REX product summary -- total AUM, fund count, flows, and top performer",
          "params": ""},
     ]
 

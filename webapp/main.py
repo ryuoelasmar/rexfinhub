@@ -194,10 +194,11 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title="REX FinHub",
         version="2.0.0",
-        description="ETP market intelligence platform. API docs at /docs. Authenticate with X-API-Key header.",
+        description="ETP market intelligence platform.",
         lifespan=lifespan,
-        docs_url="/docs",
-        redoc_url="/redoc",
+        docs_url=None,   # Disable public Swagger
+        redoc_url=None,   # Disable public ReDoc
+        openapi_url=None, # Disable OpenAPI spec
     )
 
     # Middleware order matters: last added = outermost (runs first).

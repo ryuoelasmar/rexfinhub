@@ -44,8 +44,8 @@ def verify_api_key(x_api_key: str = Header(default="")):
 
 
 @router.get("/health")
-def api_health():
-    """Health check for the API."""
+def api_health(_: None = Depends(verify_api_key)):
+    """Health check. Requires X-API-Key."""
     return {"status": "ok", "version": "2.0.0"}
 
 

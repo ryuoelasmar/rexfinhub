@@ -299,42 +299,7 @@
     </div>
   </div>
 
-  <!-- ===== Per-Trust Filings ===== -->
-  {% if all_trusts %}
-  <div class="export-section">
-    <div class="export-section-head">
-      <h2>Per-Trust Filings</h2>
-      <span class="count">{{ total_trust_count }} trusts</span>
-    </div>
-
-    <input type="text" class="trust-search" id="trustSearch" placeholder="Search trust name..." oninput="filterTrusts(this.value)">
-    <span id="trustMatchCount" style="font-size:var(--text-sm); color:var(--gray-500); margin-left:8px;"></span>
-
-    <div id="trustAccordion">
-      {% for t in all_trusts %}
-      <details class="trust-item trust-detail" data-name="{{ t.name|lower }}">
-        <summary>
-          {{ t.name }}
-          {% if t.is_rex %}<span class="trust-tag rex">REX</span>{% endif %}
-        </summary>
-        <div class="trust-body">
-          <a href="/downloads/export/trust/{{ t.id }}/filings" class="export-dl" style="font-size:12px;">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px;"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-            Fund Status CSV
-          </a>
-          {% if trust_files_map.get(t.name) %}
-          {% for f in trust_files_map[t.name] %}
-          <a href="/downloads/file?path={{ f.path }}" class="export-dl" style="font-size:12px; margin-left:6px;">
-            {{ f.name }} ({{ f.size }})
-          </a>
-          {% endfor %}
-          {% endif %}
-        </div>
-      </details>
-      {% endfor %}
-    </div>
-  </div>
-  {% endif %}
+  <!-- Per-Trust Filings removed -->
 
   <!-- ===== Pipeline Files ===== -->
   {% if summary_files or digest_files %}
@@ -380,9 +345,8 @@
       <span class="count">{{ api_endpoints|length }} endpoints</span>
     </div>
     <p style="font-size:14px; color:var(--text-muted); margin-bottom:16px;">
-      Programmatic access to all ETP data. Authenticate with <code style="background:#f0f2f5; padding:2px 6px; border-radius:3px;">X-API-Key</code> header.
-      <a href="/docs" target="_blank" style="color:var(--teal); font-weight:600; margin-left:8px;">Interactive Docs (Swagger) &rarr;</a>
-      <a href="/redoc" target="_blank" style="color:var(--teal); font-weight:600; margin-left:8px;">Reference Docs (ReDoc) &rarr;</a>
+      Programmatic access to ETP data. All requests require an <code style="background:#f0f2f5; padding:2px 6px; border-radius:3px;">X-API-Key</code> header.
+      Contact your administrator for an API key.
     </p>
     <div style="display:flex; flex-direction:column; gap:10px;">
       {% for ep in api_endpoints %}

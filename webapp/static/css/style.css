@@ -1666,7 +1666,7 @@ body, .sticky-nav, table, th, td, .kpi, .trust-card, .trust-block,
   font-weight: 600; font-size: var(--text-xs);
   text-transform: uppercase; letter-spacing: 0.04em;
   white-space: nowrap; user-select: none;
-  position: sticky; top: var(--nav-height); z-index: 10;
+  position: sticky; top: calc(var(--nav-height) + 1px); z-index: 10;
 }
 .rt-sortable { cursor: pointer; padding-right: 20px !important; position: relative; }
 .rt-sortable:hover { background: var(--navy-light); }
