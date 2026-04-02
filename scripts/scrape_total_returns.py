@@ -194,60 +194,124 @@ def parse_structured_stats(html: str, symbols: list[str]) -> dict:
     return result
 
 
-def scrape(symbols: list[str], start: str = "", end: str = "") -> dict:
-    """
-    Scrape TotalRealReturns.com for given symbols.
-
-    Returns:
-        {
-            "symbols": ["NVII", "NVDY"],
-            "dates": ["2025-05-28", "2025-05-29", ...],
-            "growth_series": {
-                "NVII": [1.0, 1.037, 1.009, ...],   # normalized from 1.0
-                "NVDY": [1.218, 1.245, ...]           # normalized from IPO-relative
-            },
-            "drawdown_series": {
-                "NVII": [0, 0, -0.027, ...],
-                "NVDY": [0, 0, -0.01, ...]
-            },
-            "stats": [...],  # parsed table rows
-            "data_points": 213,
-            "date_range": ["2025-05-28", "2026-04-01"],
-        }
-    """
+def _scrape_batch(symbols: list[str], start: str = "", end: str = "") -> dict:
+    """Scrape a single batch (up to ~4 symbols) from TotalRealReturns."""
     html = fetch_page(symbols, start, end)
 
-    # Parse dates
     dates = parse_dates(html)
     if not dates:
-        return {"error": "No date data found", "symbols": symbols}
+        return {"dates": [], "growth_series": {}, "stats": {}}
 
-    # Parse series
     all_series = parse_series(html, len(dates))
-
-    # Parse symbol names
     parsed_symbols = parse_symbol_names(html, symbols)
-    num_symbols = len(parsed_symbols)
 
-    # Series assignment: first N = growth (normalized total return per symbol)
     growth_series = {}
     for i, sym in enumerate(parsed_symbols):
         if i < len(all_series):
             growth_series[sym] = all_series[i]
 
-    # Parse structured stats from tables
     stats = parse_structured_stats(html, parsed_symbols)
-
     date_strs = [d.isoformat() for d in dates]
 
+    return {"dates": date_strs, "growth_series": growth_series, "stats": stats}
+
+
+def scrape(symbols: list[str], start: str = "", end: str = "") -> dict:
+    """
+    Scrape TotalRealReturns.com for given symbols.
+    Handles batching in pairs to get full stats for all symbols.
+    Supports up to 10 symbols.
+
+    Returns:
+        {
+            "symbols": ["NVII", "NVDY", ...],
+            "dates": ["2025-05-28", ...],
+            "growth_series": {"NVII": [1.0, 1.037, ...], ...},
+            "stats": {"NVII": {"overall_return": 40.3, ...}, ...},
+            "data_points": 213,
+            "date_range": ["2025-05-28", "2026-04-01"],
+        }
+    """
+    import time
+
+    if len(symbols) > 10:
+        return {"error": "Max 10 symbols supported", "symbols": symbols}
+
+    # Batch in pairs for full stats coverage
+    # First request: all symbols together (gets chart data for all)
+    main_result = _scrape_batch(symbols, start, end)
+    if not main_result["dates"]:
+        return {"error": "No date data found", "symbols": symbols}
+
+    all_growth = dict(main_result["growth_series"])
+    all_stats = dict(main_result["stats"])
+
+    # For symbols missing stats, fetch in pairs
+    missing = [s for s in symbols if s not in all_stats or not all_stats[s].get("overall_return")]
+    if missing:
+        # Batch missing symbols in pairs
+        for i in range(0, len(missing), 2):
+            batch = missing[i:i+2]
+            if len(batch) == 1:
+                batch = batch + [symbols[0]]  # pair with first symbol for comparison
+            time.sleep(0.5)  # polite delay
+            try:
+                batch_result = _scrape_batch(batch, start, end)
+                for sym in batch:
+                    if sym in batch_result["stats"] and batch_result["stats"][sym].get("overall_return"):
+                        all_stats[sym] = batch_result["stats"][sym]
+                    if sym in batch_result["growth_series"] and sym not in all_growth:
+                        all_growth[sym] = batch_result["growth_series"][sym]
+            except Exception:
+                pass  # best effort for supplementary batches
+
     return {
-        "symbols": parsed_symbols,
-        "dates": date_strs,
-        "growth_series": growth_series,
-        "stats": stats,
-        "data_points": len(dates),
-        "date_range": [date_strs[0], date_strs[-1]] if date_strs else [],
+        "symbols": symbols,
+        "dates": main_result["dates"],
+        "growth_series": all_growth,
+        "stats": all_stats,
+        "data_points": len(main_result["dates"]),
+        "date_range": [main_result["dates"][0], main_result["dates"][-1]] if main_result["dates"] else [],
     }
+
+
+def save_to_disk(result: dict, output_dir: Path | None = None) -> Path:
+    """Save scraped data to D: drive (or local fallback) as JSON + CSV."""
+    import csv
+    from datetime import date as dt_date
+
+    if output_dir is None:
+        d_path = Path("D:/sec-data/archives/total_returns")
+        if d_path.parent.exists():
+            output_dir = d_path
+        else:
+            output_dir = PROJECT_ROOT / "data" / "total_returns"
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    today = dt_date.today().isoformat()
+    symbols_key = "_".join(result["symbols"][:5])
+
+    # Save full JSON
+    json_path = output_dir / f"{symbols_key}_{today}.json"
+    with open(json_path, "w", encoding="utf-8") as f:
+        json.dump(result, f, indent=2, ensure_ascii=False)
+
+    # Save growth series as CSV (dates x symbols)
+    csv_path = output_dir / f"{symbols_key}_{today}.csv"
+    with open(csv_path, "w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow(["date"] + result["symbols"])
+        for i, d in enumerate(result["dates"]):
+            row = [d]
+            for sym in result["symbols"]:
+                series = result["growth_series"].get(sym, [])
+                row.append(series[i] if i < len(series) else "")
+            writer.writerow(row)
+
+    print(f"  Saved: {json_path}")
+    print(f"  Saved: {csv_path}")
+    return json_path
 
 
 def main():
@@ -256,12 +320,16 @@ def main():
     parser.add_argument("--start", default="", help="Start date YYYY-MM-DD")
     parser.add_argument("--end", default="", help="End date YYYY-MM-DD")
     parser.add_argument("--json", action="store_true", help="Output as JSON")
+    parser.add_argument("--save", action="store_true", help="Save to D: drive")
     args = parser.parse_args()
 
     symbols = [s.strip().upper() for s in args.symbols.split(",")]
     print(f"Scraping TotalRealReturns for: {', '.join(symbols)}")
 
     result = scrape(symbols, args.start, args.end)
+
+    if args.save:
+        save_to_disk(result)
 
     if args.json:
         sys.stdout = open(sys.stdout.fileno(), mode='w', encoding='utf-8', errors='replace', closefd=False)
