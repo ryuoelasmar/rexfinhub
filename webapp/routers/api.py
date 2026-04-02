@@ -368,3 +368,123 @@ async def upload_notes_db(
         import logging
         logging.getLogger(__name__).error("Notes DB upload failed: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")
+
+
+# ---------------------------------------------------------------------------
+# ETP Screener API (public-facing, API key required)
+# ---------------------------------------------------------------------------
+
+from fastapi import Query
+
+
+@router.get("/etp/screener", summary="ETP Screener Data",
+            description="Returns all active ETF/ETN fund data with 50+ fields. "
+                        "Use `scope` to filter: `all` (default), `rex` (REX products only), "
+                        "`competitors` (non-REX only). Use `ticker` to filter to specific tickers (comma-separated). "
+                        "Use `category` to filter by etp_category (LI, CC, Crypto, Defined, Thematic).")
+def etp_screener(
+    db: Session = Depends(get_db),
+    _: None = Depends(verify_api_key),
+    scope: str = Query(default="all", description="all | rex | competitors"),
+    ticker: str = Query(default="", description="Comma-separated tickers (e.g. NVDX US,TSLL US)"),
+    category: str = Query(default="", description="Filter by etp_category"),
+    limit: int = Query(default=0, description="Max results (0 = all)"),
+):
+    """Full ETP screener dataset. Requires X-API-Key header."""
+    import math
+    from sqlalchemy import text as sa_text
+
+    cols = (
+        "ticker, fund_name, issuer_display, aum, market_status, "
+        "etp_category, category_display, is_rex, rex_suite, "
+        "total_return_1day, total_return_1week, total_return_1month, "
+        "total_return_3month, total_return_6month, total_return_ytd, total_return_1year, "
+        "total_return_3year, annualized_yield, "
+        "expense_ratio, management_fee, average_vol_30day, open_interest, "
+        "percent_short_interest, average_bidask_spread, nav_tracking_error, percentage_premium, "
+        "average_percent_premium_52week, "
+        "fund_flow_1day, fund_flow_1week, fund_flow_1month, fund_flow_3month, "
+        "fund_flow_6month, fund_flow_ytd, fund_flow_1year, "
+        "inception_date, fund_type, asset_class_focus, underlying_index, "
+        "is_singlestock, uses_leverage, leverage_amount, outcome_type, is_crypto, "
+        "strategy, underlier_type, cusip, listed_exchange, regulatory_structure, "
+        "map_li_direction, map_li_leverage_amount, map_li_underlier, "
+        "map_cc_underlier, map_crypto_underlier, map_defined_category, "
+        "map_thematic_category, cc_type, cc_category, strategy_confidence, "
+        "uses_derivatives, uses_swaps, is_40act, index_weighting_methodology"
+    )
+    query = f"SELECT {cols} FROM mkt_master_data WHERE market_status = 'ACTV' AND (fund_type = 'ETF' OR fund_type = 'ETN')"
+    if scope == "rex":
+        query += " AND is_rex = 1"
+    elif scope == "competitors":
+        query += " AND is_rex = 0"
+    if category:
+        query += f" AND etp_category = '{category}'"
+    if ticker:
+        tickers = [t.strip() for t in ticker.split(",") if t.strip()]
+        if tickers:
+            in_list = ",".join(f"'{t}'" for t in tickers)
+            query += f" AND ticker IN ({in_list})"
+    query += " ORDER BY aum DESC"
+    if limit > 0:
+        query += f" LIMIT {limit}"
+
+    rows = db.execute(sa_text(query)).fetchall()
+    col_names = [c.strip() for c in cols.split(",")]
+
+    funds = []
+    for row in rows:
+        d = {}
+        for i, col in enumerate(col_names):
+            val = row[i]
+            if val is None:
+                d[col] = None
+            elif isinstance(val, float):
+                d[col] = None if (math.isnan(val) or math.isinf(val)) else round(val, 6)
+            elif isinstance(val, int):
+                d[col] = val
+            else:
+                d[col] = str(val)
+        funds.append(d)
+
+    return {"funds": funds, "count": len(funds), "scope": scope}
+
+
+@router.get("/etp/rex-summary", summary="REX Fund Summary",
+            description="Returns summary KPIs for REX products: total AUM, fund count, flows, top performer.")
+def etp_rex_summary(
+    db: Session = Depends(get_db),
+    _: None = Depends(verify_api_key),
+):
+    """REX product summary. Requires X-API-Key header."""
+    import math
+    from sqlalchemy import text as sa_text
+
+    rows = db.execute(sa_text(
+        "SELECT ticker, fund_name, rex_suite, aum, "
+        "total_return_1day, fund_flow_1week, fund_flow_1month "
+        "FROM mkt_master_data WHERE is_rex = 1 AND market_status = 'ACTV' "
+        "AND (fund_type = 'ETF' OR fund_type = 'ETN') "
+        "ORDER BY aum DESC"
+    )).fetchall()
+
+    funds = []
+    total_aum = 0
+    best = None
+    for r in rows:
+        aum = float(r[3] or 0)
+        ret_1d = float(r[4]) if r[4] and not math.isnan(float(r[4])) else None
+        total_aum += aum
+        fund = {"ticker": r[0], "fund_name": r[1], "suite": r[2], "aum": round(aum, 2),
+                "return_1d": round(ret_1d, 4) if ret_1d else None,
+                "flow_1w": round(float(r[5] or 0), 2), "flow_1m": round(float(r[6] or 0), 2)}
+        funds.append(fund)
+        if ret_1d is not None and (best is None or ret_1d > best["return_1d"]):
+            best = fund
+
+    return {
+        "total_aum_millions": round(total_aum, 2),
+        "fund_count": len(funds),
+        "best_1d_performer": best,
+        "funds": funds,
+    }
