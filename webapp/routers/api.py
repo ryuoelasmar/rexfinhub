@@ -488,3 +488,33 @@ def etp_rex_summary(
         "best_1d_performer": best,
         "funds": funds,
     }
+
+
+@router.get("/returns", summary="Total Return Data",
+            description="Fetches total return price series, drawdowns, growth of $10K, "
+                        "annual returns, and return stats for any ETF/ETN symbols. "
+                        "Data sourced from TotalRealReturns.com.")
+def total_returns_api(
+    _: None = Depends(verify_api_key),
+    symbols: str = Query(description="Comma-separated tickers (e.g. NVII,NVDY,JEPI)"),
+    start: str = Query(default="", description="Start date YYYY-MM-DD (optional)"),
+    end: str = Query(default="", description="End date YYYY-MM-DD (optional)"),
+):
+    """Total return comparison data. Requires X-API-Key."""
+    from scripts.scrape_total_returns import scrape
+
+    symbol_list = [s.strip().upper() for s in symbols.split(",") if s.strip()]
+    if not symbol_list:
+        raise HTTPException(status_code=400, detail="No symbols provided")
+    if len(symbol_list) > 10:
+        raise HTTPException(status_code=400, detail="Max 10 symbols per request")
+
+    try:
+        result = scrape(symbol_list, start, end)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Data fetch failed: {str(e)}")
+
+    if "error" in result:
+        raise HTTPException(status_code=404, detail=result["error"])
+
+    return result
