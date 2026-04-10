@@ -1518,12 +1518,23 @@ def _audit_send(subject: str, recipients: list[str], allowed: bool):
     audit_path.write_text(_json.dumps(entries, indent=2), encoding="utf-8")
 
 
+_last_alert_time: float = 0
+_ALERT_COOLDOWN = 3600  # 1 hour between alerts
+
+
 def send_critical_alert(subject: str, message: str) -> bool:
     """Send a critical alert email to relasmar@rexfin.com.
 
     Bypasses the send gate and recipient files — alerts always go through.
-    Uses Graph API directly (not SMTP).
+    Uses Graph API directly (not SMTP). Rate limited to 1 per hour.
     """
+    import time as _time
+    global _last_alert_time
+    now = _time.time()
+    if _last_alert_time and (now - _last_alert_time) < _ALERT_COOLDOWN:
+        log.warning("Alert throttled (last sent %.0f sec ago): %s", now - _last_alert_time, subject)
+        return False
+    _last_alert_time = now
     try:
         from webapp.services.graph_email import _load_env, _get_access_token, GRAPH_SEND_URL
         import requests as _req

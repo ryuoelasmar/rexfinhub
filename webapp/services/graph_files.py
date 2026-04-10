@@ -28,9 +28,11 @@ _GRAPH_BASE = "https://graph.microsoft.com/v1.0"
 # Local download destination (same as bbg_file.py fallback)
 _LOCAL_DEST = Path(__file__).resolve().parent.parent.parent / "data" / "DASHBOARD" / "bloomberg_daily_file.xlsm"
 
-# Cache resolved IDs to avoid re-discovering on every call
+# Cache resolved IDs to avoid re-discovering on every call (1-hour TTL)
 _cached_site_id: str | None = None
 _cached_drive_id: str | None = None
+_cache_time: float = 0
+_CACHE_TTL = 3600  # 1 hour
 
 
 def _get_auth() -> tuple[dict, str | None]:
@@ -60,8 +62,8 @@ def _get_site_and_drive(token: str) -> tuple[str | None, str | None]:
 
     Returns (site_id, drive_id) or (None, None) on failure.
     """
-    global _cached_site_id, _cached_drive_id
-    if _cached_site_id and _cached_drive_id:
+    global _cached_site_id, _cached_drive_id, _cache_time
+    if _cached_site_id and _cached_drive_id and (time.time() - _cache_time) < _CACHE_TTL:
         log.info("Graph Files: using cached site/drive IDs")
         return _cached_site_id, _cached_drive_id
 
@@ -109,6 +111,7 @@ def _get_site_and_drive(token: str) -> tuple[str | None, str | None]:
                 log.info("Graph Files: Bloomberg file found in drive '%s'", drive_name)
                 _cached_site_id = site_id
                 _cached_drive_id = drive_id
+                _cache_time = time.time()
                 return site_id, drive_id
 
         log.error("Graph Files: Bloomberg file not found in any drive (tried %d drives)", len(drives))
@@ -187,9 +190,25 @@ def download_bloomberg_from_sharepoint(dest: Path = None) -> Path | None:
         resp = requests.get(url, headers=headers, timeout=120, stream=True)
         if resp.status_code == 200:
             dest.parent.mkdir(parents=True, exist_ok=True)
-            with open(dest, "wb") as f:
+            expected_size = int(resp.headers.get("content-length", 0))
+            # Write to temp file first (atomic)
+            tmp_path = dest.with_suffix(".tmp")
+            with open(tmp_path, "wb") as f:
                 for chunk in resp.iter_content(chunk_size=65536):
                     f.write(chunk)
+            downloaded_size = tmp_path.stat().st_size
+            # Validate size
+            if downloaded_size < 1_000_000:  # Bloomberg file should be >1MB
+                log.error("Graph Files: downloaded file too small (%.0f bytes), discarding", downloaded_size)
+                tmp_path.unlink(missing_ok=True)
+                return None
+            if expected_size > 0 and abs(downloaded_size - expected_size) > 1024:
+                log.error("Graph Files: size mismatch (expected %d, got %d), discarding",
+                          expected_size, downloaded_size)
+                tmp_path.unlink(missing_ok=True)
+                return None
+            # Atomic rename
+            tmp_path.replace(dest)
             elapsed = time.time() - start
             size_mb = dest.stat().st_size / (1024 * 1024)
             log.info("Graph Files: downloaded %.1f MB in %.1fs -> %s", size_mb, elapsed, dest)

@@ -53,7 +53,7 @@ def get_bloomberg_file() -> Path:
 
         if not _LOCAL_CACHE.exists() or is_sharepoint_newer_than_local(_LOCAL_CACHE):
             downloaded = download_bloomberg_from_sharepoint()
-            if downloaded and downloaded.exists():
+            if downloaded and downloaded.exists() and downloaded.stat().st_size > 1_000_000:
                 mtime = datetime.fromtimestamp(downloaded.stat().st_mtime).strftime("%Y-%m-%d %H:%M")
                 log.info("Bloomberg file: Graph API (modified %s)", mtime)
                 return downloaded

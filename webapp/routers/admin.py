@@ -226,10 +226,12 @@ def toggle_gate(request: Request):
     gate = _P(__file__).resolve().parent.parent.parent / "config" / ".send_enabled"
     if gate.exists() and gate.read_text().strip().lower() == "true":
         gate.unlink()
+        log.info("Send gate LOCKED by admin (IP: %s)", request.client.host if request.client else "unknown")
         return RedirectResponse("/admin/?gate=locked", status_code=303)
     else:
         gate.parent.mkdir(parents=True, exist_ok=True)
         gate.write_text("true")
+        log.info("Send gate UNLOCKED by admin (IP: %s)", request.client.host if request.client else "unknown")
         return RedirectResponse("/admin/?gate=unlocked", status_code=303)
 
 
@@ -381,18 +383,22 @@ def classification_update(request: Request):
     if not _is_admin(request):
         return RedirectResponse("/admin/", status_code=302)
 
-    import asyncio
-    # Need to read form data synchronously
-    async def _read_form():
-        return await request.form()
-    form = asyncio.get_event_loop().run_until_complete(_read_form())
-
     import pandas as pd
     from market.config import RULES_DIR
+    from starlette.datastructures import FormData
+
+    # Read form data synchronously via Starlette's sync interface
+    import asyncio
+    loop = asyncio.new_event_loop()
+    form = loop.run_until_complete(request.form())
+    loop.close()
 
     ticker = form.get("ticker", "").strip()
     new_cat = form.get("category", "").strip()
-    if not ticker or not new_cat:
+
+    # Whitelist categories to prevent path injection
+    ALLOWED_CATEGORIES = {"LI", "CC", "Crypto", "Defined", "Thematic"}
+    if not ticker or not new_cat or new_cat not in ALLOWED_CATEGORIES:
         return RedirectResponse("/admin/?cls_error=missing", status_code=303)
 
     # Update fund_mapping.csv
@@ -405,7 +411,11 @@ def classification_update(request: Request):
     # Add new entry
     new_row = pd.DataFrame([{"ticker": ticker, "etp_category": new_cat, "is_primary": 1, "source": "manual"}])
     fm = pd.concat([fm, new_row], ignore_index=True)
-    fm.to_csv(fm_path, index=False)
+    # Atomic write: temp file then rename
+    import tempfile
+    with tempfile.NamedTemporaryFile(mode='w', dir=str(fm_path.parent), delete=False, suffix='.csv') as tmp:
+        fm.to_csv(tmp.name, index=False)
+        Path(tmp.name).replace(fm_path)
 
     # Update attributes CSV
     attr_file = RULES_DIR / f"attributes_{new_cat}.csv"
@@ -421,7 +431,11 @@ def classification_update(request: Request):
                 col_name = key[5:]  # strip "attr_" prefix
                 new_attrs[col_name] = form.get(key, "")
         attr_df = pd.concat([attr_df, pd.DataFrame([new_attrs])], ignore_index=True)
-        attr_df.to_csv(attr_file, index=False)
+        # Atomic write
+        import tempfile
+        with tempfile.NamedTemporaryFile(mode='w', dir=str(attr_file.parent), delete=False, suffix='.csv') as tmp:
+            attr_df.to_csv(tmp.name, index=False)
+            Path(tmp.name).replace(attr_file)
 
     return RedirectResponse(f"/admin/?cls_updated={ticker}", status_code=303)
 
@@ -488,6 +502,8 @@ def classification_approve(
         ).first()
         if not proposal:
             return RedirectResponse("/admin/?cls_error=missing", status_code=303)
+        if proposal.status != "pending":
+            return RedirectResponse("/admin/?cls_error=already_resolved", status_code=303)
 
         # Build candidate dict matching apply_classifications() input format
         candidate = {
