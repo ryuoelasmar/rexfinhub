@@ -198,6 +198,8 @@ def _read_shares_and_prices(xl: pd.ExcelFile) -> tuple[pd.DataFrame, pd.DataFram
     shares_cols = [0] + list(shares_map.keys())
     shares = raw_s.iloc[4:, shares_cols].copy()
     shares.columns = ["Date"] + [shares_map[i] for i in shares_map]
+    # Deduplicate columns (keep first occurrence) — prevents DataFrame return on indexing
+    shares = shares.loc[:, ~shares.columns.duplicated(keep="first")]
     shares["Date"] = pd.to_datetime(shares["Date"], errors="coerce")
     shares = shares.dropna(subset=["Date"])
     shares = shares.set_index("Date").sort_index()
