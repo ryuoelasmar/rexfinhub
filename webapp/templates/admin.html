@@ -250,7 +250,59 @@
     {{ cls_validation.summary.total_funds }} classified:
     {% for cat, count in cls_validation.summary.categories.items() %}{{ cat }}={{ count }}{% if not loop.last %}, {% endif %}{% endfor %}
   </div>
+
+  <!-- Classification Editor -->
+  <div style="margin-top:14px; border-top:1px solid var(--border); padding-top:12px;">
+    <div style="font-size:11px; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px;">Search &amp; Edit</div>
+    <div style="display:flex; gap:6px; margin-bottom:8px;">
+      <input type="text" id="cls-search" placeholder="Ticker (e.g. ATCL)" style="flex:1; max-width:200px; font-size:12px; padding:6px 10px; border:1px solid var(--border); border-radius:4px;">
+      <button onclick="lookupFund()" style="font-size:11px; padding:6px 12px; border:none; border-radius:4px; background:var(--blue); color:#fff; cursor:pointer;">Search</button>
+    </div>
+    <div id="cls-result" style="display:none;"></div>
+  </div>
 </div>
+
+{% if request.query_params.get('cls_updated') %}
+<script>document.addEventListener('DOMContentLoaded', function(){ alert('Classification updated for {{ request.query_params.get("cls_updated") }}. Changes apply on next market sync.'); });</script>
+{% endif %}
+
+<script>
+function lookupFund() {
+  var q = document.getElementById('cls-search').value.trim();
+  if (!q) return;
+  fetch('/admin/classification/lookup?q=' + encodeURIComponent(q))
+    .then(r => r.json())
+    .then(d => {
+      var el = document.getElementById('cls-result');
+      if (!d.found) {
+        el.innerHTML = '<div style="font-size:12px; color:var(--muted); padding:8px 0;">Not found: ' + d.ticker + '. Not in fund_mapping.csv.</div>';
+        el.style.display = '';
+        return;
+      }
+      var cats = ['LI', 'CC', 'Crypto', 'Defined', 'Thematic'];
+      var catOpts = cats.map(c => '<option value="' + c + '"' + (c === d.category ? ' selected' : '') + '>' + c + '</option>').join('');
+      var attrFields = '';
+      for (var key in d.attributes) {
+        attrFields += '<div style="display:flex; gap:6px; align-items:center; margin-bottom:4px;">' +
+          '<label style="font-size:11px; color:var(--muted); width:140px;">' + key + '</label>' +
+          '<input type="text" name="attr_' + key + '" value="' + (d.attributes[key] || '') + '" style="flex:1; font-size:11px; padding:4px 8px; border:1px solid var(--border); border-radius:3px;">' +
+          '</div>';
+      }
+      el.innerHTML = '<form method="post" action="/admin/classification/update" style="background:var(--white); border:1px solid var(--border); border-radius:6px; padding:12px; margin-top:4px;">' +
+        '<input type="hidden" name="ticker" value="' + d.ticker + '">' +
+        '<div style="display:flex; gap:12px; align-items:center; margin-bottom:8px;">' +
+        '<strong style="font-size:13px;">' + d.ticker + '</strong>' +
+        '<select name="category" style="font-size:11px; padding:4px 8px; border:1px solid var(--border); border-radius:3px;">' + catOpts + '</select>' +
+        '<span style="font-size:10px; color:var(--muted);">source: ' + d.source + '</span>' +
+        '</div>' +
+        (attrFields ? '<div style="margin-bottom:8px;">' + attrFields + '</div>' : '') +
+        '<button type="submit" style="font-size:11px; padding:5px 14px; border:none; border-radius:4px; background:var(--green); color:#fff; cursor:pointer;" onclick="return confirm(\'Save classification for ' + d.ticker + '?\')">Save</button>' +
+        '</form>';
+      el.style.display = '';
+    });
+}
+document.getElementById('cls-search').addEventListener('keydown', function(e) { if (e.key === 'Enter') lookupFund(); });
+</script>
 
 {# ═══════════════════════════════════════════════════════════════════════ #}
 {# SECTION 4: EMAIL MANAGEMENT                                            #}

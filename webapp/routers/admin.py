@@ -323,6 +323,109 @@ def sync_market(request: Request, db: Session = Depends(get_db)):
 # Classification Review Queue
 # ---------------------------------------------------------------------------
 
+@router.get("/classification/lookup")
+def classification_lookup(request: Request):
+    """Look up a fund's current classification by ticker."""
+    if not _is_admin(request):
+        return RedirectResponse("/admin/", status_code=302)
+
+    import json as _json
+    import pandas as pd
+    from market.config import RULES_DIR
+
+    ticker = request.query_params.get("q", "").strip().upper()
+    if not ticker:
+        return {"ticker": None, "found": False}
+
+    # Append " US" if not present
+    if not ticker.endswith(" US"):
+        ticker = ticker + " US"
+
+    fm = pd.read_csv(RULES_DIR / "fund_mapping.csv", engine="python", on_bad_lines="skip")
+    fm["ticker"] = fm["ticker"].astype(str).str.strip()
+    rows = fm[fm["ticker"] == ticker]
+
+    if rows.empty:
+        return {"ticker": ticker, "found": False, "category": None, "attributes": {}}
+
+    cat = rows.iloc[0]["etp_category"]
+    source = rows.iloc[0].get("source", "unknown")
+
+    # Load attributes for this category
+    attrs = {}
+    attr_file = RULES_DIR / f"attributes_{cat}.csv"
+    if attr_file.exists():
+        attr_df = pd.read_csv(attr_file, engine="python", on_bad_lines="skip")
+        attr_df["ticker"] = attr_df["ticker"].astype(str).str.strip()
+        match = attr_df[attr_df["ticker"] == ticker]
+        if not match.empty:
+            row = match.iloc[0]
+            for col in attr_df.columns:
+                if col != "ticker":
+                    val = row[col]
+                    attrs[col] = str(val) if pd.notna(val) else ""
+
+    return {
+        "ticker": ticker,
+        "found": True,
+        "category": cat,
+        "source": source,
+        "attributes": attrs,
+        "attribute_columns": list(attrs.keys()),
+    }
+
+
+@router.post("/classification/update")
+def classification_update(request: Request):
+    """Update a fund's classification (category + attributes)."""
+    if not _is_admin(request):
+        return RedirectResponse("/admin/", status_code=302)
+
+    import asyncio
+    # Need to read form data synchronously
+    async def _read_form():
+        return await request.form()
+    form = asyncio.get_event_loop().run_until_complete(_read_form())
+
+    import pandas as pd
+    from market.config import RULES_DIR
+
+    ticker = form.get("ticker", "").strip()
+    new_cat = form.get("category", "").strip()
+    if not ticker or not new_cat:
+        return RedirectResponse("/admin/?cls_error=missing", status_code=303)
+
+    # Update fund_mapping.csv
+    fm_path = RULES_DIR / "fund_mapping.csv"
+    fm = pd.read_csv(fm_path, engine="python", on_bad_lines="skip")
+    fm["ticker"] = fm["ticker"].astype(str).str.strip()
+
+    # Remove old entries for this ticker
+    fm = fm[fm["ticker"] != ticker]
+    # Add new entry
+    new_row = pd.DataFrame([{"ticker": ticker, "etp_category": new_cat, "is_primary": 1, "source": "manual"}])
+    fm = pd.concat([fm, new_row], ignore_index=True)
+    fm.to_csv(fm_path, index=False)
+
+    # Update attributes CSV
+    attr_file = RULES_DIR / f"attributes_{new_cat}.csv"
+    if attr_file.exists():
+        attr_df = pd.read_csv(attr_file, engine="python", on_bad_lines="skip")
+        attr_df["ticker"] = attr_df["ticker"].astype(str).str.strip()
+        # Remove old entry
+        attr_df = attr_df[attr_df["ticker"] != ticker]
+        # Build new attrs from form
+        new_attrs = {"ticker": ticker}
+        for key in form.keys():
+            if key.startswith("attr_"):
+                col_name = key[5:]  # strip "attr_" prefix
+                new_attrs[col_name] = form.get(key, "")
+        attr_df = pd.concat([attr_df, pd.DataFrame([new_attrs])], ignore_index=True)
+        attr_df.to_csv(attr_file, index=False)
+
+    return RedirectResponse(f"/admin/?cls_updated={ticker}", status_code=303)
+
+
 @router.post("/classification/scan")
 def classification_scan(request: Request, db: Session = Depends(get_db)):
     """Scan for unmapped funds and populate the review queue."""

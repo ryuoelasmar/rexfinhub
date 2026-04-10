@@ -1518,6 +1518,60 @@ def _audit_send(subject: str, recipients: list[str], allowed: bool):
     audit_path.write_text(_json.dumps(entries, indent=2), encoding="utf-8")
 
 
+def send_critical_alert(subject: str, message: str) -> bool:
+    """Send a critical alert email to relasmar@rexfin.com.
+
+    Bypasses the send gate and recipient files — alerts always go through.
+    Uses Graph API directly (not SMTP).
+    """
+    try:
+        from webapp.services.graph_email import _load_env, _get_access_token, GRAPH_SEND_URL
+        import requests as _req
+
+        cfg = _load_env()
+        if not all([cfg["tenant_id"], cfg["client_id"], cfg["client_secret"], cfg["sender"]]):
+            log.error("Cannot send alert: Azure credentials not configured")
+            return False
+
+        token = _get_access_token(cfg["tenant_id"], cfg["client_id"], cfg["client_secret"])
+        if not token:
+            log.error("Cannot send alert: token acquisition failed")
+            return False
+
+        html_body = f"""
+        <div style="font-family:sans-serif; padding:20px;">
+            <h2 style="color:#e74c3c; margin:0 0 12px;">REX FinHub Alert</h2>
+            <p style="font-size:14px; color:#1a1a2e;">{message}</p>
+            <hr style="border:none; border-top:1px solid #dee2e6; margin:16px 0;">
+            <p style="font-size:11px; color:#636e72;">
+                This is an automated alert from the REX FinHub pipeline.
+                Check the <a href="https://rex-etp-tracker.onrender.com/admin/">Operations Center</a> for details.
+            </p>
+        </div>
+        """
+
+        url = GRAPH_SEND_URL.format(sender=cfg["sender"])
+        payload = {
+            "message": {
+                "subject": f"[ALERT] {subject}",
+                "body": {"contentType": "HTML", "content": html_body},
+                "toRecipients": [{"emailAddress": {"address": "relasmar@rexfin.com"}}],
+            },
+            "saveToSentItems": "false",
+        }
+        headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+        resp = _req.post(url, json=payload, headers=headers, timeout=15)
+        if resp.status_code == 202:
+            log.info("Critical alert sent: %s", subject)
+            return True
+        else:
+            log.error("Alert send failed [%d]: %s", resp.status_code, resp.text[:200])
+            return False
+    except Exception as e:
+        log.error("Alert send error: %s", e)
+        return False
+
+
 def _send_html_digest(html_body: str, recipients: list[str],
                       edition: str = "daily",
                       subject_override: str = "",

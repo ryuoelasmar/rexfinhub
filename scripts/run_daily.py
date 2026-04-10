@@ -679,6 +679,17 @@ def main():
         if not critical_ok:
             print(f"  SKIPPED: critical step(s) failed — not sending emails with stale/missing data")
             print(f"  Errors: {'; '.join(errors)}")
+            # Send critical alert
+            try:
+                from etp_tracker.email_alerts import send_critical_alert
+                send_critical_alert(
+                    "Daily Pipeline Critical Failure",
+                    f"The daily pipeline failed on critical steps. Emails were NOT sent.<br><br>"
+                    f"<strong>Errors:</strong> {'; '.join(errors)}<br>"
+                    f"<strong>Time:</strong> {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+                )
+            except Exception as _alert_err:
+                print(f"  Alert send also failed: {_alert_err}")
         else:
             try:
                 import subprocess
