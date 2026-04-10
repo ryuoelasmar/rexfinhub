@@ -134,6 +134,31 @@ def admin_page(request: Request, db: Session = Depends(get_db)):
         ClassificationProposal.status == "approved"
     ).order_by(ClassificationProposal.reviewed_at.desc()).limit(10).all()
 
+    # All recipient lists (for email management section)
+    _config_dir = _P(__file__).resolve().parent.parent.parent / "config"
+    def _read_recipients(filename):
+        p = _config_dir / filename
+        if not p.exists():
+            return []
+        return [l.strip() for l in p.read_text(encoding="utf-8").splitlines()
+                if l.strip() and not l.startswith("#")]
+
+    all_recipients = {
+        "main": _read_recipients("email_recipients.txt"),
+        "private": _read_recipients("email_recipients_private.txt"),
+        "autocall": _read_recipients("autocall_recipients.txt"),
+    }
+
+    # SEC scrape metrics
+    sec_metrics = {}
+    try:
+        import json as _j2
+        summary_path = _P(__file__).resolve().parent.parent.parent / "outputs" / "_run_summary.json"
+        if summary_path.exists():
+            sec_metrics = _j2.loads(summary_path.read_text(encoding="utf-8"))
+    except Exception:
+        pass
+
     # Report send history
     import json as _json
     send_log_path = _P(__file__).resolve().parent.parent.parent / "data" / ".send_log.json"
@@ -183,7 +208,74 @@ def admin_page(request: Request, db: Session = Depends(get_db)):
         "approved_proposals": approved_proposals,
         "cls_validation": cls_validation,
         "report_status": report_status,
+        "all_recipients": all_recipients,
+        "sec_metrics": sec_metrics,
     })
+
+
+# ---------------------------------------------------------------------------
+# Email Gate + Recipient Management
+# ---------------------------------------------------------------------------
+
+@router.post("/gate/toggle")
+def toggle_gate(request: Request):
+    """Toggle email send gate on/off."""
+    if not _is_admin(request):
+        return RedirectResponse("/admin/", status_code=302)
+    from pathlib import Path as _P
+    gate = _P(__file__).resolve().parent.parent.parent / "config" / ".send_enabled"
+    if gate.exists() and gate.read_text().strip().lower() == "true":
+        gate.unlink()
+        return RedirectResponse("/admin/?gate=locked", status_code=303)
+    else:
+        gate.parent.mkdir(parents=True, exist_ok=True)
+        gate.write_text("true")
+        return RedirectResponse("/admin/?gate=unlocked", status_code=303)
+
+
+@router.post("/recipients/add")
+def add_recipient(request: Request, list_name: str = Form(""), email: str = Form("")):
+    """Add an email to a recipient list."""
+    if not _is_admin(request):
+        return RedirectResponse("/admin/", status_code=302)
+    from pathlib import Path as _P
+    files = {
+        "main": _P(__file__).resolve().parent.parent.parent / "config" / "email_recipients.txt",
+        "private": _P(__file__).resolve().parent.parent.parent / "config" / "email_recipients_private.txt",
+        "autocall": _P(__file__).resolve().parent.parent.parent / "config" / "autocall_recipients.txt",
+    }
+    path = files.get(list_name)
+    if not path or not email.strip():
+        return RedirectResponse("/admin/?recip_error=1", status_code=303)
+    # Append email (avoid duplicates)
+    existing = set()
+    if path.exists():
+        existing = {l.strip().lower() for l in path.read_text().splitlines() if l.strip() and not l.startswith("#")}
+    if email.strip().lower() not in existing:
+        with open(path, "a") as f:
+            f.write(f"\n{email.strip()}")
+    return RedirectResponse(f"/admin/?recip_added={email.strip()}", status_code=303)
+
+
+@router.post("/recipients/remove")
+def remove_recipient(request: Request, list_name: str = Form(""), email: str = Form("")):
+    """Remove an email from a recipient list."""
+    if not _is_admin(request):
+        return RedirectResponse("/admin/", status_code=302)
+    from pathlib import Path as _P
+    files = {
+        "main": _P(__file__).resolve().parent.parent.parent / "config" / "email_recipients.txt",
+        "private": _P(__file__).resolve().parent.parent.parent / "config" / "email_recipients_private.txt",
+        "autocall": _P(__file__).resolve().parent.parent.parent / "config" / "autocall_recipients.txt",
+    }
+    path = files.get(list_name)
+    if not path or not email.strip():
+        return RedirectResponse("/admin/?recip_error=1", status_code=303)
+    if path.exists():
+        lines = path.read_text().splitlines()
+        new_lines = [l for l in lines if l.strip().lower() != email.strip().lower()]
+        path.write_text("\n".join(new_lines) + "\n")
+    return RedirectResponse(f"/admin/?recip_removed={email.strip()}", status_code=303)
 
 
 # ---------------------------------------------------------------------------
@@ -191,19 +283,24 @@ def admin_page(request: Request, db: Session = Depends(get_db)):
 # ---------------------------------------------------------------------------
 
 @router.post("/pull-bloomberg")
-def pull_bloomberg(request: Request):
-    """Pull fresh Bloomberg file from SharePoint via Graph API."""
+def pull_bloomberg(request: Request, db: Session = Depends(get_db)):
+    """Pull fresh Bloomberg from SharePoint + sync to DB in one step."""
     if not _is_admin(request):
         return RedirectResponse("/admin/", status_code=302)
     try:
+        # Step 1: Download from SharePoint
         from webapp.services.graph_files import download_bloomberg_from_sharepoint
         path = download_bloomberg_from_sharepoint()
-        if path:
-            return RedirectResponse("/admin/?bbg_pulled=1", status_code=303)
-        else:
+        if not path:
             return RedirectResponse("/admin/?bbg_error=1", status_code=303)
+
+        # Step 2: Sync to DB
+        from webapp.services.market_sync import sync_market_data
+        result = sync_market_data(db)
+        count = result.get("master_rows", 0)
+        return RedirectResponse(f"/admin/?bbg_pulled=1&mkt_synced=1&mkt_count={count}", status_code=303)
     except Exception as e:
-        log.error("Bloomberg pull failed: %s", e)
+        log.error("Pull & Sync failed: %s", e)
         return RedirectResponse("/admin/?bbg_error=1", status_code=303)
 
 
