@@ -65,23 +65,41 @@ def _load_send_log() -> dict:
     return {}
 
 
-def _record_send(bundle: str):
-    """Record that a bundle was sent today."""
+def _record_send(key: str):
+    """Record that a report/bundle was sent. Tracks per-report for dedup."""
     import json
     log = _load_send_log()
     today = datetime.now().strftime("%Y-%m-%d")
     if today not in log:
         log[today] = {}
-    log[today][bundle] = datetime.now().strftime("%H:%M")
+    log[today][key] = datetime.now().strftime("%H:%M")
     SEND_LOG.parent.mkdir(parents=True, exist_ok=True)
     SEND_LOG.write_text(json.dumps(log, indent=2), encoding="utf-8")
 
 
-def _already_sent_today(bundle: str) -> str | None:
-    """Check if a bundle was already sent today. Returns time if yes, None if no."""
+def _already_sent_today(key: str) -> str | None:
+    """Check if a report was already sent today. Returns time if yes, None if no."""
     log = _load_send_log()
     today = datetime.now().strftime("%Y-%m-%d")
-    return log.get(today, {}).get(bundle)
+    return log.get(today, {}).get(key)
+
+
+def _already_sent_this_week(key: str) -> str | None:
+    """Check if a report was already sent this ISO week. Returns 'date HH:MM' if yes."""
+    log = _load_send_log()
+    now = datetime.now()
+    iso_year, iso_week, _ = now.isocalendar()
+    for date_str, reports in log.items():
+        if key not in reports:
+            continue
+        try:
+            d = datetime.strptime(date_str, "%Y-%m-%d")
+            dy, dw, _ = d.isocalendar()
+            if dy == iso_year and dw == iso_week:
+                return f"{date_str} {reports[key]}"
+        except ValueError:
+            continue
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -147,10 +165,16 @@ def _load_autocall_recipients() -> list[str]:
 
 def do_daily(preview: bool):
     db = _get_db()
+    force = "--force" in [a.lower() for a in sys.argv[1:]]
     try:
         date = _data_date(db)
         for base_title, filename, builder in DAILY_REPORTS:
             subject = f"{base_title}: {date}"
+            if not preview and not force:
+                prev = _already_sent_today(filename)
+                if prev:
+                    print(f"\n  BLOCKED: {filename} already sent today at {prev}")
+                    continue
             print(f"\n  Building {subject}...")
             html = builder(db)
             if preview:
@@ -158,6 +182,8 @@ def do_daily(preview: bool):
             else:
                 ok = _send_via_smtp(html, subject)
                 print(f"  {'Sent' if ok else 'FAILED'}: {subject}")
+                if ok:
+                    _record_send(filename)
     finally:
         db.close()
 
@@ -170,24 +196,37 @@ def do_weekly(preview: bool):
     from etp_tracker.weekly_digest import build_weekly_digest_html, send_weekly_digest
 
     db = _get_db()
+    force = "--force" in [a.lower() for a in sys.argv[1:]]
     try:
         date = _data_date(db)
 
         # Weekly report
         weekly_subject = f"REX Weekly ETP Report: {date}"
-        print(f"\n  Building {weekly_subject}...")
-        if preview:
+        if not preview and not force:
+            prev = _already_sent_this_week("weekly_report")
+            if prev:
+                print(f"\n  BLOCKED: weekly_report already sent this week ({prev})")
+            else:
+                print(f"\n  Building {weekly_subject}...")
+                ok = send_weekly_digest(db, DASHBOARD_URL)
+                print(f"  {'Sent' if ok else 'FAILED'}: {weekly_subject}")
+                if ok:
+                    _record_send("weekly_report")
+        elif preview:
+            print(f"\n  Building {weekly_subject}...")
             html = build_weekly_digest_html(db, DASHBOARD_URL)
             _save_and_open(html, "weekly_report")
-        else:
-            ok = send_weekly_digest(db, DASHBOARD_URL)
-            print(f"  {'Sent' if ok else 'FAILED'}: {weekly_subject}")
 
         # Market reports (L&I, Income, Flow)
         for base_title, filename, builder in WEEKLY_REPORTS:
             if builder is None:
                 continue  # weekly_report handled above
             subject = f"{base_title}: {date}"
+            if not preview and not force:
+                prev = _already_sent_this_week(filename)
+                if prev:
+                    print(f"\n  BLOCKED: {filename} already sent this week ({prev})")
+                    continue
             print(f"\n  Building {subject}...")
             html = builder(db)
             if preview:
@@ -195,8 +234,10 @@ def do_weekly(preview: bool):
             else:
                 ok = _send_via_smtp(html, subject)
                 print(f"  {'Sent' if ok else 'FAILED'}: {subject}")
+                if ok:
+                    _record_send(filename)
 
-        # Autocall report (separate recipient list — external distribution)
+        # Autocall report — PREVIEW ONLY (never auto-send, external distribution)
         base_title, filename, builder = AUTOCALL_REPORT
         subject = f"{base_title}: {date}"
         print(f"\n  Building {subject}...")
@@ -204,13 +245,7 @@ def do_weekly(preview: bool):
         if preview:
             _save_and_open(html, filename)
         else:
-            autocall_recipients = _load_autocall_recipients()
-            if autocall_recipients:
-                from etp_tracker.email_alerts import _send_html_digest
-                ok = _send_html_digest(html, autocall_recipients, subject_override=subject)
-                print(f"  {'Sent' if ok else 'FAILED'}: {subject} -> {len(autocall_recipients)} recipients")
-            else:
-                print(f"  SKIP: no autocall recipients configured")
+            print(f"  SKIP: Autocall is preview-only (send manually via separate workflow)")
     finally:
         db.close()
 
@@ -291,31 +326,20 @@ def main():
         print(f"  Market sync failed (non-fatal): {e}")
         import traceback; traceback.print_exc()
 
-    # Duplicate send guard (preview is always allowed, per-bundle)
-    force = "--force" in [a.lower() for a in sys.argv[1:]]
-
-    def _guard_and_run(b: str, fn):
-        if not preview:
-            sent_at = _already_sent_today(b)
-            if sent_at and not force:
-                print(f"\n  SKIPPED: {b} already sent today at {sent_at}.")
-                return False
-        fn(preview)
-        if not preview:
-            _record_send(b)
-        return True
+    # Per-report duplicate guards are inside do_daily/do_weekly.
+    # Daily: blocks same-day resend per report.
+    # Weekly: blocks same-week resend per report.
+    # Use --force to override all guards.
 
     if bundle == "daily":
-        _guard_and_run("daily", do_daily)
+        do_daily(preview)
     elif bundle == "weekly":
-        _guard_and_run("weekly", do_weekly)
+        do_weekly(preview)
     elif bundle == "market_share":
-        _guard_and_run("market_share", do_market_share)
+        do_market_share(preview)
     else:  # "all"
-        d = _guard_and_run("daily", do_daily)
-        w = _guard_and_run("weekly", do_weekly)
-        if not preview and not d and not w:
-            print("\n  All reports already sent today. Use --force to resend.")
+        do_daily(preview)
+        do_weekly(preview)
 
     print("\nDone.")
 

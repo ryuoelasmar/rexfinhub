@@ -304,16 +304,10 @@ def get_data_as_of(db: Session) -> str:
             return ts_row.strftime("%B %d, %Y")
     except Exception:
         pass
-    # Fallback: pipeline run timestamp
-    row = db.execute(
-        select(MktPipelineRun.finished_at)
-        .where(MktPipelineRun.status == "completed")
-        .order_by(MktPipelineRun.finished_at.desc())
-        .limit(1)
-    ).scalar()
-    if row:
-        return row.strftime("%B %d, %Y")
-    return ""
+    # Fallback: use today's local date (pipeline timestamps are UTC which
+    # causes off-by-one when formatted naively in US Eastern evenings)
+    from datetime import datetime as _dt
+    return _dt.now().strftime("%B %d, %Y")
 
 
 def get_master_data(db: Session, etn_overrides: bool = False) -> pd.DataFrame:

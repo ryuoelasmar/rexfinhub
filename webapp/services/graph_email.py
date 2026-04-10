@@ -105,6 +105,14 @@ def send_email(
 
     Returns True on success, False on failure.
     """
+    # --- SEND GATE (mirrors the gate in email_alerts._send_html_digest) ---
+    from pathlib import Path as _P
+    _gate = _P(__file__).resolve().parent.parent.parent / "config" / ".send_enabled"
+    if not _gate.exists() or _gate.read_text().strip().lower() != "true":
+        log.warning("SEND BLOCKED (Graph): config/.send_enabled is not 'true'. Subject: %s", subject)
+        return False
+    # --- END SEND GATE ---
+
     cfg = _load_env()
     if not all([cfg["tenant_id"], cfg["client_id"], cfg["client_secret"], cfg["sender"]]):
         log.warning("Azure Graph API not configured")

@@ -402,7 +402,7 @@ def _gather_market_snapshot(db=None) -> dict | None:
                     _pret = _yf_returns[_plbl]
                 else:
                     _prow = master[master["ticker"] == _ptk_bbg]
-                    _pret = float(_prow.iloc[0].get("t_w3.total_return_1day", 0)) if not _prow.empty else 0
+                    _pret = float(_prow.iloc[0].get("t_w5.price_return_1day", 0)) if not _prow.empty else 0
                 market_pulse[_plbl] = {"return_1d": _pret, "return_1d_fmt": f"{_pret:+.2f}%"}
             # Industry totals (for ETP Market Overview, not Market Pulse)
             _all_dedup = master.drop_duplicates(subset=["ticker"], keep="first") if "ticker" in master.columns else master
@@ -1498,6 +1498,26 @@ def build_digest_html_from_db(
                               edition=edition)
 
 
+def _audit_send(subject: str, recipients: list[str], allowed: bool):
+    """Log every send attempt to data/.send_audit.json."""
+    import json as _json
+    audit_path = Path(__file__).parent.parent / "data" / ".send_audit.json"
+    try:
+        entries = _json.loads(audit_path.read_text(encoding="utf-8")) if audit_path.exists() else []
+    except Exception:
+        entries = []
+    entries.append({
+        "timestamp": datetime.now().isoformat(),
+        "subject": subject,
+        "recipient_count": len(recipients),
+        "allowed": allowed,
+    })
+    # Keep last 200 entries
+    entries = entries[-200:]
+    audit_path.parent.mkdir(parents=True, exist_ok=True)
+    audit_path.write_text(_json.dumps(entries, indent=2), encoding="utf-8")
+
+
 def _send_html_digest(html_body: str, recipients: list[str],
                       edition: str = "daily",
                       subject_override: str = "",
@@ -1507,6 +1527,18 @@ def _send_html_digest(html_body: str, recipients: list[str],
     Args:
         images: Optional list of (content_id, png_bytes, filename) for inline CID images.
     """
+    # --- SEND GATE (single chokepoint for ALL email in the codebase) ---
+    # config/.send_enabled must exist and contain "true" or nothing sends.
+    _gate_file = Path(__file__).parent.parent / "config" / ".send_enabled"
+    _gate_open = _gate_file.exists() and _gate_file.read_text().strip().lower() == "true"
+    _subj_preview = subject_override or f"REX {edition}"
+    _audit_send(_subj_preview, recipients, allowed=_gate_open)
+    if not _gate_open:
+        log.warning("SEND BLOCKED: config/.send_enabled is not 'true'. Subject: %s, Recipients: %d",
+                     _subj_preview, len(recipients))
+        return False
+    # --- END SEND GATE ---
+
     if subject_override:
         subject = subject_override
     else:
@@ -1514,17 +1546,25 @@ def _send_html_digest(html_body: str, recipients: list[str],
         _label = _labels.get(edition, "Daily ETP Report")
         subject = f"REX {_label}: {datetime.now().strftime('%m/%d/%Y')}"
 
-    # Try Azure Graph API first
+    # Azure Graph API only — no SMTP fallback (SMTP uses personal email)
     try:
         from webapp.services.graph_email import is_configured, send_email
         if is_configured():
             if send_email(subject=subject, html_body=html_body,
                           recipients=recipients, images=images):
                 return True
+            else:
+                log.error("Graph API send failed for: %s", subject)
+                return False
+        else:
+            log.error("Graph API not configured. SMTP fallback disabled. Email not sent: %s", subject)
+            return False
     except ImportError:
-        pass
+        log.error("graph_email module not available. Email not sent: %s", subject)
+        return False
 
-    # Fall back to SMTP
+    # SMTP fallback DISABLED — never send from personal email
+    # If Graph fails, the email simply doesn't go out.
     config = _get_smtp_config()
     if not config["user"] or not config["password"] or not config["from_addr"]:
         return False

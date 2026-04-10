@@ -1,10 +1,1 @@
-sacheychek@rexfin.com
-mmcnair@rexfin.com
-relasmar@rexfin.com
-tranney@rexfin.com
-jgallardo@rexfin.com
-sking@rexfin.com
-MPremselaar@caisgroup.com
-SPgroup@caisgroup.com
-matthew.swingle@rbccm.com
-mike.heraty@rbccm.com
+# Recipients removed — send gate active. Restore from .bak when ready.

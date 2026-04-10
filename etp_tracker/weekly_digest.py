@@ -21,17 +21,14 @@ from __future__ import annotations
 
 import logging
 import math
-import smtplib
 from datetime import datetime, timedelta, date as date_type
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
 
 import pandas as pd
 
 from etp_tracker.email_alerts import (
     _NAVY, _GREEN, _ORANGE, _RED, _BLUE, _GRAY, _LIGHT, _BORDER, _WHITE,
     _REX_ROW_BG, _HIGHLIGHT_BG,
-    _esc, _load_recipients, _load_private_recipients, _get_smtp_config,
+    _esc, _load_recipients, _load_private_recipients,
 )
 
 log = logging.getLogger(__name__)
@@ -912,35 +909,12 @@ def _render_market_pulse_weekly(master: pd.DataFrame) -> str:
         ("IBIT US", "IBIT", "Bitcoin"), ("GLD US", "GLD", "Gold"),
     ]
 
-    # Try yfinance for accurate 1W returns
-    _yf_returns = {}
-    try:
-        import yfinance as yf
-        from datetime import date, timedelta
-        _end = date.today() + timedelta(days=1)
-        _start = date.today() - timedelta(days=10)
-        for _bbg, _yf, _lbl in _PROXIES:
-            try:
-                _hist = yf.download(_yf, start=str(_start), end=str(_end), progress=False, auto_adjust=False)
-                if len(_hist) >= 6:
-                    _wk_ago = float(_hist["Close"].values.flatten()[-6])
-                    _last = float(_hist["Close"].values.flatten()[-1])
-                    if _wk_ago > 0:
-                        _yf_returns[_lbl] = (_last - _wk_ago) / _wk_ago * 100
-            except Exception:
-                pass
-    except ImportError:
-        pass
-
     cells = []
     for bbg_ticker, yf_ticker, label in _PROXIES:
-        if label in _yf_returns:
-            ret = _yf_returns[label]
-        else:
-            row = master[master["ticker"] == bbg_ticker]
-            if row.empty:
-                continue
-            ret = float(row.iloc[0].get(ret_col, 0))
+        row = master[master["ticker"] == bbg_ticker]
+        if row.empty:
+            continue
+        ret = float(row.iloc[0].get(ret_col, 0))
         color = _GREEN if ret >= 0 else _RED
         cells.append(
             f'<td width="16%" style="{_cell}">'
@@ -957,9 +931,22 @@ def _render_market_pulse_weekly(master: pd.DataFrame) -> str:
     row1 = "".join(cells[:mid])
     row2 = "".join(cells[mid:])
 
+    # Compute 1W date range for subtitle
+    from datetime import timedelta as _td
+    _lag = datetime.now() - _td(days=1)
+    while _lag.weekday() >= 5:
+        _lag -= _td(days=1)
+    _wstart = _lag
+    for _ in range(4):
+        _wstart -= _td(days=1)
+        while _wstart.weekday() >= 5:
+            _wstart -= _td(days=1)
+    _wk_label = f"{_wstart.month}/{_wstart.day}-{_lag.month}/{_lag.day}"
+
     return f"""
 <tr><td style="padding:15px 30px 5px;">
   <div style="{_SECTION_TITLE}">Market Pulse</div>
+  <div style="font-size:10px;color:{_GRAY};margin:-4px 0 8px;">1W Total Return ({_wk_label})</div>
   <table width="100%" cellpadding="0" cellspacing="0" border="0">
     <tr>{row1}</tr>
     <tr><td colspan="{mid * 2}" style="padding:4px 0;"></td></tr>
@@ -1395,39 +1382,29 @@ def build_weekly_digest_html(
 # ---------------------------------------------------------------------------
 def _send_weekly_html(subject: str, html_body: str, recipients: list[str]) -> bool:
     """Send weekly digest HTML to a list of recipients."""
-    # Try Azure Graph API first
+    # --- SEND GATE (matches email_alerts._send_html_digest pattern) ---
+    from pathlib import Path as _P
+    _gate = _P(__file__).resolve().parent.parent / "config" / ".send_enabled"
+    if not _gate.exists() or _gate.read_text().strip().lower() != "true":
+        log.warning("SEND BLOCKED (Weekly): config/.send_enabled is not 'true'. Subject: %s", subject)
+        return False
+    # --- END SEND GATE ---
+
+    # Azure Graph API only — no SMTP fallback (SMTP uses personal email)
     try:
         from webapp.services.graph_email import is_configured, send_email
         if is_configured():
             if send_email(subject=subject, html_body=html_body, recipients=recipients):
                 log.info("Weekly digest sent via Graph API to %d recipients", len(recipients))
                 return True
+            else:
+                log.error("Graph API send failed for weekly digest: %s", subject)
+                return False
+        else:
+            log.error("Graph API not configured. SMTP fallback disabled. Weekly digest not sent: %s", subject)
+            return False
     except ImportError:
-        pass
-
-    # Fall back to SMTP
-    config = _get_smtp_config()
-    if not config["user"] or not config["password"] or not config["from_addr"]:
-        log.warning("Weekly digest: SMTP not configured")
-        return False
-
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = subject
-    msg["From"] = config["from_addr"]
-    msg["To"] = ", ".join(recipients)
-    msg.attach(MIMEText(html_body, "html"))
-
-    try:
-        with smtplib.SMTP(config["host"], config["port"]) as server:
-            server.ehlo()
-            server.starttls()
-            server.ehlo()
-            server.login(config["user"], config["password"])
-            server.sendmail(config["from_addr"], recipients, msg.as_string())
-        log.info("Weekly digest sent via SMTP to %d recipients", len(recipients))
-        return True
-    except Exception as exc:
-        log.error("Weekly digest send failed: %s", exc)
+        log.error("graph_email module not available. Weekly digest not sent: %s", subject)
         return False
 
 

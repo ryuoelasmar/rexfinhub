@@ -38,6 +38,7 @@ _PREFIX_STRIP = {
     "t_w2.": "",
     "t_w3.": "",
     "t_w4.": "",
+    "t_w5.": "",
     "q_category_attributes.": "",
 }
 
@@ -69,6 +70,12 @@ _W4_FLOW_COLS = [
     "fund_flow_3month", "fund_flow_6month", "fund_flow_ytd",
     "fund_flow_1year", "fund_flow_3year",
     "aum",
+]
+
+_W5_COLS = [
+    "price_return_1day", "price_return_2day", "price_return_3day",
+    "price_return_5day", "price_return_1month", "price_return_3month",
+    "price_return_6month", "price_return_ytd", "price_return_1year",
 ]
 
 _ENRICHMENT_COLS = [
@@ -126,7 +133,7 @@ def _get_col(row: pd.Series, field: str) -> Any:
     if field in row.index:
         return row[field]
     # Try with prefixes
-    for prefix in ["t_w2.", "t_w3.", "t_w4.", "q_category_attributes."]:
+    for prefix in ["t_w2.", "t_w3.", "t_w4.", "t_w5.", "q_category_attributes."]:
         prefixed = f"{prefix}{field}"
         if prefixed in row.index:
             return row[prefixed]
@@ -147,12 +154,22 @@ def _pack_aum_history(row: pd.Series) -> str | None:
 # ---------------------------------------------------------------------------
 # Core sync function
 # ---------------------------------------------------------------------------
+import filelock
+
+_SYNC_LOCK = filelock.FileLock(
+    str(Path(__file__).resolve().parent.parent.parent / "data" / ".market_sync.lock"),
+    timeout=300,  # Wait up to 5 min for another sync to finish
+)
+
+
 def sync_market_data(
     db: Session,
     data_file: Path | None = None,
     csv_dir: Path | None = None,
 ) -> dict:
     """Write data_engine output into SQLite tables.
+
+    Acquires a file lock to prevent concurrent syncs from corrupting the DB.
 
     Args:
         db: SQLAlchemy session
@@ -162,6 +179,16 @@ def sync_market_data(
     Returns:
         {"master_rows": int, "ts_rows": int, "report_keys": list}
     """
+    with _SYNC_LOCK:
+        return _sync_market_data_locked(db, data_file, csv_dir)
+
+
+def _sync_market_data_locked(
+    db: Session,
+    data_file: Path | None = None,
+    csv_dir: Path | None = None,
+) -> dict:
+    """Internal sync implementation — must be called with _SYNC_LOCK held."""
     from webapp.services.data_engine import build_all, build_all_from_csvs
 
     # Step 1: Build DataFrames
@@ -177,6 +204,27 @@ def sync_market_data(
     if master_df.empty:
         log.warning("No master data produced, skipping sync")
         return {"master_rows": 0, "ts_rows": 0, "report_keys": []}
+
+    # Step 1b: Validate data quality BEFORE clearing DB
+    _min_rows = 5000
+    if len(master_df) < _min_rows:
+        log.error("Bloomberg validation FAILED: master has %d rows (minimum %d). "
+                   "Aborting sync to protect existing DB data.", len(master_df), _min_rows)
+        return {"master_rows": 0, "ts_rows": 0, "report_keys": [],
+                "error": f"Row count too low: {len(master_df)} < {_min_rows}"}
+
+    # Check for excessive NaN in critical columns
+    _critical_cols = ["ticker", "fund_name"]
+    for _col in _critical_cols:
+        if _col in master_df.columns:
+            _nan_pct = master_df[_col].isna().sum() / len(master_df) * 100
+            if _nan_pct > 50:
+                log.error("Bloomberg validation FAILED: column '%s' is %.0f%% NaN. "
+                           "Aborting sync.", _col, _nan_pct)
+                return {"master_rows": 0, "ts_rows": 0, "report_keys": [],
+                        "error": f"Column {_col} is {_nan_pct:.0f}% NaN"}
+
+    log.info("Bloomberg validation passed: %d rows, critical columns OK", len(master_df))
 
     # Step 2: Create pipeline run record
     run = MktPipelineRun(
@@ -353,6 +401,16 @@ def _insert_master_data(db: Session, df: pd.DataFrame, run_id: int) -> int:
             fund_flow_3year=_safe_float(_get_col(row, "fund_flow_3year")),
             aum=_safe_float(_get_col(row, "aum")),
             aum_history_json=_pack_aum_history(row),
+            # W5 price returns
+            price_return_1day=_safe_float(_get_col(row, "price_return_1day")),
+            price_return_2day=_safe_float(_get_col(row, "price_return_2day")),
+            price_return_3day=_safe_float(_get_col(row, "price_return_3day")),
+            price_return_5day=_safe_float(_get_col(row, "price_return_5day")),
+            price_return_1month=_safe_float(_get_col(row, "price_return_1month")),
+            price_return_3month=_safe_float(_get_col(row, "price_return_3month")),
+            price_return_6month=_safe_float(_get_col(row, "price_return_6month")),
+            price_return_ytd=_safe_float(_get_col(row, "price_return_ytd")),
+            price_return_1year=_safe_float(_get_col(row, "price_return_1year")),
             # Enrichment
             etp_category=_safe_str(row.get("etp_category")),
             issuer_nickname=_safe_str(row.get("issuer_nickname")),

@@ -98,6 +98,12 @@ _W4_FIELDS = [
     "aum",
 ] + [f"aum_{i}" for i in range(1, 37)]
 
+_W5_FIELDS = [
+    "price_return_1day", "price_return_2day", "price_return_3day",
+    "price_return_5day", "price_return_1month", "price_return_3month",
+    "price_return_6month", "price_return_ytd", "price_return_1year",
+]
+
 # Base columns to keep (block 1)
 _BASE_FIELDS = [
     "ticker", "fund_name", "issuer", "listed_exchange", "inception_date",
@@ -115,7 +121,7 @@ def _build_from_split_sheets(xl: pd.ExcelFile) -> pd.DataFrame:
     Read each sheet, rename columns to canonical names, merge on ticker,
     then apply t_w2/t_w3/t_w4 prefixing.
     """
-    from market.config import W1_COL_MAP, W2_COL_MAP, W3_COL_MAP, W4_FLOW_COL_MAP
+    from market.config import W1_COL_MAP, W2_COL_MAP, W3_COL_MAP, W4_FLOW_COL_MAP, W5_COL_MAP
 
     w1 = _read_sheet(xl, "w1").rename(columns=W1_COL_MAP)
     w1 = w1.dropna(subset=["ticker"])
@@ -138,6 +144,20 @@ def _build_from_split_sheets(xl: pd.ExcelFile) -> pd.DataFrame:
         w4 = w4.drop(columns=["Fund Name"])
     if "ticker" in w4.columns:
         w4 = w4.drop_duplicates(subset=["ticker"], keep="first")
+
+    try:
+        w5 = _read_sheet(xl, "w5").rename(columns=W5_COL_MAP)
+        if "Fund Name" in w5.columns:
+            w5 = w5.drop(columns=["Fund Name"])
+        if "ticker" in w5.columns:
+            w5 = w5.drop_duplicates(subset=["ticker"], keep="first")
+        # Coerce price return columns to numeric (drop #ERROR values)
+        for col in _W5_FIELDS:
+            if col in w5.columns:
+                w5[col] = pd.to_numeric(w5[col], errors="coerce")
+    except Exception:
+        w5 = pd.DataFrame(columns=["ticker"])
+
     # AUM is the first non-flow, non-ticker column
     for col in w4.columns:
         if col not in W4_FLOW_COL_MAP.values() and col not in ("ticker", "Fund Name"):
@@ -158,13 +178,13 @@ def _build_from_split_sheets(xl: pd.ExcelFile) -> pd.DataFrame:
 
     # Merge on ticker
     df = w1.copy()
-    for sheet_df in [w2, w3, w4]:
+    for sheet_df in [w2, w3, w4, w5]:
         if "ticker" in sheet_df.columns:
             merge_cols = [c for c in sheet_df.columns if c != "ticker" and c not in df.columns]
             if merge_cols:
                 df = df.merge(sheet_df[["ticker"] + merge_cols], on="ticker", how="left")
 
-    # Apply t_w2/t_w3/t_w4 prefixes
+    # Apply t_w2/t_w3/t_w4/t_w5 prefixes
     rename_map = {}
     for field in _W2_FIELDS:
         if field in df.columns:
@@ -175,6 +195,9 @@ def _build_from_split_sheets(xl: pd.ExcelFile) -> pd.DataFrame:
     for field in _W4_FIELDS:
         if field in df.columns:
             rename_map[field] = f"t_w4.{field}"
+    for field in _W5_FIELDS:
+        if field in df.columns:
+            rename_map[field] = f"t_w5.{field}"
     df = df.rename(columns=rename_map)
 
     return df

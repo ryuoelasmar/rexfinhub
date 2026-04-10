@@ -22,6 +22,14 @@ def send_screener_report(
     Uses the same Azure AD credentials as the existing graph_email module.
     Returns True on success.
     """
+    # --- SEND GATE (matches email_alerts._send_html_digest pattern) ---
+    from pathlib import Path as _P
+    _gate = _P(__file__).resolve().parent.parent / "config" / ".send_enabled"
+    if not _gate.exists() or _gate.read_text().strip().lower() != "true":
+        log.warning("SEND BLOCKED (Screener): config/.send_enabled is not 'true'.")
+        return False
+    # --- END SEND GATE ---
+
     from webapp.services.graph_email import _load_env, _get_access_token
 
     cfg = _load_env()

@@ -301,17 +301,8 @@ def run_classification():
     approved = [c for c in candidates if c.get("confidence") in ("HIGH", "MEDIUM")]
     if approved:
         apply_classifications(approved)
-        # Sync rules CSVs
-        rules_dir = PROJECT_ROOT / "data" / "rules"
-        config_dir = PROJECT_ROOT / "config" / "rules"
-        for csv_name in ["fund_mapping.csv", "issuer_mapping.csv",
-                         "attributes_LI.csv", "attributes_CC.csv",
-                         "attributes_Crypto.csv", "attributes_Defined.csv",
-                         "attributes_Thematic.csv"]:
-            src = rules_dir / csv_name
-            dst = config_dir / csv_name
-            if src.exists():
-                shutil.copy2(src, dst)
+        # Rules CSVs are written directly to RULES_DIR (config/rules/) by classify_engine.
+        # No copy needed — single source of truth.
         print(f"  Classified {len(approved)} funds ({len(candidates) - len(approved)} LOW confidence skipped)")
     else:
         print(f"  {len(candidates)} candidates all LOW confidence -- skipped")
@@ -517,6 +508,8 @@ def main():
     print(f"=== REX Full Sync ({today}) ===")
 
     changed_trusts = None
+    critical_ok = True  # Tracks whether critical steps (SEC, DB sync, market) succeeded
+    errors = []  # Collects error descriptions for final summary
 
     if run_all:
         # === Step 0: Sync trust universe (skip if ZIP is fresh — ran at 3:45 PM) ===
@@ -545,10 +538,13 @@ def main():
         notes_ok = [False]
 
         def _run_sec():
+            nonlocal critical_ok
             try:
                 sec_result[0] = run_sec_pipeline()
             except Exception as e:
-                print(f"  SEC pipeline failed: {e}")
+                print(f"  CRITICAL: SEC pipeline failed: {e}")
+                critical_ok = False
+                errors.append(f"SEC pipeline: {e}")
 
         def _run_notes():
             try:
@@ -569,7 +565,9 @@ def main():
         try:
             run_db_sync(changed_trusts)
         except Exception as e:
-            print(f"  DB sync failed: {e}")
+            print(f"  CRITICAL: DB sync failed: {e}")
+            critical_ok = False
+            errors.append(f"DB sync: {e}")
 
         # === Archive C: cache to D: ===
         print("\n[4/8] Archiving cache C: -> D:...")
@@ -604,7 +602,9 @@ def main():
             else:
                 run_market_sync()
         except Exception as e:
-            print(f"  Market sync failed: {e}")
+            print(f"  CRITICAL: Market sync failed: {e}")
+            critical_ok = False
+            errors.append(f"Market sync: {e}")
 
         # === Archive screener snapshot ===
         print("\n[6/10] Archiving screener snapshot...")
@@ -676,33 +676,42 @@ def main():
 
         # === Wait until 5:30 PM to send emails ===
         print("\n[12/12] Sending email reports...")
-        try:
-            import subprocess
-            now_dt = datetime.now()
-            target = now_dt.replace(hour=17, minute=30, second=0, microsecond=0)
-            if now_dt < target:
-                wait_secs = (target - now_dt).total_seconds()
-                print(f"  Pipeline done. Waiting until 5:30 PM to send ({wait_secs / 60:.0f} min)...")
-                time.sleep(wait_secs)
-            day_of_week = datetime.now().strftime("%A")
-            if day_of_week in ("Saturday", "Sunday"):
-                print(f"  {day_of_week} -- skipping email reports")
-            else:
-                # Daily report Mon-Fri
-                print("  Sending daily report...")
-                subprocess.run(
-                    [sys.executable, str(PROJECT_ROOT / "scripts" / "send_email.py"), "send", "daily", "--force"],
-                    cwd=str(PROJECT_ROOT), timeout=300,
-                )
-                # Weekly + L&I + Income + Flow on Monday only
-                if day_of_week == "Monday":
-                    print("  Monday -- sending weekly bundle (Weekly + L&I + Income + Flow)...")
-                    subprocess.run(
-                        [sys.executable, str(PROJECT_ROOT / "scripts" / "send_email.py"), "send", "weekly", "--force"],
+        if not critical_ok:
+            print(f"  SKIPPED: critical step(s) failed — not sending emails with stale/missing data")
+            print(f"  Errors: {'; '.join(errors)}")
+        else:
+            try:
+                import subprocess
+                now_dt = datetime.now()
+                target = now_dt.replace(hour=17, minute=30, second=0, microsecond=0)
+                if now_dt < target:
+                    wait_secs = (target - now_dt).total_seconds()
+                    print(f"  Pipeline done. Waiting until 5:30 PM to send ({wait_secs / 60:.0f} min)...")
+                    time.sleep(wait_secs)
+                day_of_week = datetime.now().strftime("%A")
+                if day_of_week in ("Saturday", "Sunday"):
+                    print(f"  {day_of_week} -- skipping email reports")
+                else:
+                    # Daily report Mon-Fri (no --force: respect dedup guards)
+                    print("  Sending daily report...")
+                    result = subprocess.run(
+                        [sys.executable, str(PROJECT_ROOT / "scripts" / "send_email.py"), "send", "daily"],
                         cwd=str(PROJECT_ROOT), timeout=300,
                     )
-        except Exception as e:
-            print(f"  Email send failed (non-fatal): {e}")
+                    if result.returncode != 0:
+                        errors.append("Daily email send failed")
+                    # Weekly + L&I + Income + Flow on Monday only
+                    if day_of_week == "Monday":
+                        print("  Monday -- sending weekly bundle (Weekly + L&I + Income + Flow)...")
+                        result = subprocess.run(
+                            [sys.executable, str(PROJECT_ROOT / "scripts" / "send_email.py"), "send", "weekly"],
+                            cwd=str(PROJECT_ROOT), timeout=300,
+                        )
+                        if result.returncode != 0:
+                            errors.append("Weekly email send failed")
+            except Exception as e:
+                print(f"  Email send failed (non-fatal): {e}")
+                errors.append(f"Email send error: {e}")
 
     else:
         # Partial runs (sequential)
@@ -756,6 +765,16 @@ def main():
 
     elapsed = time.time() - start
     print(f"\n=== Done in {elapsed:.0f}s ({elapsed / 60:.1f}m) ===")
+    if errors:
+        print(f"  Errors ({len(errors)}): {'; '.join(errors)}")
+    if not critical_ok:
+        print("  EXIT: 1 (critical failure)")
+        sys.exit(1)
+    elif errors:
+        print("  EXIT: 2 (partial success — non-fatal errors)")
+        sys.exit(2)
+    else:
+        print("  EXIT: 0 (success)")
 
 
 if __name__ == "__main__":

@@ -39,6 +39,32 @@ _HIGHLIGHT_BG = "#f4f5f6"
 _REX_GREEN = "#27ae60"
 _REX_GREEN_LIGHT = "rgba(39,174,96,0.25)"
 
+
+def _compute_bday_date_labels() -> tuple[str, str]:
+    """Compute 1W and 1M flow/return date range labels (M/D-M/D format).
+
+    Bloomberg methodology: 1-day lag from pull date, weekends skipped.
+    1W = 5 trading days ending on lag date.
+    1M = 1 calendar month back from lag date.
+    """
+    from dateutil.relativedelta import relativedelta as _rl
+    _pull = datetime.now()
+    _lag = _pull - timedelta(days=1)
+    while _lag.weekday() >= 5:
+        _lag -= timedelta(days=1)
+    _1w_start = _lag
+    _td = 0
+    while _td < 4:
+        _1w_start -= timedelta(days=1)
+        if _1w_start.weekday() < 5:
+            _td += 1
+    _1m_start = _lag - _rl(months=1)
+    return (
+        f"{_1w_start.month}/{_1w_start.day}-{_lag.month}/{_lag.day}",
+        f"{_1m_start.month}/{_1m_start.day}-{_lag.month}/{_lag.day}",
+    )
+
+
 # Suite brand colors (section title underline + segment divider)
 _SUITE_COLORS = {
     "T-REX": "#A44A3F",
@@ -773,9 +799,10 @@ def _breakdown_table(breakdown: list[dict], breakdown_label: str,
         headers.append("Trad / Synth")
         aligns.append("center")
         col_widths.append("70px")
-    headers += ["# ETPs", "AUM", "1W Flow"]
+    _bd1w, _ = _compute_bday_date_labels()
+    headers += ["# ETPs", "AUM", f"1W Flow<br><span style='font-weight:400;font-size:8px;'>({_bd1w})</span>"]
     aligns += ["right", "right", "right"]
-    col_widths += ["50px", "80px", "80px"]
+    col_widths += ["50px", "80px", "90px"]
     if include_yield:
         headers.append("Avg Yield")
         aligns.append("right")
@@ -801,7 +828,7 @@ def _breakdown_table(breakdown: list[dict], breakdown_label: str,
         row.append(f'{b.get("market_share", 0):.1f}%')
         rows.append(row)
 
-    flow_idx = headers.index("1W Flow")
+    flow_idx = next((i for i, h in enumerate(headers) if "1W Flow" in h), None)
     return _sub_heading(f"{breakdown_label} Breakdown") + _table(
         headers, rows, aligns, highlight_col=flow_idx, col_widths=col_widths,
     )
@@ -823,14 +850,18 @@ def _segment_tables(issuers: list[dict], top10: list[dict], bottom10: list[dict]
 
     if issuers:
         body += _sub_heading("Issuer Breakdown")
+        _bd1w, _bd1m = _compute_bday_date_labels()
+        _h1w = f"1W Flow<br><span style='font-weight:400;font-size:8px;'>({_bd1w})</span>"
+        _h1m = f"1M Flow<br><span style='font-weight:400;font-size:8px;'>({_bd1m})</span>"
         if include_yield:
-            headers = ["Issuer", "# ETPs", "AUM", "1W Flow", "1M Flow", "Avg Yield", "Share"]
+            headers = ["Issuer", "# ETPs", "AUM", _h1w, _h1m, "Avg Yield", "Share"]
             aligns = ["left", "right", "right", "right", "right", "right", "right"]
-            col_widths = ["140px", "50px", "80px", "80px", "80px", "65px", "55px"]
+            col_widths = ["140px", "50px", "80px", "90px", "90px", "65px", "55px"]
         else:
-            headers = ["Issuer", "# ETPs", "AUM", "1W Flow", "1M Flow", "YTD Flow", "Share"]
+            _hytd = "YTD Flow"
+            headers = ["Issuer", "# ETPs", "AUM", _h1w, _h1m, _hytd, "Share"]
             aligns = ["left", "right", "right", "right", "right", "right", "right"]
-            col_widths = ["140px", "50px", "80px", "80px", "80px", "80px", "55px"]
+            col_widths = ["140px", "50px", "80px", "90px", "90px", "80px", "55px"]
         rows = []
         rex_idxs = set()
         for iss in issuers[:15]:
@@ -1367,6 +1398,7 @@ def build_flow_email(dashboard_url: str = "", db=None) -> tuple[str, list]:
     suites = data.get("suites", [])
 
     body = ""
+    _1w_lbl, _1m_lbl = _compute_bday_date_labels()
 
     # --- 1. Key Highlights ---
     highlights = _flow_highlights(data)
@@ -1378,17 +1410,17 @@ def build_flow_email(dashboard_url: str = "", db=None) -> tuple[str, list]:
         market_row=[
             ("Active ETPs", f'{grand_kpis.get("count", 0):,}'),
             ("Market AUM", grand_kpis.get("total_aum", "--")),
-            ("1W Flow", grand_kpis.get("flow_1w", "--"),
+            (f"1W Flow\n({_1w_lbl})", grand_kpis.get("flow_1w", "--"),
              grand_kpis.get("flow_1w_positive", True)),
-            ("1M Flow", grand_kpis.get("flow_1m", "--"),
+            (f"1M Flow\n({_1m_lbl})", grand_kpis.get("flow_1m", "--"),
              grand_kpis.get("flow_1m_positive", True)),
         ],
         rex_row=[
             ("REX Funds", str(rex_kpis.get("count", 0))),
             ("REX AUM", rex_kpis.get("total_aum", "--")),
-            ("REX 1W Flow", rex_kpis.get("flow_1w", "--"),
+            (f"REX 1W Flow\n({_1w_lbl})", rex_kpis.get("flow_1w", "--"),
              rex_kpis.get("flow_1w_positive", True)),
-            ("REX 1M Flow", rex_kpis.get("flow_1m", "--"),
+            (f"REX 1M Flow\n({_1m_lbl})", rex_kpis.get("flow_1m", "--"),
              rex_kpis.get("flow_1m_positive", True)),
         ],
     )
@@ -1460,18 +1492,18 @@ def build_flow_email(dashboard_url: str = "", db=None) -> tuple[str, list]:
             rex_row = [
                 ("REX Funds", str(rex_s.get("count", 0))),
                 ("REX AUM", rex_s.get("total_aum", "--")),
-                ("REX 1W Flow", rex_s.get("flow_1w", "--"),
+                (f"REX 1W Flow\n({_1w_lbl})", rex_s.get("flow_1w", "--"),
                  rex_s.get("flow_1w_positive", True)),
-                ("REX 1M Flow", rex_s.get("flow_1m", "--"),
+                (f"REX 1M Flow\n({_1m_lbl})", rex_s.get("flow_1m", "--"),
                  rex_s.get("flow_1m_positive", True)),
             ]
         seg += _flow_dual_kpi(
             market_row=[
                 ("ETPs", str(kpis.get("count", 0))),
                 ("AUM", kpis.get("total_aum", "--")),
-                ("1W Flow", kpis.get("flow_1w", "--"),
+                (f"1W Flow\n({_1w_lbl})", kpis.get("flow_1w", "--"),
                  kpis.get("flow_1w_positive", True)),
-                ("1M Flow", kpis.get("flow_1m", "--"),
+                (f"1M Flow\n({_1m_lbl})", kpis.get("flow_1m", "--"),
                  kpis.get("flow_1m_positive", True)),
             ],
             rex_row=rex_row,
@@ -1486,7 +1518,7 @@ def build_flow_email(dashboard_url: str = "", db=None) -> tuple[str, list]:
 
         # Issuer comparison table (REX rows highlighted)
         if issuers:
-            headers = ["Issuer", "ETPs", "AUM", "1W Flow", "1M Flow", "Share"]
+            headers = ["Issuer", "ETPs", "AUM", f"1W Flow<br><span style='font-weight:400;'>({_1w_lbl})</span>", f"1M Flow<br><span style='font-weight:400;'>({_1m_lbl})</span>", "Share"]
             aligns = ["left", "right", "right", "right", "right", "right"]
             widths = ["140px", "50px", "80px", "80px", "80px", "55px"]
             iss_rows = []
@@ -1548,22 +1580,7 @@ def build_autocall_email(dashboard_url: str = "", db=None) -> tuple[str, list]:
                            '<tr><td style="padding:20px 30px;">No autocallable data found.</td></tr>',
                            dashboard_url, date_str), []
 
-    # Compute flow date ranges for labels (1-day lag from pull date)
-    from dateutil.relativedelta import relativedelta as _rl
-    _pull = datetime.now()
-    _lag = _pull - timedelta(days=1)
-    _d = _lag
-    _td_count = 0
-    while _td_count < 5:
-        _d -= timedelta(days=1)
-        if _d.weekday() < 5:
-            _td_count += 1
-    _1w_start = _d + timedelta(days=1)
-    while _1w_start.weekday() >= 5:
-        _1w_start += timedelta(days=1)
-    _1m_start = _lag - _rl(months=1)
-    _1w_label = f"{_1w_start.month}/{_1w_start.day}-{_lag.month}/{_lag.day}"
-    _1m_label = f"{_1m_start.month}/{_1m_start.day}-{_lag.month}/{_lag.day}"
+    _1w_label, _1m_label = _compute_bday_date_labels()
 
     kpis = auto_suite.get("kpis", {})
     rex_s = auto_suite.get("rex_kpis", {})
@@ -1648,27 +1665,21 @@ def build_autocall_email(dashboard_url: str = "", db=None) -> tuple[str, list]:
     if rex_s.get("count", 0) > 0:
         _metrics = []
         if _share_rank is not None:
-            sc = _GREEN if _share_rank <= 3 else _NAVY
             _metrics.append(
-                f'<td style="padding:6px 10px;text-align:center;">'
-                f'<div style="font-size:18px;font-weight:700;color:{sc};">#{_share_rank}</div>'
-                f'{_rank_pill(_share_rank, "share_rank")}'
-                f'<div style="font-size:8px;color:{_GRAY};text-transform:uppercase;margin-top:3px;">Share Rank</div></td>'
+                f'<td style="padding:6px 10px;text-align:center;vertical-align:top;">'
+                f'<div style="font-size:18px;font-weight:700;color:{_NAVY};">#{_share_rank}</div>'
+                f'<div style="font-size:8px;color:{_GRAY};text-transform:uppercase;margin-top:3px;">Share Rank<br>&nbsp;</div></td>'
             )
         if _flow_1w_rank is not None:
-            fc = _GREEN if _flow_1w_rank <= 3 else _NAVY
             _metrics.append(
-                f'<td style="padding:6px 10px;text-align:center;">'
-                f'<div style="font-size:18px;font-weight:700;color:{fc};">#{_flow_1w_rank}</div>'
-                f'{_rank_pill(_flow_1w_rank, "flow_1w_rank")}'
+                f'<td style="padding:6px 10px;text-align:center;vertical-align:top;">'
+                f'<div style="font-size:18px;font-weight:700;color:{_NAVY};">#{_flow_1w_rank}</div>'
                 f'<div style="font-size:8px;color:{_GRAY};text-transform:uppercase;margin-top:3px;">1W Flow Rank<br>({_1w_label})</div></td>'
             )
         if _flow_1m_rank is not None:
-            mc = _GREEN if _flow_1m_rank <= 3 else _NAVY
             _metrics.append(
-                f'<td style="padding:6px 10px;text-align:center;">'
-                f'<div style="font-size:18px;font-weight:700;color:{mc};">#{_flow_1m_rank}</div>'
-                f'{_rank_pill(_flow_1m_rank, "flow_1m_rank")}'
+                f'<td style="padding:6px 10px;text-align:center;vertical-align:top;">'
+                f'<div style="font-size:18px;font-weight:700;color:{_NAVY};">#{_flow_1m_rank}</div>'
                 f'<div style="font-size:8px;color:{_GRAY};text-transform:uppercase;margin-top:3px;">1M Flow Rank<br>({_1m_label})</div></td>'
             )
         if _metrics:
@@ -1731,26 +1742,12 @@ def build_autocall_email(dashboard_url: str = "", db=None) -> tuple[str, list]:
     # Shows category AUM since CAIE launch (Jun 2025) + REX share from ATCL (Feb 2026).
     # Y1 axis capped at 5%. Uses QuickChart.io for email-safe rendering.
 
-    # Bloomberg methodology note — compute dynamic example dates
-    from dateutil.relativedelta import relativedelta
-    _pull = datetime.now()
-    _lag = _pull - timedelta(days=1)
-    # Walk back to find 5 trading days before lag
-    _d = _lag
-    _tdays = 0
-    while _tdays < 5:
-        _d -= timedelta(days=1)
-        if _d.weekday() < 5:
-            _tdays += 1
-    _1w_start = _d + timedelta(days=1)
-    while _1w_start.weekday() >= 5:
-        _1w_start += timedelta(days=1)
-    _1m_start = _lag - relativedelta(months=1)
-
-    _meth_pull_day = f"{_pull.strftime('%a')} {_pull.month}/{_pull.day}"
-    _meth_lag_day = f"{_lag.strftime('%a')} {_lag.month}/{_lag.day}"
-    _meth_1w_start = f"{_1w_start.strftime('%a')} {_1w_start.month}/{_1w_start.day}"
-    _meth_1m_start = f"{_1m_start.month}/{_1m_start.day}"
+    # Bloomberg methodology note — dynamic example dates
+    _meth_1w, _meth_1m = _compute_bday_date_labels()
+    _meth_pull_day = f"{datetime.now().strftime('%a')} {datetime.now().month}/{datetime.now().day}"
+    _meth_lag_day = _meth_1w.split("-")[1]  # end date
+    _meth_1w_start = _meth_1w.split("-")[0]
+    _meth_1m_start = _meth_1m.split("-")[0]
 
     body += (
         f'<tr><td style="padding:16px 30px 12px;">'

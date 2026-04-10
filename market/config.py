@@ -91,6 +91,15 @@ W4_FLOW_COL_MAP = {
 # W4 AUM columns: positional (indices 10-46 after ticker+name+8 flows)
 # Col 10 = aum (current), cols 11-46 = aum_1 through aum_36
 
+W5_COL_MAP = {
+    "Ticker": "ticker",
+    "1d%": "price_return_1day", "2d%": "price_return_2day",
+    "3d%": "price_return_3day", "5d%": "price_return_5day",
+    "1m%": "price_return_1month", "3m%": "price_return_3month",
+    "6m%": "price_return_6month", "ytd%": "price_return_ytd",
+    "1y%": "price_return_1year",
+}
+
 # ---------------------------------------------------------------------------
 # Column definitions (canonical snake_case names -- post-rename)
 # ---------------------------------------------------------------------------
@@ -123,8 +132,14 @@ W4_FIELDS = [
     "aum",
 ] + [f"aum_{i}" for i in range(1, 37)]
 
+W5_FIELDS = [
+    "price_return_1day", "price_return_2day", "price_return_3day",
+    "price_return_5day", "price_return_1month", "price_return_3month",
+    "price_return_6month", "price_return_ytd", "price_return_1year",
+]
+
 # All ETP fields combined (flat, no prefix)
-ALL_ETP_FIELDS = BASE_FIELDS + W2_FIELDS + W3_FIELDS + W4_FIELDS
+ALL_ETP_FIELDS = BASE_FIELDS + W2_FIELDS + W3_FIELDS + W4_FIELDS + W5_FIELDS
 
 # ---------------------------------------------------------------------------
 # Category display names

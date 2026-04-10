@@ -248,16 +248,7 @@ def main():
         approved = [c for c in candidates if c.get("confidence") in ("HIGH", "MEDIUM")]
         if approved:
             apply_classifications(approved)
-            rules_dir = PROJECT_ROOT / "data" / "rules"
-            config_dir = PROJECT_ROOT / "config" / "rules"
-            for csv_name in ["fund_mapping.csv", "issuer_mapping.csv",
-                             "attributes_LI.csv", "attributes_CC.csv",
-                             "attributes_Crypto.csv", "attributes_Defined.csv",
-                             "attributes_Thematic.csv"]:
-                src = rules_dir / csv_name
-                dst = config_dir / csv_name
-                if src.exists():
-                    shutil.copy2(src, dst)
+            # Rules CSVs written directly to RULES_DIR (config/rules/) by classify_engine.
             log(f"  Classified {len(approved)} funds ({len(candidates) - len(approved)} LOW skipped)")
         else:
             log(f"  No new funds to classify ({len(candidates)} candidates, all LOW)")
