@@ -104,8 +104,12 @@ def _record_pipeline_run(metrics: RunMetrics, triggered_by: str = "manual") -> N
         log.warning("Failed to record pipeline run in database: %s", e)
 
 
+import os as _os
+_DEFAULT_CACHE = _os.environ.get("SEC_CACHE_DIR", str(Path(__file__).resolve().parent.parent / "cache" / "sec"))
+
+
 def run_pipeline(ciks: list[str], overrides: dict | None = None, since: str | None = None, until: str | None = None,
-                 output_root: Path | str = "outputs", cache_dir: Path | str = "D:/sec-data/cache/rexfinhub",
+                 output_root: Path | str = "outputs", cache_dir: Path | str = _DEFAULT_CACHE,
                  user_agent: str | None = None, request_timeout: int = 45, pause: float = 0.35,
                  refresh_submissions: bool = True, refresh_max_age_hours: int = 6, refresh_force_now: bool = False,
                  force_reprocess: bool = False, max_workers: int = _DEFAULT_WORKERS,

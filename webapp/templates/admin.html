@@ -175,7 +175,7 @@
           {% endif %}
           {% if send_url %}
           <form method="post" action="{{ send_url }}" style="display:inline; margin-left:4px;">
-            <button type="submit" style="font-size:10px; padding:3px 8px; border:none; border-radius:3px; background:var(--green); color:#fff; cursor:pointer;" onclick="return confirm('Send to ALL recipients?')">Send</button>
+            <button type="submit" style="font-size:10px; padding:3px 8px; border:none; border-radius:3px; background:var(--green); color:#fff; cursor:pointer;" onclick="return confirmSend(this, '{{ name }}')">Send</button>
           </form>
           {% elif key == 'autocall_report' %}
           <span style="font-size:10px; color:var(--muted);">Preview only</span>
@@ -312,12 +312,12 @@ document.getElementById('cls-search').addEventListener('keydown', function(e) { 
 
   <div style="display:flex; gap:16px; flex-wrap:wrap;">
     {% for list_key, list_label in [("main", "Daily/Weekly (ETFUpdates)"), ("private", "Private (BCC)"), ("autocall", "Autocallable (External)")] %}
-    <div style="flex:1; min-width:200px;">
+    <div style="flex:1; min-width:200px;" data-list="{{ list_key }}">
       <div style="font-size:11px; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px;">{{ list_label }}</div>
       {% if all_recipients[list_key] %}
       {% for email in all_recipients[list_key] %}
       <div style="display:flex; justify-content:space-between; align-items:center; padding:4px 0; border-bottom:1px solid var(--border); font-size:12px;">
-        <span>{{ email }}</span>
+        <span class="recip-email">{{ email }}</span>
         <form method="post" action="/admin/recipients/remove" style="display:inline;">
           <input type="hidden" name="list_name" value="{{ list_key }}">
           <input type="hidden" name="email" value="{{ email }}">
@@ -404,6 +404,34 @@ document.getElementById('cls-search').addEventListener('keydown', function(e) { 
 </details>
 
 <script>
+// Double-confirm send: first show recipients, then ask yes/no
+function confirmSend(btn, reportName) {
+  // Get recipients from the page
+  var recipEls = document.querySelectorAll('[data-list="main"] .recip-email');
+  var recipients = [];
+  recipEls.forEach(function(el) { recipients.push(el.textContent.trim()); });
+
+  if (recipients.length === 0) {
+    alert('No recipients configured. Add recipients in the Email Recipients section first.');
+    return false;
+  }
+
+  var recipList = recipients.join('\n  • ');
+  var step1 = confirm(
+    'SEND: ' + reportName + '\n\n' +
+    'Recipients (' + recipients.length + '):\n  • ' + recipList + '\n\n' +
+    'Continue?'
+  );
+  if (!step1) return false;
+
+  var step2 = confirm(
+    'FINAL CONFIRMATION\n\n' +
+    'Send "' + reportName + '" to ' + recipients.length + ' recipient(s) NOW?\n\n' +
+    'This cannot be undone.'
+  );
+  return step2;
+}
+
 function setMaint(mins){fetch('/api/v1/maintenance',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'minutes='+mins}).then(r=>r.json()).then(d=>{if(d.ok){checkMaintStatus();alert('Banner activated for '+mins+' min.');}});}
 function clearMaint(){fetch('/api/v1/maintenance',{method:'DELETE'}).then(r=>r.json()).then(d=>{if(d.ok)checkMaintStatus();});}
 function checkMaintStatus(){fetch('/api/v1/maintenance').then(r=>r.json()).then(d=>{var el=document.getElementById('maintStatus'),txt=document.getElementById('maintStatusText');if(d.active){var rem=Math.max(0,Math.round((new Date(d.shutdown_at)-Date.now())/60000));txt.textContent='Active — '+rem+' min remaining';el.style.display='';}else{el.style.display='none';}});}
