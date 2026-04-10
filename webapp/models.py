@@ -535,6 +535,38 @@ class MktFundClassification(Base):
     )
 
 
+class ClassificationProposal(Base):
+    """Review queue for fund classification proposals.
+
+    Auto-classify writes proposals here instead of directly to CSVs.
+    Proposals are reviewed in the admin panel before being applied.
+    """
+    __tablename__ = "classification_proposals"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    ticker: Mapped[str] = mapped_column(String(30), nullable=False)
+    fund_name: Mapped[str | None] = mapped_column(String(300))
+    issuer: Mapped[str | None] = mapped_column(String(200))
+    aum: Mapped[float | None] = mapped_column(Float)
+    # Classification
+    proposed_category: Mapped[str | None] = mapped_column(String(20))  # LI, CC, Crypto, Defined, Thematic
+    proposed_strategy: Mapped[str | None] = mapped_column(String(50))
+    confidence: Mapped[str | None] = mapped_column(String(10))  # HIGH, MEDIUM, LOW
+    reason: Mapped[str | None] = mapped_column(Text)
+    attributes_json: Mapped[str | None] = mapped_column(Text)  # Resolved attributes as JSON
+    # Review state
+    status: Mapped[str] = mapped_column(String(20), default="pending", nullable=False)  # pending, approved, rejected
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime)
+    review_notes: Mapped[str | None] = mapped_column(Text)
+    # Timestamps
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+    __table_args__ = (
+        Index("idx_cls_proposal_ticker", "ticker"),
+        Index("idx_cls_proposal_status", "status"),
+    )
+
+
 class MktGlobalEtp(Base):
     """Global ETP universe supplement data (~16,534 rows).
 

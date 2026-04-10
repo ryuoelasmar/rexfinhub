@@ -95,6 +95,106 @@
 </div>
 {% endif %}
 
+<!-- Pipeline Status Dashboard -->
+<div style="border:1px solid var(--border); border-radius:8px; padding:20px; margin-bottom:24px; background:var(--light);">
+  <h3 style="margin:0 0 12px; font-size:16px;">System Status</h3>
+
+  <!-- KPI Row -->
+  <div style="display:flex; gap:12px; margin-bottom:16px; flex-wrap:wrap;">
+    <!-- Bloomberg -->
+    <div style="flex:1; min-width:180px; background:var(--white); border:1px solid var(--border); border-radius:6px; padding:14px 16px;">
+      <div style="font-size:10px; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px;">Bloomberg Data</div>
+      {% if bbg_status.age_hours < 6 %}
+      <div style="font-size:14px; font-weight:700; color:var(--green);">Fresh</div>
+      {% elif bbg_status.age_hours < 24 %}
+      <div style="font-size:14px; font-weight:700; color:var(--orange);">{{ "%.0f"|format(bbg_status.age_hours) }}h old</div>
+      {% else %}
+      <div style="font-size:14px; font-weight:700; color:var(--red);">STALE ({{ "%.0f"|format(bbg_status.age_hours) }}h)</div>
+      {% endif %}
+      <div style="font-size:11px; color:var(--muted); margin-top:2px;">{{ bbg_status.modified }} &middot; {{ bbg_status.source }}</div>
+    </div>
+
+    <!-- Last Pipeline Run -->
+    {% if pipeline_runs %}
+    {% set last_run = pipeline_runs[0] %}
+    <div style="flex:1; min-width:180px; background:var(--white); border:1px solid var(--border); border-radius:6px; padding:14px 16px;">
+      <div style="font-size:10px; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px;">Last Market Sync</div>
+      {% if last_run.status == 'completed' %}
+      <div style="font-size:14px; font-weight:700; color:var(--green);">{{ last_run.master_rows_written | default(0) }} funds</div>
+      {% elif last_run.status == 'running' %}
+      <div style="font-size:14px; font-weight:700; color:var(--orange);">Running...</div>
+      {% else %}
+      <div style="font-size:14px; font-weight:700; color:var(--red);">{{ last_run.status }}</div>
+      {% endif %}
+      <div style="font-size:11px; color:var(--muted); margin-top:2px;">
+        {{ last_run.started_at.strftime('%m/%d %H:%M') if last_run.started_at else 'N/A' }}
+        {% if last_run.finished_at and last_run.started_at %}
+        &middot; {{ ((last_run.finished_at - last_run.started_at).total_seconds() / 60) | round(1) }}min
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Send Gate -->
+    <div style="flex:1; min-width:180px; background:var(--white); border:1px solid var(--border); border-radius:6px; padding:14px 16px;">
+      <div style="font-size:10px; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px;">Email Gate</div>
+      {% if send_gate_open %}
+      <div style="font-size:14px; font-weight:700; color:var(--green);">Open</div>
+      <div style="font-size:11px; color:var(--muted); margin-top:2px;">Emails can send</div>
+      {% else %}
+      <div style="font-size:14px; font-weight:700; color:var(--red);">Locked</div>
+      <div style="font-size:11px; color:var(--muted); margin-top:2px;">All sends blocked</div>
+      {% endif %}
+    </div>
+
+    <!-- Recipients -->
+    <div style="flex:1; min-width:180px; background:var(--white); border:1px solid var(--border); border-radius:6px; padding:14px 16px;">
+      <div style="font-size:10px; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px;">Recipients</div>
+      <div style="font-size:14px; font-weight:700; color:var(--text);">{{ recipients | length }}</div>
+      <div style="font-size:11px; color:var(--muted); margin-top:2px;">configured in email_recipients.txt</div>
+    </div>
+  </div>
+
+  <!-- Recent Pipeline Runs -->
+  {% if pipeline_runs %}
+  <div style="font-size:12px; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:8px;">Recent Pipeline Runs</div>
+  <table style="width:100%; border-collapse:collapse; font-size:12px;">
+    <thead>
+      <tr style="border-bottom:2px solid var(--border);">
+        <th style="padding:6px 10px; text-align:left; font-weight:600; color:var(--muted);">Time</th>
+        <th style="padding:6px 10px; text-align:left; font-weight:600; color:var(--muted);">Status</th>
+        <th style="padding:6px 10px; text-align:right; font-weight:600; color:var(--muted);">Rows Read</th>
+        <th style="padding:6px 10px; text-align:right; font-weight:600; color:var(--muted);">Written</th>
+        <th style="padding:6px 10px; text-align:right; font-weight:600; color:var(--muted);">Duration</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for run in pipeline_runs %}
+      <tr style="border-bottom:1px solid var(--border);">
+        <td style="padding:6px 10px;">{{ run.started_at.strftime('%m/%d %H:%M') if run.started_at else '—' }}</td>
+        <td style="padding:6px 10px;">
+          {% if run.status == 'completed' %}
+          <span style="background:var(--green-bg); color:var(--green); padding:2px 8px; border-radius:10px; font-size:11px; font-weight:600;">OK</span>
+          {% elif run.status == 'running' %}
+          <span style="background:var(--orange-bg); color:var(--orange); padding:2px 8px; border-radius:10px; font-size:11px; font-weight:600;">Running</span>
+          {% else %}
+          <span style="background:var(--red-bg); color:var(--red); padding:2px 8px; border-radius:10px; font-size:11px; font-weight:600;">{{ run.status }}</span>
+          {% endif %}
+        </td>
+        <td style="padding:6px 10px; text-align:right;">{{ run.etp_rows_read | default(0) | int }}</td>
+        <td style="padding:6px 10px; text-align:right;">{{ run.master_rows_written | default(0) | int }}</td>
+        <td style="padding:6px 10px; text-align:right;">
+          {% if run.finished_at and run.started_at %}
+          {{ ((run.finished_at - run.started_at).total_seconds() / 60) | round(1) }}m
+          {% else %}—{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</div>
+
 <!-- Pending Trust Requests -->
 <div style="border:1px solid var(--border); border-radius:8px; padding:20px; margin-bottom:24px; background:var(--light);">
   <h3 style="margin:0 0 4px; font-size:16px;">Pending Trust Requests</h3>

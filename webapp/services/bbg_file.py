@@ -1,67 +1,84 @@
 """Centralized Bloomberg daily file resolution.
 
 Every data module must import get_bloomberg_file() from here.
-No other module should hardcode OneDrive or local fallback paths.
+No other module should hardcode OneDrive or local paths.
+
+Resolution:
+  1. Graph API (SharePoint) — pull fresh if newer than local cache
+  2. Local cache (data/DASHBOARD/) — last successful Graph download
+  No OneDrive dependency. No silent fallback to stale data.
 """
 from __future__ import annotations
 
 import logging
+import time
+from datetime import datetime
 from pathlib import Path
 
 log = logging.getLogger(__name__)
 
-_ONEDRIVE_PATH = Path(
-    r"C:\Users\RyuEl-Asmar\REX Financial LLC"
-    r"\REX Financial LLC - MasterFiles"
-    r"\MASTER Data\bloomberg_daily_file.xlsm"
-)
-_LOCAL_FALLBACK = (
+_LOCAL_CACHE = (
     Path(__file__).resolve().parent.parent.parent
     / "data"
     / "DASHBOARD"
     / "bloomberg_daily_file.xlsm"
 )
 
+_STALENESS_HOURS = 24  # Error if local cache older than this and Graph fails
+
+
+def _file_age_hours(path: Path) -> float:
+    """Return file age in hours, or 999 if file doesn't exist."""
+    if not path.exists():
+        return 999
+    return (time.time() - path.stat().st_mtime) / 3600
+
 
 def get_bloomberg_file() -> Path:
-    """Return the ONE Bloomberg daily file path.
+    """Return the Bloomberg daily file path.
 
-    Resolution order:
-        1. OneDrive MASTER Data folder (primary, synced by Ryu)
-        2. Local data/DASHBOARD/ fallback (for Render or offline work)
+    Resolution:
+        1. Check SharePoint via Graph API. If newer than local cache, download.
+        2. Use local cache (from last successful Graph download).
+        3. If local cache is >24h old and Graph failed, log ERROR.
 
-    Logs which source was chosen and its modification time.
-    Raises FileNotFoundError if neither location has the file.
+    Raises FileNotFoundError if no file available.
     """
-    if _ONEDRIVE_PATH.exists():
-        try:
-            with open(_ONEDRIVE_PATH, "rb") as f:
-                f.read(4)
-            from datetime import datetime
+    # --- Try Graph API: download if newer than local cache ---
+    try:
+        from webapp.services.graph_files import (
+            is_sharepoint_newer_than_local,
+            download_bloomberg_from_sharepoint,
+        )
 
-            mtime = datetime.fromtimestamp(
-                _ONEDRIVE_PATH.stat().st_mtime
-            ).strftime("%Y-%m-%d %H:%M")
-            log.info("Bloomberg file: OneDrive (modified %s)", mtime)
-            return _ONEDRIVE_PATH
-        except PermissionError:
-            log.warning("Bloomberg file: OneDrive exists but not readable")
+        if not _LOCAL_CACHE.exists() or is_sharepoint_newer_than_local(_LOCAL_CACHE):
+            downloaded = download_bloomberg_from_sharepoint()
+            if downloaded and downloaded.exists():
+                mtime = datetime.fromtimestamp(downloaded.stat().st_mtime).strftime("%Y-%m-%d %H:%M")
+                log.info("Bloomberg file: Graph API (modified %s)", mtime)
+                return downloaded
+            else:
+                log.warning("Bloomberg file: Graph API download failed")
+        else:
+            age = _file_age_hours(_LOCAL_CACHE)
+            log.info("Bloomberg file: local cache is current (%.1fh old)", age)
+    except ImportError:
+        log.warning("Bloomberg file: graph_files module not available")
+    except Exception as e:
+        log.warning("Bloomberg file: Graph API error: %s", e)
 
-    if _LOCAL_FALLBACK.exists():
-        try:
-            with open(_LOCAL_FALLBACK, "rb") as f:
-                f.read(4)
-            import time
-
-            age_hours = (time.time() - _LOCAL_FALLBACK.stat().st_mtime) / 3600
-            log.warning(
-                "Bloomberg file: LOCAL FALLBACK (%.1fh old) - OneDrive not available",
-                age_hours,
+    # --- Use local cache (last successful download) ---
+    if _LOCAL_CACHE.exists():
+        age = _file_age_hours(_LOCAL_CACHE)
+        if age > _STALENESS_HOURS:
+            log.error(
+                "Bloomberg file: local cache is %.0fh old and Graph API failed. "
+                "Data is STALE. Check SharePoint connectivity.", age
             )
-            return _LOCAL_FALLBACK
-        except PermissionError:
-            log.warning("Bloomberg file: local fallback exists but not readable")
+        else:
+            log.info("Bloomberg file: using local cache (%.1fh old)", age)
+        return _LOCAL_CACHE
 
     raise FileNotFoundError(
-        f"Bloomberg file not found at {_ONEDRIVE_PATH} or {_LOCAL_FALLBACK}"
+        f"Bloomberg file not available. Graph API failed and no local cache at {_LOCAL_CACHE}"
     )

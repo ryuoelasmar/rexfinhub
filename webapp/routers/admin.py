@@ -101,6 +101,30 @@ def admin_page(request: Request, db: Session = Depends(get_db)):
             if line.strip() and not line.startswith("#")
         ]
 
+    # Pipeline status (last 5 runs)
+    from webapp.models import MktPipelineRun
+    pipeline_runs = db.query(MktPipelineRun).order_by(
+        MktPipelineRun.id.desc()
+    ).limit(5).all()
+
+    # Bloomberg file freshness
+    bbg_status = {"source": "unknown", "age_hours": 999, "modified": "N/A"}
+    try:
+        from webapp.services.bbg_file import get_bloomberg_file, _LOCAL_CACHE, _file_age_hours
+        if _LOCAL_CACHE.exists():
+            from datetime import datetime as _dt
+            bbg_status["age_hours"] = _file_age_hours(_LOCAL_CACHE)
+            bbg_status["modified"] = _dt.fromtimestamp(_LOCAL_CACHE.stat().st_mtime).strftime("%Y-%m-%d %H:%M")
+            bbg_status["source"] = "Graph API cache"
+            bbg_status["size_mb"] = _LOCAL_CACHE.stat().st_size / (1024 * 1024)
+    except Exception:
+        pass
+
+    # Send gate status
+    from pathlib import Path as _P
+    gate_file = _P(__file__).resolve().parent.parent.parent / "config" / ".send_enabled"
+    send_gate_open = gate_file.exists() and gate_file.read_text().strip().lower() == "true"
+
     return templates.TemplateResponse("admin.html", {
         "request": request,
         "pending_requests": pending_requests,
@@ -110,6 +134,9 @@ def admin_page(request: Request, db: Session = Depends(get_db)):
         "ai_configured": ai_configured(),
         "ai_usage_today": ai_usage_today,
         "recipients": recipients,
+        "pipeline_runs": pipeline_runs,
+        "bbg_status": bbg_status,
+        "send_gate_open": send_gate_open,
     })
 
 
