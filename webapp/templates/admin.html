@@ -51,7 +51,12 @@
   Removed {{ request.query_params.get('recip_removed') }}.
 </div>
 {% endif %}
-{% for err_key in ['bbg_error', 'mkt_error', 'cls_error', 'recip_error'] %}
+{% if request.query_params.get('render_uploaded') %}
+<div style="background:var(--green-bg); border-left:4px solid var(--green); padding:10px 14px; border-radius:0 6px 6px 0; margin-bottom:12px; font-size:13px;">
+  Database uploaded to Render. Site updated.
+</div>
+{% endif %}
+{% for err_key in ['bbg_error', 'mkt_error', 'cls_error', 'recip_error', 'render_error'] %}
 {% if request.query_params.get(err_key) %}
 <div style="background:var(--red-bg); border-left:4px solid var(--red); padding:10px 14px; border-radius:0 6px 6px 0; margin-bottom:12px; font-size:13px;">
   Operation failed. Check logs for details.
@@ -68,6 +73,9 @@
     <div>
       <form method="post" action="/admin/pull-bloomberg" style="display:inline;">
         <button type="submit" style="background:var(--blue); color:#fff; border:none; padding:7px 14px; border-radius:4px; cursor:pointer; font-size:11px; font-weight:600;" onclick="return confirm('Pull fresh Bloomberg from SharePoint and sync to database?')">Pull &amp; Sync</button>
+      </form>
+      <form method="post" action="/admin/upload-render" style="display:inline; margin-left:6px;">
+        <button type="submit" style="background:var(--green); color:#fff; border:none; padding:7px 14px; border-radius:4px; cursor:pointer; font-size:11px; font-weight:600;" onclick="return confirm('Upload lean DB to Render? Site will update in ~30 seconds.')">Upload to Render</button>
       </form>
     </div>
   </div>
@@ -436,6 +444,12 @@ function setMaint(mins){fetch('/api/v1/maintenance',{method:'POST',headers:{'Con
 function clearMaint(){fetch('/api/v1/maintenance',{method:'DELETE'}).then(r=>r.json()).then(d=>{if(d.ok)checkMaintStatus();});}
 function checkMaintStatus(){fetch('/api/v1/maintenance').then(r=>r.json()).then(d=>{var el=document.getElementById('maintStatus'),txt=document.getElementById('maintStatusText');if(d.active){var rem=Math.max(0,Math.round((new Date(d.shutdown_at)-Date.now())/60000));txt.textContent='Active — '+rem+' min remaining';el.style.display='';}else{el.style.display='none';}});}
 checkMaintStatus();
+
+// Auto-refresh page every 60 seconds (only if no forms are being filled)
+setInterval(function() {
+  if (document.activeElement && document.activeElement.tagName === 'INPUT') return;
+  window.location.reload();
+}, 60000);
 </script>
 
 {% endblock %}

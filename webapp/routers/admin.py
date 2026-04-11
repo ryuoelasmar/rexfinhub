@@ -272,6 +272,20 @@ def pull_bloomberg(request: Request, db: Session = Depends(get_db)):
         return RedirectResponse("/admin/?bbg_error=1", status_code=303)
 
 
+@router.post("/upload-render")
+def upload_render(request: Request):
+    """Upload lean DB to Render."""
+    if not _is_admin(request):
+        return RedirectResponse("/admin/", status_code=302)
+    try:
+        from scripts.run_daily import upload_db_to_render
+        upload_db_to_render()
+        return RedirectResponse("/admin/?render_uploaded=1", status_code=303)
+    except Exception as e:
+        log.error("Render upload failed: %s", e)
+        return RedirectResponse("/admin/?render_error=1", status_code=303)
+
+
 @router.post("/sync-market")
 def sync_market(request: Request, db: Session = Depends(get_db)):
     """Trigger market data sync from Bloomberg file."""
