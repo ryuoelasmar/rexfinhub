@@ -91,12 +91,16 @@ def _run_in_background(name: str, fn):
 
 @app.get("/pipeline/status")
 def status(_: None = Depends(verify_key)):
-    """Current pipeline state."""
+    """Current pipeline state + server health."""
+    import shutil
+    disk = shutil.disk_usage("/home/jarvis")
     return {
         "running": _state["running"],
         "last_result": _state["last_result"],
         "last_time": _state["last_time"],
         "server_time": datetime.now().isoformat(),
+        "disk_free_gb": round(disk.free / (1024**3), 1),
+        "disk_total_gb": round(disk.total / (1024**3), 1),
     }
 
 

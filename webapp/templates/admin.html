@@ -71,10 +71,10 @@
   <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
     <h3 style="margin:0; font-size:16px;">Data &amp; Pipeline</h3>
     <div>
-      <form method="post" action="/admin/pull-bloomberg" style="display:inline;">
+      <form method="post" action="/admin/pull-bloomberg" style="display:inline;" onsubmit="setTimeout(pollVpsStatus, 2000);">
         <button type="submit" style="background:var(--blue); color:#fff; border:none; padding:7px 14px; border-radius:4px; cursor:pointer; font-size:11px; font-weight:600;" onclick="return confirm('Pull fresh Bloomberg from SharePoint and sync to database?')">Pull &amp; Sync</button>
       </form>
-      <form method="post" action="/admin/upload-render" style="display:inline; margin-left:6px;">
+      <form method="post" action="/admin/upload-render" style="display:inline; margin-left:6px;" onsubmit="setTimeout(pollVpsStatus, 2000);">
         <button type="submit" style="background:var(--green); color:#fff; border:none; padding:7px 14px; border-radius:4px; cursor:pointer; font-size:11px; font-weight:600;" onclick="return confirm('Upload lean DB to Render? Site will update in ~30 seconds.')">Upload to Render</button>
       </form>
     </div>
@@ -445,11 +445,45 @@ function clearMaint(){fetch('/api/v1/maintenance',{method:'DELETE'}).then(r=>r.j
 function checkMaintStatus(){fetch('/api/v1/maintenance').then(r=>r.json()).then(d=>{var el=document.getElementById('maintStatus'),txt=document.getElementById('maintStatusText');if(d.active){var rem=Math.max(0,Math.round((new Date(d.shutdown_at)-Date.now())/60000));txt.textContent='Active — '+rem+' min remaining';el.style.display='';}else{el.style.display='none';}});}
 checkMaintStatus();
 
-// Auto-refresh page every 60 seconds (only if no forms are being filled)
+// Auto-refresh page every 60 seconds (only if no forms are being filled and no VPS job running)
+var _vpsJobRunning = false;
 setInterval(function() {
+  if (_vpsJobRunning) return; // Don't refresh while polling VPS
   if (document.activeElement && document.activeElement.tagName === 'INPUT') return;
   window.location.reload();
 }, 60000);
+
+// Poll VPS status after triggering a job
+function pollVpsStatus() {
+  _vpsJobRunning = true;
+  var statusEl = document.getElementById('vps-status');
+  if (!statusEl) {
+    var banner = document.createElement('div');
+    banner.id = 'vps-status';
+    banner.style.cssText = 'background:var(--blue); color:#fff; padding:10px 14px; border-radius:6px; margin-bottom:12px; font-size:13px;';
+    banner.textContent = 'VPS job running...';
+    document.querySelector('.header').after(banner);
+    statusEl = banner;
+  }
+  var check = setInterval(function() {
+    fetch('/admin/vps-status').then(r => r.json()).then(d => {
+      if (d.running) {
+        statusEl.textContent = 'VPS: ' + d.running + ' in progress...';
+      } else if (d.last_result) {
+        statusEl.textContent = 'VPS: ' + d.last_result.name + ' — ' + d.last_result.status + ': ' + (d.last_result.detail || '');
+        statusEl.style.background = d.last_result.status === 'ok' ? 'var(--green)' : 'var(--red)';
+        clearInterval(check);
+        _vpsJobRunning = false;
+        setTimeout(function() { window.location.reload(); }, 3000);
+      }
+    }).catch(function() {
+      statusEl.textContent = 'VPS: unreachable';
+      statusEl.style.background = 'var(--red)';
+      clearInterval(check);
+      _vpsJobRunning = false;
+    });
+  }, 5000);
+}
 </script>
 
 {% endblock %}

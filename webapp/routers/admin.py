@@ -261,6 +261,15 @@ _VPS_API = "https://46.224.126.196"
 _ON_RENDER = os.environ.get("RENDER", "") != ""
 
 
+@router.get("/vps-status")
+def vps_status(request: Request):
+    """Proxy VPS pipeline status for admin JS polling."""
+    if not _is_admin(request):
+        return {"running": None, "last_result": None}
+    result = _call_vps("/pipeline/status")
+    return result or {"running": None, "last_result": {"name": "vps", "status": "error", "detail": "unreachable"}}
+
+
 def _call_vps(endpoint: str) -> dict | None:
     """Call the pipeline API on the VPS. Returns response dict or None on failure."""
     import requests as _req
