@@ -223,14 +223,7 @@ async def upload_db(
                         break
                     f.write(chunk)
                     total_in += len(chunk)
-            # Step 2: Dispose engine and remove old DB + stale WAL/SHM files
-            engine.dispose()
-            for suffix in ("", "-wal", "-shm"):
-                try:
-                    os.unlink(str(DB_PATH) + suffix)
-                except OSError:
-                    pass
-            # Step 3: Decompress gz -> new DB (63MB gz + 455MB out = 518MB peak)
+            # Step 2: Decompress gz -> temp DB (keeps old DB live during decompression)
             with _gzip.open(gz_tmp, "rb") as gz_in:
                 with open(tmp_path, "wb") as f_out:
                     while True:
@@ -243,6 +236,14 @@ async def upload_db(
                 os.unlink(gz_tmp)
             except OSError:
                 pass
+            # Step 3: Atomic swap — dispose engine, swap files, re-init
+            # Gap is <1 second (just a file rename)
+            engine.dispose()
+            for suffix in ("-wal", "-shm"):
+                try:
+                    os.unlink(str(DB_PATH) + suffix)
+                except OSError:
+                    pass
         else:
             with open(tmp_path, "wb") as f:
                 while True:

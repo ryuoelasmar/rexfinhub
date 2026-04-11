@@ -269,7 +269,19 @@ def _archive_snapshot(src: Path):
         shutil.copy2(src, dest)
         log.info("Graph Files: archived snapshot -> %s", dest.name)
 
-    # Clean up snapshots older than 30 days
+    # Mirror to D: drive if available
+    d_archive = Path("D:/sec-data/archives/bloomberg")
+    if d_archive.parent.exists():
+        try:
+            d_archive.mkdir(parents=True, exist_ok=True)
+            d_dest = d_archive / dest.name
+            if not d_dest.exists():
+                shutil.copy2(src, d_dest)
+                log.info("Graph Files: mirrored to D: -> %s", d_dest.name)
+        except Exception as e:
+            log.warning("Graph Files: D: mirror failed (non-fatal): %s", e)
+
+    # Clean up local snapshots older than 30 days (D: keeps everything)
     cutoff = _dt.now() - timedelta(days=30)
     for old in history_dir.glob("bloomberg_daily_file_*.xlsm"):
         try:
@@ -277,6 +289,6 @@ def _archive_snapshot(src: Path):
             file_date = _dt.strptime(date_str, "%Y-%m-%d")
             if file_date < cutoff:
                 old.unlink()
-                log.info("Graph Files: deleted old snapshot %s", old.name)
+                log.info("Graph Files: deleted old local snapshot %s", old.name)
         except (ValueError, OSError):
             pass
