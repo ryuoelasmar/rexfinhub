@@ -212,6 +212,10 @@ def download_bloomberg_from_sharepoint(dest: Path = None) -> Path | None:
             elapsed = time.time() - start
             size_mb = dest.stat().st_size / (1024 * 1024)
             log.info("Graph Files: downloaded %.1f MB in %.1fs -> %s", size_mb, elapsed, dest)
+
+            # Archive daily snapshot (keep 30 days locally)
+            _archive_snapshot(dest)
+
             return dest
         else:
             log.error("Graph Files: download failed [%d]: %s", resp.status_code, resp.text[:200])
@@ -248,3 +252,31 @@ def is_sharepoint_newer_than_local(local_path: Path) -> bool:
     except Exception as e:
         log.warning("Graph Files: date comparison failed: %s", e)
         return False
+
+
+def _archive_snapshot(src: Path):
+    """Archive Bloomberg file with today's date. Keep 30 days locally."""
+    import shutil
+    from datetime import datetime as _dt, timedelta
+
+    history_dir = src.parent / "history"
+    history_dir.mkdir(parents=True, exist_ok=True)
+
+    today = _dt.now().strftime("%Y-%m-%d")
+    dest = history_dir / f"bloomberg_daily_file_{today}.xlsm"
+
+    if not dest.exists():
+        shutil.copy2(src, dest)
+        log.info("Graph Files: archived snapshot -> %s", dest.name)
+
+    # Clean up snapshots older than 30 days
+    cutoff = _dt.now() - timedelta(days=30)
+    for old in history_dir.glob("bloomberg_daily_file_*.xlsm"):
+        try:
+            date_str = old.stem.split("_")[-1]
+            file_date = _dt.strptime(date_str, "%Y-%m-%d")
+            if file_date < cutoff:
+                old.unlink()
+                log.info("Graph Files: deleted old snapshot %s", old.name)
+        except (ValueError, OSError):
+            pass
