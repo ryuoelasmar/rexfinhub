@@ -23,6 +23,9 @@ from datetime import datetime, timedelta
 from pathlib import Path
 import pandas as pd
 
+import logging
+log = logging.getLogger(__name__)
+
 _REX_TRUSTS = {"REX ETF Trust", "ETF Opportunities Trust"}
 
 # Email-safe colors (no CSS variables)
