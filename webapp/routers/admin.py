@@ -682,7 +682,7 @@ def send_test_digest(request: Request, db: Session = Depends(get_db)):
         from etp_tracker.email_alerts import build_digest_html_from_db, _send_html_digest
         dashboard_url = str(request.base_url).rstrip("/")
         html = build_digest_html_from_db(db, dashboard_url=dashboard_url, edition="daily")
-        ok = _send_html_digest(html, ["relasmar@rexfin.com"], edition="daily")
+        ok = _send_html_digest(html, ["relasmar@rexfin.com"], bypass_gate=True, edition="daily")
 
         if ok:
             return RedirectResponse("/admin/?digest=test_sent", status_code=303)
@@ -762,7 +762,7 @@ def send_test_morning_brief(request: Request, db: Session = Depends(get_db)):
         from etp_tracker.email_alerts import build_morning_brief_html, _send_html_digest
         dashboard_url = str(request.base_url).rstrip("/")
         html = build_morning_brief_html(db, dashboard_url=dashboard_url)
-        ok = _send_html_digest(html, ["relasmar@rexfin.com"], edition="morning")
+        ok = _send_html_digest(html, ["relasmar@rexfin.com"], bypass_gate=True, edition="morning")
 
         if ok:
             return RedirectResponse("/admin/?digest=test_morning_sent", status_code=303)
@@ -817,7 +817,7 @@ def send_test_li_report(request: Request, db: Session = Depends(get_db)):
         from etp_tracker.email_alerts import _send_html_digest
         dashboard_url = str(request.base_url).rstrip("/")
         html, images = build_li_email(dashboard_url=dashboard_url, db=db)
-        ok = _send_html_digest(html, ["relasmar@rexfin.com"], edition="daily",
+        ok = _send_html_digest(html, ["relasmar@rexfin.com"], bypass_gate=True, edition="daily",
                                subject_override=f"REX ETP Leverage & Inverse Report: {datetime.now().strftime('%m/%d/%Y')}",
                                images=images)
         if ok:
@@ -839,7 +839,7 @@ def send_test_cc_report(request: Request, db: Session = Depends(get_db)):
         from etp_tracker.email_alerts import _send_html_digest
         dashboard_url = str(request.base_url).rstrip("/")
         html, images = build_cc_email(dashboard_url=dashboard_url, db=db)
-        ok = _send_html_digest(html, ["relasmar@rexfin.com"], edition="daily",
+        ok = _send_html_digest(html, ["relasmar@rexfin.com"], bypass_gate=True, edition="daily",
                                subject_override=f"REX ETP Income Report: {datetime.now().strftime('%m/%d/%Y')}",
                                images=images)
         if ok:
@@ -939,7 +939,7 @@ def send_test_flow_report(request: Request, db: Session = Depends(get_db)):
         from etp_tracker.email_alerts import _send_html_digest
         dashboard_url = str(request.base_url).rstrip("/")
         html, images = build_flow_email(dashboard_url=dashboard_url, db=db)
-        ok = _send_html_digest(html, ["relasmar@rexfin.com"], edition="daily",
+        ok = _send_html_digest(html, ["relasmar@rexfin.com"], bypass_gate=True, edition="daily",
                                subject_override=f"REX ETP Flow Report: {datetime.now().strftime('%m/%d/%Y')}",
                                images=images)
         if ok:

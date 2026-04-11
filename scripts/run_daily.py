@@ -447,11 +447,26 @@ def upload_db_to_render():
     gz_path = str(render_db) + ".upload.gz"
 
     try:
-        print("  Stripping 13F tables...", end=" ", flush=True)
+        print("  Stripping tables for lean Render upload...", end=" ", flush=True)
         shutil.copy2(db_path, render_db)
-        conn = sqlite3.connect(str(render_db))
-        for table in ("holdings", "institutions", "cusip_mappings"):
+        conn = sqlite3.connect(str(render_db), isolation_level=None)
+        # Drop large tables not needed on Render website
+        drop_tables = [
+            "holdings", "institutions", "cusip_mappings",  # 13F (3.5M rows)
+            "fund_extractions",  # 651K rows (regenerable from pipeline)
+            "name_history",  # 51K rows (regenerable)
+            "filing_alerts",  # 514 rows (watcher internal)
+            "trust_candidates",  # 59 rows (watcher internal)
+            "analysis_results",  # Claude analysis (not needed on Render)
+            "pipeline_runs",  # Local pipeline tracking
+            "screener_uploads",  # Local upload tracking
+        ]
+        for table in drop_tables:
             conn.execute(f"DROP TABLE IF EXISTS [{table}]")
+        # Trim filings to last 90 days
+        conn.execute("DELETE FROM filings WHERE filing_date < date('now', '-90 days')")
+        # Trim time series to last 12 months
+        conn.execute("DELETE FROM mkt_time_series WHERE months_ago > 12")
         conn.execute("VACUUM")
         conn.close()
         raw_mb = render_db.stat().st_size / 1e6

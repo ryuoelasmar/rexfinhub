@@ -1586,7 +1586,8 @@ def send_critical_alert(subject: str, message: str) -> bool:
 def _send_html_digest(html_body: str, recipients: list[str],
                       edition: str = "daily",
                       subject_override: str = "",
-                      images: list[tuple[str, bytes, str]] | None = None) -> bool:
+                      images: list[tuple[str, bytes, str]] | None = None,
+                      bypass_gate: bool = False) -> bool:
     """Send pre-built HTML digest via Azure Graph or SMTP.
 
     Args:
@@ -1594,8 +1595,9 @@ def _send_html_digest(html_body: str, recipients: list[str],
     """
     # --- SEND GATE (single chokepoint for ALL email in the codebase) ---
     # config/.send_enabled must exist and contain "true" or nothing sends.
+    # bypass_gate=True for test sends (admin test to relasmar@rexfin.com only).
     _gate_file = Path(__file__).parent.parent / "config" / ".send_enabled"
-    _gate_open = _gate_file.exists() and _gate_file.read_text().strip().lower() == "true"
+    _gate_open = bypass_gate or (_gate_file.exists() and _gate_file.read_text().strip().lower() == "true")
     _subj_preview = subject_override or f"REX {edition}"
     _audit_send(_subj_preview, recipients, allowed=_gate_open)
     if not _gate_open:
