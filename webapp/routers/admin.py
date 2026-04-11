@@ -227,23 +227,29 @@ def toggle_gate(request: Request):
 
 @router.post("/recipients/add")
 def add_recipient_route(request: Request, list_name: str = Form(""), email: str = Form(""), db: Session = Depends(get_db)):
-    """Add an email to a recipient list (DB-based)."""
+    """Add an email to a recipient list (DB + sync to VPS)."""
     if not _is_admin(request):
         return RedirectResponse("/admin/", status_code=302)
     from webapp.services.recipients import add_recipient, VALID_LIST_TYPES
     if list_name not in VALID_LIST_TYPES or not email.strip():
         return RedirectResponse("/admin/?recip_error=1", status_code=303)
+    # Write to local DB
     add_recipient(db, email.strip(), list_name, added_by="admin")
+    # Sync to VPS (so emails actually send from there)
+    if _ON_RENDER:
+        _call_vps(f"/pipeline/recipients/add?email={email.strip()}&list_type={list_name}")
     return RedirectResponse(f"/admin/?recip_added={email.strip()}", status_code=303)
 
 
 @router.post("/recipients/remove")
 def remove_recipient_route(request: Request, list_name: str = Form(""), email: str = Form(""), db: Session = Depends(get_db)):
-    """Remove an email from a recipient list (DB-based)."""
+    """Remove an email from a recipient list (DB + sync to VPS)."""
     if not _is_admin(request):
         return RedirectResponse("/admin/", status_code=302)
     from webapp.services.recipients import remove_recipient
     remove_recipient(db, email.strip(), list_name)
+    if _ON_RENDER:
+        _call_vps(f"/pipeline/recipients/remove?email={email.strip()}&list_type={list_name}")
     return RedirectResponse(f"/admin/?recip_removed={email.strip()}", status_code=303)
 
 
@@ -251,7 +257,7 @@ def remove_recipient_route(request: Request, list_name: str = Form(""), email: s
 # Operational Actions (Run Now)
 # ---------------------------------------------------------------------------
 
-_VPS_API = "http://46.224.126.196:8001"
+_VPS_API = "https://46.224.126.196"
 _ON_RENDER = os.environ.get("RENDER", "") != ""
 
 
@@ -270,7 +276,8 @@ def _call_vps(endpoint: str) -> dict | None:
             pass
     try:
         resp = _req.post(f"{_VPS_API}{endpoint}",
-                         headers={"X-API-Key": api_key}, timeout=30)
+                         headers={"X-API-Key": api_key}, timeout=30,
+                         verify=False)  # Self-signed cert on VPS
         return resp.json() if resp.status_code == 200 else None
     except Exception as e:
         log.error("VPS API call failed (%s): %s", endpoint, e)

@@ -152,6 +152,57 @@ def upload_render(_: None = Depends(verify_key)):
     return _run_in_background("upload-render", _do)
 
 
+@app.post("/pipeline/recipients/add")
+def add_recipient_api(
+    email: str, list_type: str, _: None = Depends(verify_key)
+):
+    """Add a recipient to the VPS database."""
+    from webapp.database import init_db, SessionLocal
+    from webapp.services.recipients import add_recipient, VALID_LIST_TYPES
+
+    if list_type not in VALID_LIST_TYPES:
+        raise HTTPException(400, f"Invalid list_type: {list_type}")
+
+    init_db()
+    db = SessionLocal()
+    try:
+        ok = add_recipient(db, email, list_type, added_by="render-admin")
+        return {"status": "ok", "added": ok, "email": email, "list_type": list_type}
+    finally:
+        db.close()
+
+
+@app.post("/pipeline/recipients/remove")
+def remove_recipient_api(
+    email: str, list_type: str, _: None = Depends(verify_key)
+):
+    """Remove a recipient from the VPS database."""
+    from webapp.database import init_db, SessionLocal
+    from webapp.services.recipients import remove_recipient
+
+    init_db()
+    db = SessionLocal()
+    try:
+        ok = remove_recipient(db, email, list_type)
+        return {"status": "ok", "removed": ok, "email": email, "list_type": list_type}
+    finally:
+        db.close()
+
+
+@app.get("/pipeline/recipients")
+def list_recipients_api(_: None = Depends(verify_key)):
+    """List all active recipients from VPS database."""
+    from webapp.database import init_db, SessionLocal
+    from webapp.services.recipients import get_all_recipients_by_list
+
+    init_db()
+    db = SessionLocal()
+    try:
+        return get_all_recipients_by_list(db)
+    finally:
+        db.close()
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8001)
