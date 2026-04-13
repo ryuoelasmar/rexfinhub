@@ -111,19 +111,33 @@
   function makeStickyHeaders() {
     // Apply sticky headers to all tables with sortable columns (legacy system).
     // rt-table system already has sticky via CSS, so skip those.
+    // IMPORTANT: sticky must be applied to <th> elements, not <thead>.
+    // Browser support for `position: sticky` on thead is inconsistent —
+    // Safari and older Chrome ignore it, causing the first tbody row to
+    // render behind the thead. Applying to each th individually works
+    // reliably and avoids the first-row-disappearing bug.
     document.querySelectorAll('table:not(.rt-table)').forEach(function(table) {
       var thead = table.querySelector('thead');
       if (!thead || thead.hasAttribute('data-sticky-initialized')) return;
-      // Only target tables with sortable th (onclick or .sortable class)
-      var hasSortable = thead.querySelector('th.sortable, th[onclick]');
-      if (!hasSortable) return;
+      var sortableThs = thead.querySelectorAll('th.sortable, th[onclick]');
+      if (sortableThs.length === 0) return;
       thead.setAttribute('data-sticky-initialized', '1');
-      // Tables inside .table-scroll-wrap stick to container top
+
       var inScrollWrap = table.closest('.table-scroll-wrap');
-      thead.style.position = 'sticky';
-      thead.style.top = inScrollWrap ? '0' : 'var(--nav-height, 48px)';
-      thead.style.zIndex = '5';
-      thead.style.background = 'var(--table-header-bg, #ffffff)';
+      var topValue = inScrollWrap ? '0' : 'var(--nav-height, 48px)';
+      // Computed background — read from an existing th to respect theme
+      var firstTh = thead.querySelector('th');
+      var bg = firstTh ? (getComputedStyle(firstTh).backgroundColor || '#ffffff') : '#ffffff';
+      if (bg === 'rgba(0, 0, 0, 0)' || bg === 'transparent') bg = '#ffffff';
+
+      // Apply sticky to EVERY th in the thead (not just sortable ones,
+      // otherwise unsortable headers would scroll away while sortables stick)
+      thead.querySelectorAll('th').forEach(function(th) {
+        th.style.position = 'sticky';
+        th.style.top = topValue;
+        th.style.zIndex = '5';
+        th.style.backgroundColor = bg;
+      });
     });
   }
 

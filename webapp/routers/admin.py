@@ -292,12 +292,16 @@ def vps_status(request: Request):
     """Proxy VPS pipeline status for admin JS polling."""
     if not _is_admin(request):
         return {"running": None, "last_result": None}
-    result = _call_vps("/pipeline/status")
+    result = _call_vps("/pipeline/status", method="GET")
     return result or {"running": None, "last_result": {"name": "vps", "status": "error", "detail": "unreachable"}}
 
 
-def _call_vps(endpoint: str) -> dict | None:
-    """Call the pipeline API on the VPS. Returns response dict or None on failure."""
+def _call_vps(endpoint: str, method: str = "POST") -> dict | None:
+    """Call the pipeline API on the VPS. Returns response dict or None on failure.
+
+    method: "POST" for action endpoints (pull-sync, sec-scrape, upload-render,
+            recipients/*) or "GET" for read-only endpoints (status).
+    """
     import requests as _req
     api_key = os.environ.get("API_KEY", "")
     if not api_key:
@@ -310,9 +314,10 @@ def _call_vps(endpoint: str) -> dict | None:
         except Exception:
             pass
     try:
-        resp = _req.post(f"{_VPS_API}{endpoint}",
-                         headers={"X-API-Key": api_key}, timeout=30,
-                         verify=False)  # Self-signed cert on VPS
+        fn = _req.get if method.upper() == "GET" else _req.post
+        resp = fn(f"{_VPS_API}{endpoint}",
+                  headers={"X-API-Key": api_key}, timeout=30,
+                  verify=False)  # Self-signed cert on VPS
         return resp.json() if resp.status_code == 200 else None
     except Exception as e:
         log.error("VPS API call failed (%s): %s", endpoint, e)

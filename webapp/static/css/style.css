@@ -397,8 +397,10 @@ th, .data-table thead th, .rt-table thead th {
   border-bottom: 2px solid #e5e7eb;
   /* sticky headers only inside scroll containers — NOT global */
 }
-thead { background: #ffffff; }
-[data-theme="dark"] thead { background: var(--surface-2, #1e293b); }
+/* Table header backgrounds — applied per-th because position:sticky on thead
+   has inconsistent browser support (Safari/older Chrome render first tbody
+   row behind the thead). JS in table-sort.js applies sticky to individual
+   th elements. */
 /* Numeric header alignment */
 .rt-th.rt-num, th.num-col { text-align: right; }
 th.sortable { cursor: pointer; }
