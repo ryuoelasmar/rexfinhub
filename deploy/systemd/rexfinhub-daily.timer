@@ -3,7 +3,8 @@ Description=REX FinHub Daily Pipeline Timer (weekdays 5:00 PM ET)
 
 [Timer]
 # VPS timezone set to America/New_York — DST handled automatically
-OnCalendar=Mon..Fri 17:00:00
+# Runs after Bloomberg pull (17:00) has time to complete
+OnCalendar=Mon..Fri 17:30:00
 Persistent=true
 
 [Install]

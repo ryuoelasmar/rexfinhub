@@ -5,10 +5,10 @@ Wants=network-online.target
 
 [Service]
 Type=oneshot
-User=rexfinhub
-WorkingDirectory=/home/rexfinhub/rexfinhub
-EnvironmentFile=/home/rexfinhub/rexfinhub/config/.env
-Environment=SEC_CACHE_DIR=/home/rexfinhub/rexfinhub/cache/sec
+User=jarvis
+WorkingDirectory=/home/jarvis/rexfinhub
+EnvironmentFile=/home/jarvis/rexfinhub/config/.env
+Environment=SEC_CACHE_DIR=/home/jarvis/rexfinhub/cache/sec
 ExecStart=/home/jarvis/venv/bin/python scripts/run_daily.py
 TimeoutStartSec=7200
 StandardOutput=journal
