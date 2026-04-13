@@ -182,6 +182,30 @@ def admin_page(request: Request, db: Session = Depends(get_db)):
     except Exception as e:
         log.warning("Classification validation failed: %s", e)
 
+    # Structured notes status
+    notes_stats = {"available": False, "total_products": 0, "total_filings": 0, "date_max": "--"}
+    try:
+        from webapp.routers.notes import _load_stats
+        notes_stats = _load_stats()
+    except Exception as e:
+        log.warning("Structured notes stats failed: %s", e)
+
+    # Product pipeline (from Workstream C — rex_products table)
+    product_stats = {"available": False, "total": 0}
+    try:
+        from webapp.models import RexProduct
+        from sqlalchemy import func as _func
+        total = db.query(RexProduct).count()
+        if total > 0:
+            status_rows = db.query(RexProduct.status, _func.count(RexProduct.id)).group_by(RexProduct.status).all()
+            product_stats = {
+                "available": True,
+                "total": total,
+                "by_status": {s: c for s, c in status_rows},
+            }
+    except Exception as e:
+        log.debug("Product pipeline stats not available: %s", e)
+
     return templates.TemplateResponse("admin.html", {
         "request": request,
         "pending_requests": pending_requests,
@@ -200,6 +224,8 @@ def admin_page(request: Request, db: Session = Depends(get_db)):
         "report_status": report_status,
         "all_recipients": all_recipients,
         "sec_metrics": sec_metrics,
+        "notes_stats": notes_stats,
+        "product_stats": product_stats,
     })
 
 
@@ -340,6 +366,36 @@ def upload_render(request: Request):
     except Exception as e:
         log.error("Render upload failed: %s", e)
         return RedirectResponse("/admin/?render_error=1", status_code=303)
+
+
+@router.post("/sec-scrape")
+def trigger_sec_scrape(request: Request):
+    """Trigger SEC filing scrape on the VPS (incremental, all trusts)."""
+    if not _is_admin(request):
+        return RedirectResponse("/admin/", status_code=302)
+
+    if _ON_RENDER:
+        result = _call_vps("/pipeline/sec-scrape")
+        if result and result.get("status") in ("started", "ok"):
+            return RedirectResponse("/admin/?sec_scrape_started=1", status_code=303)
+        return RedirectResponse("/admin/?sec_scrape_error=1", status_code=303)
+
+    # Local: run directly (blocking — not recommended for long scrapes)
+    try:
+        import os
+        from etp_tracker.run_pipeline import run_pipeline, load_ciks_from_db
+        os.environ.setdefault("SEC_CACHE_DIR", "cache/sec")
+        ciks, overrides = load_ciks_from_db()
+        result = run_pipeline(
+            ciks=ciks, overrides=overrides, since="2024-01-01",
+            refresh_submissions=True,
+            user_agent="REX-ETP-Tracker/2.0 (relasmar@rexfin.com)",
+            etf_only=True,
+        )
+        return RedirectResponse(f"/admin/?sec_scrape_done=1&count={result}", status_code=303)
+    except Exception as e:
+        log.error("SEC scrape failed: %s", e)
+        return RedirectResponse("/admin/?sec_scrape_error=1", status_code=303)
 
 
 @router.post("/sync-market")
@@ -670,6 +726,92 @@ def reject_request(
         db.commit()
 
     return RedirectResponse("/admin/?rejected=1", status_code=303)
+
+
+# --- Trust CRUD (direct add/deactivate, no approval queue) ---
+
+@router.post("/trusts/add")
+def add_trust_direct(
+    request: Request,
+    cik: str = Form(""),
+    name: str = Form(""),
+    is_rex: str = Form(""),
+    db: Session = Depends(get_db),
+):
+    """Directly add a trust to the monitored list (admin bypass for approval queue)."""
+    if not _is_admin(request):
+        return RedirectResponse("/admin/", status_code=302)
+
+    from urllib.parse import quote
+    cik = normalize_cik(cik.strip())
+    name = name.strip()
+
+    if not cik or not name:
+        return RedirectResponse("/admin/?trust_error=missing_fields", status_code=303)
+
+    # Verify CIK against SEC submissions JSON before adding
+    try:
+        import requests as _req
+        padded = cik.zfill(10)
+        url = f"https://data.sec.gov/submissions/CIK{padded}.json"
+        resp = _req.get(url, headers={"User-Agent": "REX-ETP-Tracker/2.0 (relasmar@rexfin.com)"}, timeout=15)
+        if resp.status_code != 200:
+            return RedirectResponse(f"/admin/?trust_error=cik_not_found&cik={cik}", status_code=303)
+        sec_data = resp.json()
+        sec_name = sec_data.get("name", "")
+        # Sanity check the name matches (loosely)
+        if name.lower() not in sec_name.lower() and sec_name.lower() not in name.lower():
+            log.warning("Trust name mismatch: user='%s' SEC='%s'", name, sec_name)
+    except Exception as e:
+        log.warning("SEC verification failed for CIK %s: %s", cik, e)
+        return RedirectResponse(f"/admin/?trust_error=verify_failed&msg={quote(str(e)[:50])}", status_code=303)
+
+    existing = db.execute(select(Trust).where(Trust.cik == cik)).scalar_one_or_none()
+    if existing:
+        if not existing.is_active:
+            existing.is_active = True
+            db.commit()
+            return RedirectResponse("/admin/?trust_reactivated=1", status_code=303)
+        return RedirectResponse("/admin/?trust_error=already_exists", status_code=303)
+
+    slug = re.sub(r"[^a-z0-9]+", "-", name.lower().strip()).strip("-")
+    db.add(Trust(
+        cik=cik,
+        name=name,
+        slug=slug,
+        is_rex=bool(is_rex),
+        is_active=True,
+        added_by="ADMIN_DIRECT",
+    ))
+    db.commit()
+
+    # Also add to trusts.py registry
+    try:
+        from etp_tracker.trusts import add_trust
+        add_trust(cik, name)
+    except Exception as e:
+        log.warning("Could not write to trusts.py: %s", e)
+
+    return RedirectResponse("/admin/?trust_added=1", status_code=303)
+
+
+@router.post("/trusts/deactivate")
+def deactivate_trust(
+    request: Request,
+    trust_id: int = Form(0),
+    db: Session = Depends(get_db),
+):
+    """Deactivate a trust (stops monitoring without deleting)."""
+    if not _is_admin(request):
+        return RedirectResponse("/admin/", status_code=302)
+
+    trust = db.query(Trust).filter(Trust.id == trust_id).first()
+    if not trust:
+        return RedirectResponse("/admin/?trust_error=not_found", status_code=303)
+
+    trust.is_active = False
+    db.commit()
+    return RedirectResponse("/admin/?trust_deactivated=1", status_code=303)
 
 
 # --- Digest Send ---

@@ -56,7 +56,38 @@
   Database uploaded to Render. Site updated.
 </div>
 {% endif %}
-{% for err_key in ['bbg_error', 'mkt_error', 'cls_error', 'recip_error', 'render_error'] %}
+{% if request.query_params.get('sec_scrape_started') %}
+<div style="background:var(--green-bg); border-left:4px solid var(--green); padding:10px 14px; border-radius:0 6px 6px 0; margin-bottom:12px; font-size:13px;">
+  SEC scrape started on VPS. Check back in 30-60 minutes.
+</div>
+{% endif %}
+{% if request.query_params.get('sec_scrape_done') %}
+<div style="background:var(--green-bg); border-left:4px solid var(--green); padding:10px 14px; border-radius:0 6px 6px 0; margin-bottom:12px; font-size:13px;">
+  SEC scrape complete. {{ request.query_params.get('count', 0) }} processed.
+</div>
+{% endif %}
+{% if request.query_params.get('trust_added') %}
+<div style="background:var(--green-bg); border-left:4px solid var(--green); padding:10px 14px; border-radius:0 6px 6px 0; margin-bottom:12px; font-size:13px;">
+  Trust added and verified against SEC.
+</div>
+{% endif %}
+{% if request.query_params.get('trust_reactivated') %}
+<div style="background:var(--green-bg); border-left:4px solid var(--green); padding:10px 14px; border-radius:0 6px 6px 0; margin-bottom:12px; font-size:13px;">
+  Trust reactivated.
+</div>
+{% endif %}
+{% if request.query_params.get('trust_deactivated') %}
+<div style="background:var(--orange-bg); border-left:4px solid var(--orange); padding:10px 14px; border-radius:0 6px 6px 0; margin-bottom:12px; font-size:13px;">
+  Trust deactivated (no longer monitored).
+</div>
+{% endif %}
+{% if request.query_params.get('trust_error') %}
+<div style="background:var(--red-bg); border-left:4px solid var(--red); padding:10px 14px; border-radius:0 6px 6px 0; margin-bottom:12px; font-size:13px;">
+  Trust operation failed: {{ request.query_params.get('trust_error') }}
+  {% if request.query_params.get('cik') %} (CIK: {{ request.query_params.get('cik') }}){% endif %}
+</div>
+{% endif %}
+{% for err_key in ['bbg_error', 'mkt_error', 'cls_error', 'recip_error', 'render_error', 'sec_scrape_error'] %}
 {% if request.query_params.get(err_key) %}
 <div style="background:var(--red-bg); border-left:4px solid var(--red); padding:10px 14px; border-radius:0 6px 6px 0; margin-bottom:12px; font-size:13px;">
   Operation failed. Check logs for details.
@@ -71,7 +102,10 @@
   <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
     <h3 style="margin:0; font-size:16px;">Data &amp; Pipeline</h3>
     <div>
-      <form method="post" action="/admin/pull-bloomberg" style="display:inline;" onsubmit="setTimeout(pollVpsStatus, 2000);">
+      <form method="post" action="/admin/sec-scrape" style="display:inline;" onsubmit="setTimeout(pollVpsStatus, 2000);">
+        <button type="submit" style="background:var(--orange); color:#fff; border:none; padding:7px 14px; border-radius:4px; cursor:pointer; font-size:11px; font-weight:600;" onclick="return confirm('Run SEC filing scrape on the VPS? This takes ~30-60 minutes.')">SEC Scrape</button>
+      </form>
+      <form method="post" action="/admin/pull-bloomberg" style="display:inline; margin-left:6px;" onsubmit="setTimeout(pollVpsStatus, 2000);">
         <button type="submit" style="background:var(--blue); color:#fff; border:none; padding:7px 14px; border-radius:4px; cursor:pointer; font-size:11px; font-weight:600;" onclick="return confirm('Pull fresh Bloomberg from SharePoint and sync to database?')">Pull &amp; Sync</button>
       </form>
       <form method="post" action="/admin/upload-render" style="display:inline; margin-left:6px;" onsubmit="setTimeout(pollVpsStatus, 2000);">
@@ -135,6 +169,34 @@
           {% if send_gate_open %}Lock{% else %}Unlock{% endif %}
         </button>
       </form>
+    </div>
+  </div>
+
+  <!-- Second row: Structured Notes + Product Pipeline -->
+  <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:10px;">
+    <div style="flex:1; min-width:160px; background:var(--white); border:1px solid var(--border); border-radius:6px; padding:12px 14px;">
+      <div style="font-size:9px; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px;">Structured Notes</div>
+      {% if notes_stats.available %}
+      <div style="font-size:15px; font-weight:700; color:var(--text); margin-top:4px;">{{ "{:,}".format(notes_stats.total_products) }}</div>
+      <div style="font-size:10px; color:var(--muted); margin-top:2px;">{{ notes_stats.issuers }} issuers · thru {{ notes_stats.date_max }}</div>
+      {% else %}
+      <div style="font-size:15px; font-weight:700; color:var(--muted); margin-top:4px;">Not loaded</div>
+      <div style="font-size:10px; color:var(--muted); margin-top:2px;">structured_notes.db missing</div>
+      {% endif %}
+    </div>
+
+    <div style="flex:1; min-width:160px; background:var(--white); border:1px solid var(--border); border-radius:6px; padding:12px 14px;">
+      <div style="font-size:9px; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px;">Product Pipeline</div>
+      {% if product_stats.available %}
+      <div style="font-size:15px; font-weight:700; color:var(--text); margin-top:4px;">{{ product_stats.total }} products</div>
+      <div style="font-size:10px; color:var(--muted); margin-top:2px;">
+        {{ product_stats.by_status.get('Listed', 0) }} listed · {{ product_stats.by_status.get('Filed', 0) }} filed
+        {% if product_stats.by_status.get('Research', 0) or product_stats.by_status.get('Target List', 0) %} · {{ (product_stats.by_status.get('Research', 0) + product_stats.by_status.get('Target List', 0)) }} pipeline{% endif %}
+      </div>
+      {% else %}
+      <div style="font-size:15px; font-weight:700; color:var(--muted); margin-top:4px;">Not imported</div>
+      <div style="font-size:10px; color:var(--muted); margin-top:2px;">run import_product_tracker.py</div>
+      {% endif %}
     </div>
   </div>
 </div>
@@ -356,7 +418,7 @@ document.getElementById('cls-search').addEventListener('keydown', function(e) { 
   </summary>
   <div style="padding:0 20px 16px;">
     {% if pending_requests %}
-    <table style="font-size:12px; width:100%; border-collapse:collapse;">
+    <table style="font-size:12px; width:100%; border-collapse:collapse; margin-bottom:12px;">
       <thead><tr style="border-bottom:2px solid var(--border);">
         <th style="padding:6px 8px; text-align:left; color:var(--muted);">Trust</th>
         <th style="padding:6px 8px; text-align:left; color:var(--muted);">CIK</th>
@@ -376,8 +438,20 @@ document.getElementById('cls-search').addEventListener('keydown', function(e) { 
       </tbody>
     </table>
     {% else %}
-    <div style="padding:8px 0; font-size:12px; color:var(--muted);">No pending requests. Auto-discovery handles most trusts.</div>
+    <div style="padding:8px 0; font-size:12px; color:var(--muted); margin-bottom:12px;">No pending requests. Auto-discovery handles most trusts.</div>
     {% endif %}
+
+    <!-- Direct Trust Add -->
+    <div style="border-top:1px solid var(--border); padding-top:12px;">
+      <div style="font-size:11px; font-weight:600; color:var(--muted); margin-bottom:6px; text-transform:uppercase; letter-spacing:0.4px;">Add Trust Directly</div>
+      <form method="post" action="/admin/trusts/add" style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;" onsubmit="return confirm('Add trust? CIK will be verified against SEC.')">
+        <input type="text" name="cik" placeholder="CIK (e.g. 1771146)" required style="font-size:11px; padding:4px 8px; border:1px solid var(--border); border-radius:3px; width:140px;">
+        <input type="text" name="name" placeholder="Trust name" required style="font-size:11px; padding:4px 8px; border:1px solid var(--border); border-radius:3px; flex:1; min-width:200px;">
+        <label style="font-size:11px; color:var(--muted);"><input type="checkbox" name="is_rex" value="1"> REX</label>
+        <button type="submit" style="font-size:10px; padding:4px 10px; border:none; border-radius:3px; background:var(--blue); color:#fff; cursor:pointer;">Add + Verify</button>
+      </form>
+      <div style="font-size:10px; color:var(--muted); margin-top:4px;">Verifies against data.sec.gov before adding. Skips approval queue.</div>
+    </div>
   </div>
 </details>
 
