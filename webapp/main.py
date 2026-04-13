@@ -260,6 +260,8 @@ def create_app() -> FastAPI:
     app.include_router(downloads.router)
     app.include_router(api.router)
     app.include_router(admin.router)
+    from webapp.routers import admin_products
+    app.include_router(admin_products.router)
     app.include_router(screener.router)
     app.include_router(market.router)
     app.include_router(market_advanced_router)

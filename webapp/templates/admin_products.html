@@ -1,0 +1,215 @@
+{% extends "base.html" %}
+{% block title %}Product Pipeline — Admin — REX Financial{% endblock %}
+
+{% block head %}
+<style>
+.page-wrap { max-width:1400px; margin:0 auto; padding:20px; }
+.breadcrumb { font-size:12px; color:#94a3b8; margin-bottom:8px; }
+.breadcrumb a { color:#1F3864; text-decoration:none; }
+h1 { font-size:22px; font-weight:700; color:#0f172a; margin:0 0 16px; }
+
+.kpi-row { display:flex; gap:12px; margin-bottom:20px; flex-wrap:wrap; }
+.kpi { flex:1; min-width:120px; background:#f8fafc; border:1px solid #e5e7eb; border-left:3px solid #1F3864; border-radius:6px; padding:12px 16px; }
+.kpi .num { font-size:26px; font-weight:800; color:#0f172a; line-height:1; }
+.kpi .label { font-size:10px; color:#94a3b8; text-transform:uppercase; letter-spacing:0.04em; margin-top:4px; }
+.kpi.green { border-left-color:#059669; } .kpi.green .num { color:#059669; }
+.kpi.blue  { border-left-color:#2563eb; } .kpi.blue  .num { color:#2563eb; }
+.kpi.orange{ border-left-color:#d97706; } .kpi.orange .num { color:#d97706; }
+.kpi.red   { border-left-color:#dc2626; } .kpi.red   .num { color:#dc2626; }
+
+.action-bar { display:flex; gap:8px; margin-bottom:16px; flex-wrap:wrap; align-items:center; }
+.btn { padding:7px 14px; border:1px solid #e5e7eb; border-radius:4px; font-size:13px; cursor:pointer; background:#fff; color:#0f172a; text-decoration:none; font-weight:500; }
+.btn:hover { background:#f8fafc; }
+.btn-primary { background:#0f172a; color:#fff; border-color:#0f172a; }
+.btn-primary:hover { background:#1e293b; }
+.btn-sm { padding:4px 8px; font-size:11px; }
+
+.filter-bar { background:#fff; border:1px solid #e5e7eb; border-radius:6px; padding:12px 16px; margin-bottom:16px; display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+.filter-bar select, .filter-bar input { padding:6px 10px; border:1px solid #e5e7eb; border-radius:4px; font-size:13px; }
+
+table.products { width:100%; border-collapse:collapse; font-size:12px; background:#fff; border:1px solid #e5e7eb; border-radius:6px; }
+table.products th { background:#f8fafc; padding:8px 10px; text-align:left; font-size:10px; text-transform:uppercase; color:#64748b; border-bottom:2px solid #e5e7eb; letter-spacing:0.04em; }
+table.products td { padding:6px 10px; border-bottom:1px solid #f1f5f9; vertical-align:middle; }
+table.products tr:hover { background:#fafbfc; }
+.status-pill { display:inline-block; padding:2px 8px; border-radius:3px; font-size:10px; font-weight:600; text-transform:uppercase; }
+.status-Listed { background:#ecfdf5; color:#059669; }
+.status-Filed { background:#eff6ff; color:#2563eb; }
+.status-Research, .status-Target-List { background:#fffbeb; color:#d97706; }
+.status-Delisted { background:#fef2f2; color:#dc2626; }
+.status-Awaiting-Effective { background:#fef3c7; color:#b45309; }
+.suite-pill { display:inline-block; padding:2px 6px; border-radius:3px; font-size:10px; font-weight:600; background:#f1f5f9; color:#475569; }
+.ticker-col { font-family:monospace; font-weight:700; color:#1F3864; }
+
+.msg-banner { background:#ecfdf5; border:1px solid #10b981; border-left:3px solid #059669; border-radius:4px; padding:10px 14px; margin-bottom:16px; font-size:13px; color:#047857; }
+
+.modal { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.4); z-index:1000; align-items:center; justify-content:center; }
+.modal.open { display:flex; }
+.modal-box { background:#fff; border-radius:8px; padding:24px; max-width:500px; width:90%; max-height:90vh; overflow-y:auto; }
+.modal h2 { margin:0 0 16px; font-size:16px; color:#0f172a; }
+.modal label { display:block; font-size:11px; color:#64748b; text-transform:uppercase; margin-top:10px; margin-bottom:4px; }
+.modal input, .modal select, .modal textarea { width:100%; padding:7px 10px; border:1px solid #e5e7eb; border-radius:4px; font-size:13px; font-family:inherit; box-sizing:border-box; }
+.modal textarea { min-height:60px; resize:vertical; }
+.modal-actions { display:flex; gap:8px; margin-top:16px; justify-content:flex-end; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-wrap">
+  <div class="breadcrumb">
+    <a href="/admin/">Admin</a> / <span>Product Pipeline</span>
+  </div>
+  <h1>REX Product Pipeline</h1>
+
+  {% if msg %}
+    {% if msg == 'updated' %}<div class="msg-banner">Product updated.</div>
+    {% elif msg == 'added' %}<div class="msg-banner">Product added.</div>
+    {% elif msg.startswith('synced_') %}<div class="msg-banner">Synced from SEC: {{ msg.split('_')[1] }} products updated.</div>
+    {% endif %}
+  {% endif %}
+
+  <div class="kpi-row">
+    <div class="kpi"><div class="num">{{ total }}</div><div class="label">Total</div></div>
+    <div class="kpi green"><div class="num">{{ status_counts.get('Listed', 0) }}</div><div class="label">Listed</div></div>
+    <div class="kpi blue"><div class="num">{{ status_counts.get('Filed', 0) }}</div><div class="label">Filed</div></div>
+    <div class="kpi orange"><div class="num">{{ status_counts.get('Research', 0) + status_counts.get('Target List', 0) }}</div><div class="label">Pipeline</div></div>
+    <div class="kpi red"><div class="num">{{ status_counts.get('Delisted', 0) }}</div><div class="label">Delisted</div></div>
+  </div>
+
+  <div class="action-bar">
+    <button onclick="openAddModal()" class="btn btn-primary">+ Add Product</button>
+    <form method="post" action="/admin/products/sync-from-sec" style="display:inline;">
+      <button type="submit" class="btn">Sync from SEC</button>
+    </form>
+    <span style="flex:1;"></span>
+    <span style="font-size:12px; color:#64748b;">Showing {{ filtered_count }} of {{ total }}</span>
+  </div>
+
+  <form method="get" class="filter-bar">
+    <input type="text" name="q" placeholder="Search name, ticker, underlier..." value="{{ filter_q }}" style="flex:1; min-width:200px;">
+    <select name="status">
+      <option value="">All statuses</option>
+      {% for s in valid_statuses %}
+      <option value="{{ s }}" {% if filter_status == s %}selected{% endif %}>{{ s }} ({{ status_counts.get(s, 0) }})</option>
+      {% endfor %}
+    </select>
+    <select name="suite">
+      <option value="">All suites</option>
+      {% for s in valid_suites %}
+      <option value="{{ s }}" {% if filter_suite == s %}selected{% endif %}>{{ s }} ({{ suite_counts.get(s, 0) }})</option>
+      {% endfor %}
+    </select>
+    <button type="submit" class="btn">Filter</button>
+    <a href="/admin/products/" class="btn">Clear</a>
+  </form>
+
+  <table class="products">
+    <thead>
+      <tr>
+        <th>Ticker</th>
+        <th>Name</th>
+        <th>Suite</th>
+        <th>Status</th>
+        <th>Underlier</th>
+        <th>Filed</th>
+        <th>Est. Effective</th>
+        <th>Listed</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for p in products %}
+      <tr>
+        <td class="ticker-col">{{ p.ticker or '—' }}</td>
+        <td>{{ p.name[:60] }}</td>
+        <td><span class="suite-pill">{{ p.product_suite }}</span></td>
+        <td><span class="status-pill status-{{ p.status.replace(' ', '-') }}">{{ p.status }}</span></td>
+        <td>{{ p.underlier or '—' }}</td>
+        <td>{{ p.initial_filing_date.strftime('%Y-%m-%d') if p.initial_filing_date else '—' }}</td>
+        <td>{{ p.estimated_effective_date.strftime('%Y-%m-%d') if p.estimated_effective_date else '—' }}</td>
+        <td>{{ p.official_listed_date.strftime('%Y-%m-%d') if p.official_listed_date else '—' }}</td>
+        <td>
+          <button type="button" onclick='openEditModal({{ p.id }}, {{ {"name": p.name, "status": p.status, "product_suite": p.product_suite, "ticker": p.ticker or "", "underlier": p.underlier or "", "notes": p.notes or ""} | tojson }})' class="btn btn-sm">Edit</button>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div id="editModal" class="modal">
+  <div class="modal-box">
+    <h2 id="editModalTitle">Edit Product</h2>
+    <form id="editForm" method="post">
+      <label>Name</label>
+      <input type="text" name="name" id="edit_name" required>
+      <label>Suite</label>
+      <select name="product_suite" id="edit_suite">
+        {% for s in valid_suites %}<option value="{{ s }}">{{ s }}</option>{% endfor %}
+      </select>
+      <label>Status</label>
+      <select name="status" id="edit_status">
+        {% for s in valid_statuses %}<option value="{{ s }}">{{ s }}</option>{% endfor %}
+      </select>
+      <label>Ticker</label>
+      <input type="text" name="ticker" id="edit_ticker">
+      <label>Underlier</label>
+      <input type="text" name="underlier" id="edit_underlier">
+      <label>Notes</label>
+      <textarea name="notes" id="edit_notes"></textarea>
+      <div class="modal-actions">
+        <button type="button" class="btn" onclick="closeModal()">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div id="addModal" class="modal">
+  <div class="modal-box">
+    <h2>Add New Product</h2>
+    <form method="post" action="/admin/products/add">
+      <label>Name</label>
+      <input type="text" name="name" required>
+      <label>Suite</label>
+      <select name="product_suite">
+        {% for s in valid_suites %}<option value="{{ s }}">{{ s }}</option>{% endfor %}
+      </select>
+      <label>Status</label>
+      <select name="status">
+        {% for s in valid_statuses %}<option value="{{ s }}" {% if s == 'Research' %}selected{% endif %}>{{ s }}</option>{% endfor %}
+      </select>
+      <label>Ticker (optional)</label>
+      <input type="text" name="ticker">
+      <label>Underlier (optional)</label>
+      <input type="text" name="underlier">
+      <label>Notes (optional)</label>
+      <textarea name="notes"></textarea>
+      <div class="modal-actions">
+        <button type="button" class="btn" onclick="closeModal()">Cancel</button>
+        <button type="submit" class="btn btn-primary">Add Product</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+function openEditModal(id, data) {
+  document.getElementById('editForm').action = '/admin/products/update/' + id;
+  document.getElementById('edit_name').value = data.name;
+  document.getElementById('edit_suite').value = data.product_suite;
+  document.getElementById('edit_status').value = data.status;
+  document.getElementById('edit_ticker').value = data.ticker;
+  document.getElementById('edit_underlier').value = data.underlier;
+  document.getElementById('edit_notes').value = data.notes;
+  document.getElementById('editModal').classList.add('open');
+}
+function openAddModal() { document.getElementById('addModal').classList.add('open'); }
+function closeModal() {
+  document.getElementById('editModal').classList.remove('open');
+  document.getElementById('addModal').classList.remove('open');
+}
+document.addEventListener('click', function(e) {
+  if (e.target.classList.contains('modal')) closeModal();
+});
+</script>
+{% endblock %}
