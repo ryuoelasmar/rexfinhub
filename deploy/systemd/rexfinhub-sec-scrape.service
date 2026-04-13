@@ -10,6 +10,6 @@ WorkingDirectory=/home/jarvis/rexfinhub
 EnvironmentFile=/home/jarvis/rexfinhub/config/.env
 Environment=SEC_CACHE_DIR=/home/jarvis/rexfinhub/cache/sec
 ExecStart=/home/jarvis/venv/bin/python scripts/run_all_pipelines.py --skip-email --skip-market
-TimeoutStartSec=3600
+TimeoutStartSec=7200
 StandardOutput=journal
 StandardError=journal
