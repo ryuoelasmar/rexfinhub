@@ -734,8 +734,9 @@ def filing_evaluator_api(
         )
 
     try:
-        from screener.candidate_evaluator import evaluate_candidates
-        results = evaluate_candidates(tickers)
+        from dataclasses import asdict
+        from screener.foundation_scorer import score_candidates
+        results = score_candidates(tickers)
     except FileNotFoundError:
         return JSONResponse(
             {"error": "Bloomberg data file not found. Upload from Admin panel first."},
@@ -747,7 +748,7 @@ def filing_evaluator_api(
 
     clean_results = []
     for r in results:
-        clean_results.append(serialize_eval(r))
+        clean_results.append(serialize_eval(asdict(r)))
 
     return JSONResponse({"results": clean_results})
 

@@ -555,7 +555,7 @@ document.addEventListener('DOMContentLoaded', function() {
         + 'SEC Funds</div>';
       data.funds.forEach(function(f) {
         var statusStyle = f.status === 'EFFECTIVE' ? 'color:var(--green)' : f.status === 'PENDING' ? 'color:var(--orange)' : f.status === 'DELAYED' ? 'color:var(--red)' : '';
-        html += '<a href="/trusts/' + escapeHtml(f.trust_slug) + '" class="search-result-item">'
+        html += '<a href="/funds/' + escapeHtml(f.series_id) + '" class="search-result-item">'
           + '<div class="sri-main">'
           + '<div class="sri-title">' + escapeHtml(f.fund_name) + '</div>'
           + '<div class="sri-sub">' + escapeHtml(f.trust_name) + (f.ticker ? ' &middot; ' + escapeHtml(f.ticker) : '') + '</div>'

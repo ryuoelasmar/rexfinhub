@@ -123,6 +123,7 @@
       thead.style.position = 'sticky';
       thead.style.top = inScrollWrap ? '0' : 'var(--nav-height, 48px)';
       thead.style.zIndex = '5';
+      thead.style.background = 'var(--table-header-bg, #ffffff)';
     });
   }
 

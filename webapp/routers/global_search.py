@@ -141,6 +141,7 @@ def global_search(
     if len(products) < 3:
         fund_rows = db.execute(
             select(
+                FundStatus.series_id,
                 FundStatus.fund_name,
                 FundStatus.ticker,
                 FundStatus.status,
@@ -157,6 +158,7 @@ def global_search(
         ).all()
         funds = [
             {
+                "series_id": r.series_id,
                 "fund_name": r.fund_name,
                 "ticker": r.ticker,
                 "status": r.status,
