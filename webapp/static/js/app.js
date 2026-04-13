@@ -512,7 +512,7 @@ document.addEventListener('DOMContentLoaded', function() {
         + '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px;margin-right:4px;opacity:0.5"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>'
         + 'Products</div>';
       data.products.forEach(function(p) {
-        var url = '/holdings/fund/' + encodeURIComponent(p.ticker);
+        var url = '/market/fund/' + encodeURIComponent(p.ticker);
         html += '<a href="' + url + '" class="search-result-item">'
           + '<div class="sri-main">'
           + '<div class="sri-title"><span class="sri-ticker">' + escapeHtml(p.ticker) + '</span> ' + escapeHtml(p.fund_name) + '</div>'

@@ -397,10 +397,22 @@ th, .data-table thead th, .rt-table thead th {
   border-bottom: 2px solid #e5e7eb;
   /* sticky headers only inside scroll containers — NOT global */
 }
-/* Table header backgrounds — applied per-th because position:sticky on thead
-   has inconsistent browser support (Safari/older Chrome render first tbody
-   row behind the thead). JS in table-sort.js applies sticky to individual
-   th elements. */
+/* Legacy sticky table headers — applied to tables with sortable columns.
+   Sticky is set on each th (not thead) because sticky on thead has
+   inconsistent browser support. Background is set explicitly with !important
+   to defeat any row highlighting that might bleed through during scroll. */
+.legacy-sticky-table thead th {
+  position: sticky !important;
+  top: var(--nav-height, 48px);
+  z-index: 5;
+  background: #ffffff !important;
+  box-shadow: 0 2px 0 0 #e5e7eb;
+}
+[data-theme="dark"] .legacy-sticky-table thead th {
+  background: var(--table-header-bg, #1e293b) !important;
+  box-shadow: 0 2px 0 0 rgba(255,255,255,0.08);
+}
+.table-scroll-wrap .legacy-sticky-table thead th { top: 0; }
 /* Numeric header alignment */
 .rt-th.rt-num, th.num-col { text-align: right; }
 th.sortable { cursor: pointer; }
