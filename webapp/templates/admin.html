@@ -31,6 +31,16 @@
   <strong>{{ request.query_params.get('cls_approved') }}</strong> classified and saved.
 </div>
 {% endif %}
+{% if request.query_params.get('cls_batch_approved') %}
+<div style="background:var(--green-bg); border-left:4px solid var(--green); padding:10px 14px; border-radius:0 6px 6px 0; margin-bottom:12px; font-size:13px;">
+  Batch approved: <strong>{{ request.query_params.get('cls_batch_approved') }}</strong> proposals classified.
+</div>
+{% endif %}
+{% if request.query_params.get('cls_batch_rejected') %}
+<div style="background:var(--orange-bg); border-left:4px solid var(--orange); padding:10px 14px; border-radius:0 6px 6px 0; margin-bottom:12px; font-size:13px;">
+  Batch rejected: <strong>{{ request.query_params.get('cls_batch_rejected') }}</strong> proposals dismissed.
+</div>
+{% endif %}
 {% if request.query_params.get('gate') == 'unlocked' %}
 <div style="background:var(--green-bg); border-left:4px solid var(--green); padding:10px 14px; border-radius:0 6px 6px 0; margin-bottom:12px; font-size:13px;">
   Email gate <strong>unlocked</strong>. Sends are now enabled.
@@ -270,36 +280,107 @@
 
   <!-- Pending Proposals -->
   {% if pending_proposals %}
-  <div style="font-size:11px; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px;">Review Queue ({{ pending_proposals | length }})</div>
-  <table style="width:100%; border-collapse:collapse; font-size:12px; margin-bottom:12px;">
-    <thead>
-      <tr style="border-bottom:2px solid var(--border);">
-        <th style="padding:6px 8px; text-align:left; font-weight:600; color:var(--muted);">Ticker</th>
-        <th style="padding:6px 8px; text-align:left; font-weight:600; color:var(--muted);">Fund</th>
-        <th style="padding:6px 8px; text-align:left; font-weight:600; color:var(--muted);">Category</th>
-        <th style="padding:6px 8px; text-align:center; font-weight:600; color:var(--muted);">Conf.</th>
-        <th style="padding:6px 8px; text-align:right; font-weight:600; color:var(--muted);">Actions</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for p in pending_proposals %}
-      <tr style="border-bottom:1px solid var(--border);">
-        <td style="padding:6px 8px; font-weight:600;">{{ p.ticker }}</td>
-        <td style="padding:6px 8px; font-size:11px;">{{ (p.fund_name or '')[:40] }}</td>
-        <td style="padding:6px 8px;"><span style="background:var(--blue); color:#fff; padding:1px 6px; border-radius:8px; font-size:10px;">{{ p.proposed_category }}</span></td>
-        <td style="padding:6px 8px; text-align:center; font-size:11px; font-weight:600; color:{% if p.confidence == 'HIGH' %}var(--green){% elif p.confidence == 'MEDIUM' %}var(--orange){% else %}var(--red){% endif %};">{{ p.confidence }}</td>
-        <td style="padding:6px 8px; text-align:right; white-space:nowrap;">
-          <form method="post" action="/admin/classification/{{ p.id }}/approve" style="display:inline;">
-            <button type="submit" style="font-size:10px; padding:2px 8px; border:none; border-radius:3px; background:var(--green); color:#fff; cursor:pointer;" onclick="return confirm('Approve {{ p.ticker }} as {{ p.proposed_category }}?')">Approve</button>
-          </form>
-          <form method="post" action="/admin/classification/{{ p.id }}/reject" style="display:inline; margin-left:3px;">
-            <button type="submit" style="font-size:10px; padding:2px 8px; border:none; border-radius:3px; background:var(--red); color:#fff; cursor:pointer;">Reject</button>
-          </form>
-        </td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+    <div style="font-size:11px; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px;">Review Queue ({{ pending_proposals | length }})</div>
+    <div style="font-size:11px; color:var(--muted);">
+      <span id="clsSelCount">0</span> selected
+    </div>
+  </div>
+
+  <form id="clsBatchForm" method="post" action="/admin/classification/batch" onsubmit="return prepareBatch();">
+    <input type="hidden" name="proposal_ids" id="clsBatchIds">
+    <input type="hidden" name="action" id="clsBatchAction">
+    <input type="hidden" name="override_category" id="clsBatchCategory">
+
+    <table style="width:100%; border-collapse:collapse; font-size:12px; margin-bottom:8px;">
+      <thead>
+        <tr style="border-bottom:2px solid var(--border);">
+          <th style="padding:6px 8px; width:28px;"><input type="checkbox" id="clsSelAll" onclick="toggleAllCls(this.checked)"></th>
+          <th style="padding:6px 8px; text-align:left; font-weight:600; color:var(--muted);">Ticker</th>
+          <th style="padding:6px 8px; text-align:left; font-weight:600; color:var(--muted);">Fund</th>
+          <th style="padding:6px 8px; text-align:left; font-weight:600; color:var(--muted);">Category</th>
+          <th style="padding:6px 8px; text-align:center; font-weight:600; color:var(--muted);">Conf.</th>
+          <th style="padding:6px 8px; text-align:right; font-weight:600; color:var(--muted);">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in pending_proposals %}
+        <tr style="border-bottom:1px solid var(--border);">
+          <td style="padding:6px 8px;"><input type="checkbox" class="clsRowCb" value="{{ p.id }}" onclick="updateClsCount()"></td>
+          <td style="padding:6px 8px; font-weight:600;">{{ p.ticker }}</td>
+          <td style="padding:6px 8px; font-size:11px;">{{ (p.fund_name or '')[:40] }}</td>
+          <td style="padding:6px 8px;"><span style="background:var(--blue); color:#fff; padding:1px 6px; border-radius:8px; font-size:10px;">{{ p.proposed_category }}</span></td>
+          <td style="padding:6px 8px; text-align:center; font-size:11px; font-weight:600; color:{% if p.confidence == 'HIGH' %}var(--green){% elif p.confidence == 'MEDIUM' %}var(--orange){% else %}var(--red){% endif %};">{{ p.confidence }}</td>
+          <td style="padding:6px 8px; text-align:right; white-space:nowrap;">
+            <button type="button" onclick="return singleApprove({{ p.id }}, '{{ p.ticker }}', '{{ p.proposed_category }}')" style="font-size:10px; padding:2px 8px; border:none; border-radius:3px; background:var(--green); color:#fff; cursor:pointer;">Approve</button>
+            <button type="button" onclick="return singleReject({{ p.id }})" style="font-size:10px; padding:2px 8px; border:none; border-radius:3px; background:var(--red); color:#fff; cursor:pointer; margin-left:3px;">Reject</button>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <!-- Batch action bar -->
+    <div style="display:flex; gap:6px; align-items:center; padding:8px 10px; background:var(--white); border:1px solid var(--border); border-radius:4px; flex-wrap:wrap;">
+      <span style="font-size:11px; color:var(--muted); font-weight:600;">Batch:</span>
+      <button type="button" onclick="doBatch('approve')" style="font-size:10px; padding:4px 10px; border:none; border-radius:3px; background:var(--green); color:#fff; cursor:pointer;">Approve Selected</button>
+      <button type="button" onclick="doBatch('reject')" style="font-size:10px; padding:4px 10px; border:none; border-radius:3px; background:var(--red); color:#fff; cursor:pointer;">Reject Selected</button>
+      <span style="color:var(--border); margin:0 4px;">|</span>
+      <select id="clsBatchOverride" style="font-size:10px; padding:3px 6px; border:1px solid var(--border); border-radius:3px;">
+        <option value="">Recategorize as...</option>
+        <option value="LI">LI (Leverage &amp; Inverse)</option>
+        <option value="CC">CC (Covered Call / Income)</option>
+        <option value="Crypto">Crypto</option>
+        <option value="Defined">Defined Outcome</option>
+        <option value="Thematic">Thematic</option>
+      </select>
+      <button type="button" onclick="doBatch('recategorize')" style="font-size:10px; padding:4px 10px; border:none; border-radius:3px; background:var(--blue); color:#fff; cursor:pointer;">Apply</button>
+    </div>
+  </form>
+
+  <!-- Single-action forms (hidden, triggered by row buttons) -->
+  {% for p in pending_proposals %}
+  <form id="clsApproveForm{{ p.id }}" method="post" action="/admin/classification/{{ p.id }}/approve" style="display:none;"></form>
+  <form id="clsRejectForm{{ p.id }}" method="post" action="/admin/classification/{{ p.id }}/reject" style="display:none;"></form>
+  {% endfor %}
+
+  <script>
+    function updateClsCount() {
+      var n = document.querySelectorAll('.clsRowCb:checked').length;
+      document.getElementById('clsSelCount').textContent = n;
+    }
+    function toggleAllCls(checked) {
+      document.querySelectorAll('.clsRowCb').forEach(function(cb) { cb.checked = checked; });
+      updateClsCount();
+    }
+    function doBatch(action) {
+      var checked = Array.from(document.querySelectorAll('.clsRowCb:checked')).map(function(cb) { return cb.value; });
+      if (checked.length === 0) { alert('Select at least one proposal.'); return; }
+      var label = action;
+      var override = '';
+      if (action === 'recategorize') {
+        override = document.getElementById('clsBatchOverride').value;
+        if (!override) { alert('Pick a category from the dropdown first.'); return; }
+        label = 'Recategorize as ' + override;
+      }
+      if (!confirm(label + ' ' + checked.length + ' proposal(s)?')) return;
+      document.getElementById('clsBatchIds').value = checked.join(',');
+      document.getElementById('clsBatchAction').value = action;
+      document.getElementById('clsBatchCategory').value = override;
+      document.getElementById('clsBatchForm').submit();
+    }
+    function prepareBatch() { return true; }
+    function singleApprove(id, ticker, cat) {
+      if (!confirm('Approve ' + ticker + ' as ' + cat + '?')) return false;
+      document.getElementById('clsApproveForm' + id).submit();
+      return false;
+    }
+    function singleReject(id) {
+      if (!confirm('Reject this proposal?')) return false;
+      document.getElementById('clsRejectForm' + id).submit();
+      return false;
+    }
+  </script>
   {% else %}
   <div style="text-align:center; padding:12px; color:var(--muted); font-size:12px;">No pending proposals. Click "Scan New Funds" to check.</div>
   {% endif %}

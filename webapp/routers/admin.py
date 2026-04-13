@@ -636,6 +636,84 @@ def classification_reject(
     return RedirectResponse("/admin/?cls_rejected=1", status_code=303)
 
 
+@router.post("/classification/batch")
+def classification_batch(
+    request: Request,
+    action: str = Form(""),
+    proposal_ids: str = Form(""),
+    override_category: str = Form(""),
+    db: Session = Depends(get_db),
+):
+    """Batch operation on multiple classification proposals.
+
+    action: approve | reject | recategorize
+    proposal_ids: comma-separated list of proposal IDs
+    override_category: optional category override for 'recategorize' action
+    """
+    if not _is_admin(request):
+        return RedirectResponse("/admin/", status_code=302)
+
+    try:
+        import json as _json
+        from webapp.models import ClassificationProposal
+        from tools.rules_editor.classify_engine import apply_classifications
+
+        ids = [int(x.strip()) for x in proposal_ids.split(",") if x.strip().isdigit()]
+        if not ids:
+            return RedirectResponse("/admin/?cls_error=no_selection", status_code=303)
+
+        valid_cats = {"LI", "CC", "Crypto", "Defined", "Thematic"}
+        if action == "recategorize" and override_category not in valid_cats:
+            return RedirectResponse("/admin/?cls_error=invalid_category", status_code=303)
+
+        proposals = db.query(ClassificationProposal).filter(
+            ClassificationProposal.id.in_(ids),
+            ClassificationProposal.status == "pending",
+        ).all()
+
+        if not proposals:
+            return RedirectResponse("/admin/?cls_error=none_pending", status_code=303)
+
+        count = 0
+        if action == "reject":
+            for p in proposals:
+                p.status = "rejected"
+                p.reviewed_at = datetime.utcnow()
+                count += 1
+            db.commit()
+            return RedirectResponse(f"/admin/?cls_batch_rejected={count}", status_code=303)
+
+        # For approve / recategorize — build candidates and apply
+        candidates = []
+        for p in proposals:
+            category = override_category if action == "recategorize" else p.proposed_category
+            if category not in valid_cats:
+                continue
+            candidates.append({
+                "ticker": p.ticker,
+                "etp_category": category,
+                "attributes": _json.loads(p.attributes_json or "{}"),
+            })
+
+        if candidates:
+            apply_classifications(candidates)
+
+        for p in proposals:
+            p.status = "approved"
+            p.reviewed_at = datetime.utcnow()
+            if action == "recategorize":
+                p.review_notes = f"Recategorized to {override_category}"
+            count += 1
+        db.commit()
+
+        return RedirectResponse(f"/admin/?cls_batch_approved={count}", status_code=303)
+
+    except Exception as e:
+        log.error("Batch classification failed: %s", e)
+        from urllib.parse import quote
+        return RedirectResponse(f"/admin/?cls_error=batch&msg={quote(str(e)[:80])}", status_code=303)
+
+
 @router.post("/login")
 def admin_login(request: Request, password: str = Form("")):
     """Verify admin password."""
