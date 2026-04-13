@@ -1,8 +1,14 @@
-"""Monday Product Status Report — REX Product Pipeline for ETFUpdates.
+"""Weekly REX Product Pipeline — executive-first.
 
-Separate weekly Monday email showing where each REX product stands in its
-lifecycle. Data sourced from the rex_products table (imported from the
-Excel Master Product Development Tracker).
+One question: what's new and what's coming next?
+
+Sections:
+  1. Top KPIs (Live incl ETNs, AUM from Bloomberg, New This Week, Launching 30d)
+  2. Next Up — the immediate next filing/batch going effective
+  3. New This Week — listings + new filings (always shown, empty state if none)
+  4. Launching Next 30 Days — grouped by filing, not by fund
+
+No suite-by-suite counter breakdown. Filings with multiple funds collapse to one row.
 """
 from __future__ import annotations
 
@@ -17,310 +23,339 @@ log = logging.getLogger(__name__)
 
 DASHBOARD_URL = "https://rex-etp-tracker.onrender.com"
 
-# Color palette
-_NAVY = "#1a1a2e"
+_MAX_WIDTH = "680px"
+_NAVY = "#0f172a"
 _GREEN = "#059669"
 _RED = "#dc2626"
-_ORANGE = "#d97706"
+_AMBER = "#d97706"
 _BLUE = "#2563eb"
 _GRAY = "#64748b"
 _LIGHT = "#f8fafc"
 _BORDER = "#e5e7eb"
 _WHITE = "#ffffff"
 
-# Suite display order + colors
-SUITE_ORDER = [
-    "T-REX",
-    "Premium Income",
-    "Growth & Income",
-    "IncomeMax",
-    "Crypto",
-    "Thematic",
-    "Autocallable",
-    "T-Bill",
-]
-
-SUITE_COLORS = {
-    "T-REX": "#1a1a2e",
-    "Premium Income": "#2563eb",
-    "Growth & Income": "#059669",
-    "IncomeMax": "#d97706",
-    "Crypto": "#8b5cf6",
-    "Thematic": "#0891b2",
-    "Autocallable": "#dc2626",
-    "T-Bill": "#64748b",
-}
-
 
 def build_product_status_report(db: Session) -> str:
-    """Build the Monday product status email HTML.
-
-    Returns:
-        Complete HTML email string
-    """
+    """Build the weekly product pipeline report."""
     from webapp.models import RexProduct
 
     total = db.query(RexProduct).count()
     if total == 0:
-        return _render_empty()
+        return _render_empty_db()
 
-    # Pipeline counts by status
-    status_counts = dict(
-        db.query(RexProduct.status, func.count(RexProduct.id))
-        .group_by(RexProduct.status)
-        .all()
-    )
+    # KPIs
+    listed_count = db.query(RexProduct).filter(RexProduct.status == "Listed").count()
+    rex_aum = _total_rex_aum(db)
 
-    # Pipeline by suite + status
-    suite_status = defaultdict(lambda: defaultdict(int))
-    for suite, status, count in (
-        db.query(RexProduct.product_suite, RexProduct.status, func.count(RexProduct.id))
-        .group_by(RexProduct.product_suite, RexProduct.status)
-        .all()
-    ):
-        suite_status[suite][status] = count
-
-    # Products changing status this week (using updated_at)
-    week_ago = datetime.now() - timedelta(days=7)
-    recent_changes = (
-        db.query(RexProduct)
-        .filter(RexProduct.updated_at >= week_ago)
-        .order_by(RexProduct.updated_at.desc())
-        .limit(15)
-        .all()
-    )
-
-    # Awaiting effectiveness (Filed status with estimated_effective_date in future)
     today = date.today()
-    awaiting = (
-        db.query(RexProduct)
-        .filter(RexProduct.status.in_(["Filed", "Awaiting Effective"]))
-        .filter(RexProduct.estimated_effective_date.isnot(None))
-        .filter(RexProduct.estimated_effective_date >= today)
-        .order_by(RexProduct.estimated_effective_date.asc())
-        .limit(30)
-        .all()
-    )
+    seven_days_ago = today - timedelta(days=7)
+    thirty_days_out = today + timedelta(days=30)
 
-    # Recently listed (last 30 days)
-    thirty_days_ago = today - timedelta(days=30)
-    recently_listed = (
+    # New this week
+    new_listings = (
         db.query(RexProduct)
         .filter(RexProduct.status == "Listed")
-        .filter(RexProduct.official_listed_date.isnot(None))
-        .filter(RexProduct.official_listed_date >= thirty_days_ago)
+        .filter(RexProduct.official_listed_date >= seven_days_ago)
+        .filter(RexProduct.official_listed_date <= today)
         .order_by(RexProduct.official_listed_date.desc())
         .all()
     )
 
-    # Listed products by suite (for the pipeline section)
-    listed_by_suite = defaultdict(list)
-    for p in (
+    new_filings = (
         db.query(RexProduct)
-        .filter(RexProduct.status == "Listed")
-        .order_by(RexProduct.product_suite, RexProduct.name)
+        .filter(RexProduct.status.in_(["Filed", "Awaiting Effective"]))
+        .filter(RexProduct.initial_filing_date >= seven_days_ago)
+        .order_by(RexProduct.initial_filing_date.desc())
         .all()
-    ):
-        listed_by_suite[p.product_suite].append(p)
-
-    # Filed/pending by suite
-    filed_by_suite = defaultdict(int)
-    for suite, count in (
-        db.query(RexProduct.product_suite, func.count(RexProduct.id))
-        .filter(RexProduct.status == "Filed")
-        .group_by(RexProduct.product_suite)
-        .all()
-    ):
-        filed_by_suite[suite] = count
-
-    html = _render_report(
-        total=total,
-        status_counts=status_counts,
-        suite_status=suite_status,
-        recent_changes=recent_changes,
-        awaiting=awaiting,
-        recently_listed=recently_listed,
-        listed_by_suite=listed_by_suite,
-        filed_by_suite=filed_by_suite,
     )
-    return html
+
+    # Launching next 30 days (grouped by filing)
+    upcoming_grouped = _gather_upcoming_grouped(db, today, thirty_days_out)
+    upcoming_count = sum(g["fund_count"] for g in upcoming_grouped)
+
+    new_this_week_count = len(new_listings) + len(new_filings)
+
+    return _render(
+        total=total,
+        listed_count=listed_count,
+        rex_aum=rex_aum,
+        new_this_week_count=new_this_week_count,
+        upcoming_count=upcoming_count,
+        new_listings=new_listings,
+        new_filings_grouped=_group_filings(new_filings),
+        upcoming_grouped=upcoming_grouped,
+        today=today,
+    )
 
 
-def _render_report(*, total, status_counts, suite_status, recent_changes,
-                   awaiting, recently_listed, listed_by_suite, filed_by_suite) -> str:
-    """Render the full product status report HTML."""
-    today = date.today()
-    # Monday of current week
+def _total_rex_aum(db: Session) -> float:
+    """Total REX AUM across all listed products from Bloomberg."""
+    try:
+        from webapp.services.market_data import get_master_data, data_available
+        if not data_available(db):
+            return 0.0
+        master = get_master_data(db, etn_overrides=True)
+        rex = master[master["is_rex"] == True] if "is_rex" in master.columns else None
+        if rex is None or len(rex) == 0:
+            return 0.0
+        aum_col = "t_w4.aum" if "t_w4.aum" in rex.columns else "aum"
+        return float(rex[aum_col].sum() or 0)
+    except Exception:
+        return 0.0
+
+
+def _group_filings(products: list) -> list[dict]:
+    """Group products by (trust, initial_filing_date) so one 485APOS = one row."""
+    if not products:
+        return []
+    grouped = defaultdict(lambda: {
+        "trust": "", "suite": "", "filing_date": None, "effective_date": None,
+        "funds": [], "fund_count": 0, "form": "",
+    })
+    for p in products:
+        key = (p.trust, str(p.initial_filing_date), p.latest_form or "")
+        g = grouped[key]
+        g["trust"] = p.trust or ""
+        g["suite"] = p.product_suite or ""
+        g["filing_date"] = p.initial_filing_date
+        g["effective_date"] = p.estimated_effective_date
+        g["form"] = p.latest_form or ""
+        g["funds"].append({"name": p.name, "ticker": p.ticker or ""})
+    for g in grouped.values():
+        g["fund_count"] = len(g["funds"])
+    return sorted(grouped.values(), key=lambda g: g["filing_date"] or date(1970, 1, 1), reverse=True)
+
+
+def _gather_upcoming_grouped(db: Session, today: date, cutoff: date) -> list[dict]:
+    """Upcoming effectives, grouped by filing."""
+    from webapp.models import RexProduct
+
+    products = (
+        db.query(RexProduct)
+        .filter(RexProduct.status.in_(["Filed", "Awaiting Effective"]))
+        .filter(RexProduct.estimated_effective_date.isnot(None))
+        .filter(RexProduct.estimated_effective_date >= today)
+        .filter(RexProduct.estimated_effective_date <= cutoff)
+        .order_by(RexProduct.estimated_effective_date.asc())
+        .all()
+    )
+
+    grouped = defaultdict(lambda: {
+        "trust": "", "suite": "", "effective_date": None, "filing_date": None,
+        "funds": [], "fund_count": 0,
+    })
+    for p in products:
+        key = (p.trust, str(p.estimated_effective_date), p.initial_filing_date.isoformat() if p.initial_filing_date else "")
+        g = grouped[key]
+        g["trust"] = p.trust or ""
+        g["suite"] = p.product_suite or ""
+        g["effective_date"] = p.estimated_effective_date
+        g["filing_date"] = p.initial_filing_date
+        g["funds"].append({"name": p.name, "ticker": p.ticker or ""})
+
+    for g in grouped.values():
+        g["fund_count"] = len(g["funds"])
+
+    return sorted(grouped.values(), key=lambda g: g["effective_date"])
+
+
+# ---------------------------------------------------------------------------
+# Rendering
+# ---------------------------------------------------------------------------
+
+def _render(*, total, listed_count, rex_aum, new_this_week_count, upcoming_count,
+            new_listings, new_filings_grouped, upcoming_grouped, today) -> str:
     week_start = today - timedelta(days=today.weekday())
     week_end = week_start + timedelta(days=6)
 
-    sections = []
+    header = f"""
+<div style="padding:20px 24px 16px; border-bottom:1px solid {_BORDER};">
+  <div style="font-size:11px; text-transform:uppercase; letter-spacing:0.08em; color:{_GRAY}; font-weight:600;">REX Financial</div>
+  <div style="font-size:22px; font-weight:700; color:{_NAVY}; margin-top:4px;">Product Pipeline</div>
+  <div style="font-size:13px; color:{_GRAY}; margin-top:2px;">Week of {week_start.strftime('%B %d, %Y')}</div>
+</div>"""
 
-    # --- Header ---
-    sections.append(f"""
-    <div style="background:{_NAVY}; color:{_WHITE}; padding:24px 28px; border-radius:8px 8px 0 0;">
-      <div style="font-size:11px; text-transform:uppercase; letter-spacing:0.12em; opacity:0.7;">REX Financial — Product Pipeline</div>
-      <div style="font-size:24px; font-weight:800; margin:6px 0;">REX Product Pipeline</div>
-      <div style="font-size:13px; opacity:0.8;">Week of {week_start.strftime('%B %d, %Y')}</div>
-    </div>
-    """)
+    # KPIs — all same width (table layout, not flex)
+    aum_display = _fmt_dollars(rex_aum) if rex_aum > 0 else "—"
+    kpis = f"""
+<div style="padding:20px 24px 8px;">
+  <table style="width:100%; border-collapse:separate; border-spacing:8px 0;">
+    <tr>
+      <td style="background:{_LIGHT}; border:1px solid {_BORDER}; border-left:3px solid {_GREEN}; border-radius:4px; padding:12px 14px; width:25%;">
+        <div style="font-size:22px; font-weight:800; color:{_NAVY}; line-height:1;">{listed_count}</div>
+        <div style="font-size:10px; color:{_GRAY}; text-transform:uppercase; letter-spacing:0.04em; margin-top:4px;">Live Products</div>
+      </td>
+      <td style="background:{_LIGHT}; border:1px solid {_BORDER}; border-left:3px solid {_BLUE}; border-radius:4px; padding:12px 14px; width:25%;">
+        <div style="font-size:22px; font-weight:800; color:{_NAVY}; line-height:1;">{aum_display}</div>
+        <div style="font-size:10px; color:{_GRAY}; text-transform:uppercase; letter-spacing:0.04em; margin-top:4px;">Total AUM</div>
+      </td>
+      <td style="background:{_LIGHT}; border:1px solid {_BORDER}; border-left:3px solid {_AMBER}; border-radius:4px; padding:12px 14px; width:25%;">
+        <div style="font-size:22px; font-weight:800; color:{_NAVY}; line-height:1;">{new_this_week_count}</div>
+        <div style="font-size:10px; color:{_GRAY}; text-transform:uppercase; letter-spacing:0.04em; margin-top:4px;">New This Week</div>
+      </td>
+      <td style="background:{_LIGHT}; border:1px solid {_BORDER}; border-left:3px solid {_NAVY}; border-radius:4px; padding:12px 14px; width:25%;">
+        <div style="font-size:22px; font-weight:800; color:{_NAVY}; line-height:1;">{upcoming_count}</div>
+        <div style="font-size:10px; color:{_GRAY}; text-transform:uppercase; letter-spacing:0.04em; margin-top:4px;">Launching 30d</div>
+      </td>
+    </tr>
+  </table>
+</div>"""
 
-    # --- KPI Banner ---
-    listed = status_counts.get("Listed", 0)
-    filed = status_counts.get("Filed", 0)
-    awaiting_count = status_counts.get("Awaiting Effective", 0)
-    research = status_counts.get("Research", 0) + status_counts.get("Target List", 0)
-    delisted = status_counts.get("Delisted", 0)
+    next_up_section = _render_next_up(upcoming_grouped, today)
+    new_section = _render_new_this_week(new_listings, new_filings_grouped)
+    upcoming_section = _render_upcoming(upcoming_grouped, today)
 
-    sections.append(f"""
-    <div style="padding:20px 28px 4px; display:flex; gap:12px; flex-wrap:wrap;">
-      <div style="flex:1; min-width:120px; background:{_LIGHT}; border:1px solid {_BORDER}; border-left:3px solid {_GREEN}; border-radius:6px; padding:14px 16px; text-align:center;">
-        <div style="font-size:30px; font-weight:800; color:{_GREEN}; line-height:1;">{listed}</div>
-        <div style="font-size:10px; color:{_GRAY}; text-transform:uppercase; letter-spacing:0.04em; margin-top:4px;">Listed</div>
-      </div>
-      <div style="flex:1; min-width:120px; background:{_LIGHT}; border:1px solid {_BORDER}; border-left:3px solid {_BLUE}; border-radius:6px; padding:14px 16px; text-align:center;">
-        <div style="font-size:30px; font-weight:800; color:{_BLUE}; line-height:1;">{filed}</div>
-        <div style="font-size:10px; color:{_GRAY}; text-transform:uppercase; letter-spacing:0.04em; margin-top:4px;">Filed</div>
-      </div>
-      <div style="flex:1; min-width:120px; background:{_LIGHT}; border:1px solid {_BORDER}; border-left:3px solid {_ORANGE}; border-radius:6px; padding:14px 16px; text-align:center;">
-        <div style="font-size:30px; font-weight:800; color:{_ORANGE}; line-height:1;">{research}</div>
-        <div style="font-size:10px; color:{_GRAY}; text-transform:uppercase; letter-spacing:0.04em; margin-top:4px;">In Research</div>
-      </div>
-      <div style="flex:1; min-width:120px; background:{_LIGHT}; border:1px solid {_BORDER}; border-left:3px solid {_NAVY}; border-radius:6px; padding:14px 16px; text-align:center;">
-        <div style="font-size:30px; font-weight:800; color:{_NAVY}; line-height:1;">{total}</div>
-        <div style="font-size:10px; color:{_GRAY}; text-transform:uppercase; letter-spacing:0.04em; margin-top:4px;">Total Products</div>
-      </div>
-    </div>
-    """)
+    body = "\n".join([header, kpis, next_up_section, new_section, upcoming_section])
 
-    # --- Recently Listed ---
-    if recently_listed:
-        rows = []
-        for p in recently_listed[:15]:
-            suite_color = SUITE_COLORS.get(p.product_suite, _GRAY)
-            rows.append(f"""
-            <tr>
-              <td style="padding:8px 10px; border-bottom:1px solid {_BORDER};">{p.official_listed_date.strftime('%b %d') if p.official_listed_date else '--'}</td>
-              <td style="padding:8px 10px; border-bottom:1px solid {_BORDER}; font-weight:700; font-family:monospace;">{p.ticker or 'TBD'}</td>
-              <td style="padding:8px 10px; border-bottom:1px solid {_BORDER}; font-size:12px;">{(p.name or '')[:50]}</td>
-              <td style="padding:8px 10px; border-bottom:1px solid {_BORDER};">
-                <span style="background:{suite_color}; color:{_WHITE}; padding:2px 8px; border-radius:3px; font-size:10px; font-weight:600;">{p.product_suite}</span>
-              </td>
-            </tr>""")
-
-        sections.append(f"""
-        <div style="padding:20px 28px 8px;">
-          <div style="font-size:14px; font-weight:700; color:{_NAVY}; margin-bottom:10px;">RECENTLY LISTED (last 30 days)</div>
-          <table style="width:100%; border-collapse:collapse; font-size:13px;">
-            <thead><tr style="background:{_LIGHT}; font-size:10px; text-transform:uppercase; color:{_GRAY};">
-              <th style="padding:8px 10px; text-align:left; border-bottom:2px solid {_BORDER};">Listed</th>
-              <th style="padding:8px 10px; text-align:left; border-bottom:2px solid {_BORDER};">Ticker</th>
-              <th style="padding:8px 10px; text-align:left; border-bottom:2px solid {_BORDER};">Fund Name</th>
-              <th style="padding:8px 10px; text-align:left; border-bottom:2px solid {_BORDER};">Suite</th>
-            </tr></thead>
-            <tbody>{''.join(rows)}</tbody>
-          </table>
-        </div>
-        """)
-
-    # --- Awaiting Effectiveness ---
-    if awaiting:
-        rows = []
-        for p in awaiting[:20]:
-            days_left = (p.estimated_effective_date - today).days if p.estimated_effective_date else 0
-            urgency = ""
-            if days_left <= 7:
-                urgency = f' style="background:#fef2f2;"'
-            elif days_left <= 30:
-                urgency = f' style="background:#fffbeb;"'
-            suite_color = SUITE_COLORS.get(p.product_suite, _GRAY)
-            rows.append(f"""
-            <tr{urgency}>
-              <td style="padding:8px 10px; border-bottom:1px solid {_BORDER};">{p.estimated_effective_date.strftime('%b %d')}</td>
-              <td style="padding:8px 10px; border-bottom:1px solid {_BORDER}; font-weight:700;">{days_left}d</td>
-              <td style="padding:8px 10px; border-bottom:1px solid {_BORDER}; font-size:12px;">{(p.name or '')[:55]}</td>
-              <td style="padding:8px 10px; border-bottom:1px solid {_BORDER};">
-                <span style="background:{suite_color}; color:{_WHITE}; padding:2px 8px; border-radius:3px; font-size:10px; font-weight:600;">{p.product_suite}</span>
-              </td>
-            </tr>""")
-
-        sections.append(f"""
-        <div style="padding:16px 28px 8px;">
-          <div style="font-size:14px; font-weight:700; color:{_NAVY}; margin-bottom:10px;">AWAITING EFFECTIVENESS ({len(awaiting)} products)</div>
-          <table style="width:100%; border-collapse:collapse; font-size:13px;">
-            <thead><tr style="background:{_LIGHT}; font-size:10px; text-transform:uppercase; color:{_GRAY};">
-              <th style="padding:8px 10px; text-align:left; border-bottom:2px solid {_BORDER};">Expected</th>
-              <th style="padding:8px 10px; text-align:left; border-bottom:2px solid {_BORDER};">In</th>
-              <th style="padding:8px 10px; text-align:left; border-bottom:2px solid {_BORDER};">Fund Name</th>
-              <th style="padding:8px 10px; text-align:left; border-bottom:2px solid {_BORDER};">Suite</th>
-            </tr></thead>
-            <tbody>{''.join(rows)}</tbody>
-          </table>
-        </div>
-        """)
-
-    # --- Pipeline by Suite ---
-    sections.append(f"""
-    <div style="padding:16px 28px 8px;">
-      <div style="font-size:14px; font-weight:700; color:{_NAVY}; margin-bottom:10px;">PIPELINE BY SUITE</div>
-    """)
-
-    for suite in SUITE_ORDER:
-        if suite not in suite_status:
-            continue
-        stats = suite_status[suite]
-        suite_total = sum(stats.values())
-        listed_count = stats.get("Listed", 0)
-        filed_count = stats.get("Filed", 0)
-        awaiting_c = stats.get("Awaiting Effective", 0)
-        delisted_c = stats.get("Delisted", 0)
-        suite_color = SUITE_COLORS.get(suite, _GRAY)
-
-        sections.append(f"""
-        <div style="border:1px solid {_BORDER}; border-left:3px solid {suite_color}; border-radius:6px; padding:12px 16px; margin-bottom:8px;">
-          <div style="display:flex; justify-content:space-between; align-items:center;">
-            <div style="font-size:14px; font-weight:700; color:{_NAVY};">{suite}</div>
-            <div style="font-size:11px; color:{_GRAY};">Total: <b>{suite_total}</b></div>
-          </div>
-          <div style="display:flex; gap:16px; margin-top:6px; font-size:12px;">
-            <span><span style="color:{_GRAY};">Listed:</span> <b style="color:{_GREEN};">{listed_count}</b></span>
-            <span><span style="color:{_GRAY};">Filed:</span> <b style="color:{_BLUE};">{filed_count}</b></span>
-            {f'<span><span style="color:{_GRAY};">Awaiting:</span> <b style="color:{_ORANGE};">{awaiting_c}</b></span>' if awaiting_c else ''}
-            {f'<span><span style="color:{_GRAY};">Delisted:</span> <b style="color:{_RED};">{delisted_c}</b></span>' if delisted_c else ''}
-          </div>
-        </div>
-        """)
-
-    sections.append("</div>")
-
-    # --- Footer ---
-    sections.append(f"""
-    <div style="background:{_LIGHT}; padding:16px 28px; border-radius:0 0 8px 8px; border-top:1px solid {_BORDER};">
-      <div style="font-size:11px; color:{_GRAY};">
-        <a href="{DASHBOARD_URL}/dashboard" style="color:{_BLUE};">Dashboard</a> |
-        <a href="{DASHBOARD_URL}/filings/" style="color:{_BLUE};">Filing Explorer</a>
-      </div>
-      <div style="font-size:10px; color:#94a3b8; margin-top:6px;">
-        Source: REX Master Product Development Tracker. Generated {datetime.now().strftime('%Y-%m-%d %H:%M ET')}.
-      </div>
-    </div>
-    """)
-
-    body = "\n".join(sections)
     return f"""<!DOCTYPE html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>REX Product Pipeline</title></head>
+<title>REX Product Pipeline — {today.strftime('%b %d')}</title></head>
 <body style="margin:0; padding:20px; background:#f1f5f9; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
-<div style="max-width:760px; margin:0 auto; background:{_WHITE}; border-radius:8px; border:1px solid {_BORDER}; overflow:hidden;">
+<div style="max-width:{_MAX_WIDTH}; margin:0 auto; background:{_WHITE}; border-radius:6px; border:1px solid {_BORDER}; overflow:hidden;">
 {body}
 </div></body></html>"""
 
 
-def _render_empty() -> str:
-    """Render an empty-state message when no products are in DB."""
+def _render_next_up(upcoming_grouped: list[dict], today: date) -> str:
+    if not upcoming_grouped:
+        return ""
+    g = upcoming_grouped[0]
+    days_left = (g["effective_date"] - today).days
+    fund_count_str = f"{g['fund_count']} fund{'s' if g['fund_count'] != 1 else ''}"
+
+    # Sample fund names
+    first_two = [f['name'][:40] for f in g["funds"][:2]]
+    sample = ", ".join(first_two)
+    if g["fund_count"] > 2:
+        sample += f" +{g['fund_count'] - 2} more"
+
+    return f"""
+<div style="padding:16px 24px 8px;">
+  <div style="font-size:11px; text-transform:uppercase; letter-spacing:0.08em; color:{_GRAY}; font-weight:700; margin-bottom:8px;">Next Up</div>
+  <div style="border:1px solid {_BORDER}; border-left:3px solid {_BLUE}; border-radius:4px; padding:12px 14px; background:{_LIGHT};">
+    <div style="display:flex; justify-content:space-between; align-items:baseline;">
+      <div style="font-size:14px; font-weight:700; color:{_NAVY};">{g['effective_date'].strftime('%A, %b %d')}</div>
+      <div style="font-size:12px; color:{_GRAY};">in {days_left} day{'s' if days_left != 1 else ''}</div>
+    </div>
+    <div style="font-size:12px; color:#374151; margin-top:4px;">
+      <b>{fund_count_str}</b> from {g['trust']} ({g['suite']})
+    </div>
+    <div style="font-size:11px; color:{_GRAY}; margin-top:4px;">{sample}</div>
+  </div>
+</div>"""
+
+
+def _render_new_this_week(new_listings: list, new_filings_grouped: list[dict]) -> str:
+    rows = []
+
+    if new_listings:
+        for p in new_listings[:10]:
+            rows.append(f"""
+  <tr>
+    <td style="padding:6px 0; font-size:11px; color:{_GREEN}; font-weight:700; text-transform:uppercase; white-space:nowrap;">Listed</td>
+    <td style="padding:6px 10px; font-size:12px; color:{_NAVY}; font-weight:700; font-family:monospace; white-space:nowrap;">{p.ticker or 'TBD'}</td>
+    <td style="padding:6px 0; font-size:12px; color:#374151;">{(p.name or '')[:50]}</td>
+    <td style="padding:6px 0; font-size:11px; color:{_GRAY}; white-space:nowrap;">{p.official_listed_date.strftime('%b %d') if p.official_listed_date else ''}</td>
+  </tr>""")
+
+    if new_filings_grouped:
+        for g in new_filings_grouped[:10]:
+            if g["fund_count"] == 1:
+                desc = g["funds"][0]["name"][:50]
+            else:
+                desc = f'<b>{g["fund_count"]} funds</b> &middot; {g["trust"]} &middot; {g["suite"]}'
+            rows.append(f"""
+  <tr>
+    <td style="padding:6px 0; font-size:11px; color:{_BLUE}; font-weight:700; text-transform:uppercase; white-space:nowrap;">Filed</td>
+    <td style="padding:6px 10px; font-size:12px; color:{_NAVY}; font-weight:700; font-family:monospace; white-space:nowrap;">{g.get('form') or '485'}</td>
+    <td style="padding:6px 0; font-size:12px; color:#374151;">{desc}</td>
+    <td style="padding:6px 0; font-size:11px; color:{_GRAY}; white-space:nowrap;">{g['filing_date'].strftime('%b %d') if g['filing_date'] else ''}</td>
+  </tr>""")
+
+    if not rows:
+        return f"""
+<div style="padding:18px 24px 8px;">
+  <div style="font-size:11px; text-transform:uppercase; letter-spacing:0.08em; color:{_GRAY}; font-weight:700; margin-bottom:8px;">New This Week</div>
+  <div style="font-size:13px; color:{_GRAY}; font-style:italic;">No new listings or filings this week.</div>
+</div>"""
+
+    return f"""
+<div style="padding:18px 24px 8px;">
+  <div style="font-size:11px; text-transform:uppercase; letter-spacing:0.08em; color:{_GRAY}; font-weight:700; margin-bottom:10px;">New This Week</div>
+  <table style="width:100%; border-collapse:collapse;">
+    <tbody>
+      {''.join(rows)}
+    </tbody>
+  </table>
+</div>"""
+
+
+def _render_upcoming(upcoming_grouped: list[dict], today: date) -> str:
+    if not upcoming_grouped:
+        return f"""
+<div style="padding:18px 24px;">
+  <div style="font-size:11px; text-transform:uppercase; letter-spacing:0.08em; color:{_GRAY}; font-weight:700; margin-bottom:8px;">Launching Next 30 Days</div>
+  <div style="font-size:13px; color:{_GRAY}; font-style:italic;">No upcoming launches scheduled.</div>
+</div>"""
+
+    rows = []
+    for g in upcoming_grouped[:15]:
+        days_left = (g["effective_date"] - today).days
+        if g["fund_count"] == 1:
+            desc = g["funds"][0]["name"][:55]
+        else:
+            desc = f'<b>{g["fund_count"]} funds</b> &middot; {g["trust"]}'
+
+        row_bg = "#fffbeb" if days_left <= 7 else ""
+        rows.append(f"""
+  <tr style="background:{row_bg};">
+    <td style="padding:6px 0; font-size:12px; color:{_NAVY}; font-weight:600; white-space:nowrap;">{g['effective_date'].strftime('%b %d')}</td>
+    <td style="padding:6px 10px; font-size:11px; color:{_GRAY}; white-space:nowrap;">{days_left}d</td>
+    <td style="padding:6px 0; font-size:12px; color:#374151;">{desc}</td>
+    <td style="padding:6px 0; font-size:11px; color:{_GRAY}; white-space:nowrap; text-align:right;">{g['suite']}</td>
+  </tr>""")
+
+    remainder = max(0, len(upcoming_grouped) - 15)
+    more_line = ""
+    if remainder > 0:
+        more_line = f"""
+  <tr><td colspan="4" style="padding:8px 0; text-align:center; font-size:11px; color:{_GRAY}; font-style:italic;">+ {remainder} more filing(s) &middot; <a href="{DASHBOARD_URL}/pipeline" style="color:{_BLUE};">see full calendar</a></td></tr>"""
+
+    return f"""
+<div style="padding:18px 24px;">
+  <div style="font-size:11px; text-transform:uppercase; letter-spacing:0.08em; color:{_GRAY}; font-weight:700; margin-bottom:10px;">Launching Next 30 Days</div>
+  <table style="width:100%; border-collapse:collapse;">
+    <thead>
+      <tr style="border-bottom:1px solid {_BORDER};">
+        <th style="padding:6px 0; text-align:left; font-size:10px; color:{_GRAY}; text-transform:uppercase; font-weight:600;">Effective</th>
+        <th style="padding:6px 10px; text-align:left; font-size:10px; color:{_GRAY}; text-transform:uppercase; font-weight:600;">In</th>
+        <th style="padding:6px 0; text-align:left; font-size:10px; color:{_GRAY}; text-transform:uppercase; font-weight:600;">Filing</th>
+        <th style="padding:6px 0; text-align:right; font-size:10px; color:{_GRAY}; text-transform:uppercase; font-weight:600;">Suite</th>
+      </tr>
+    </thead>
+    <tbody>
+      {''.join(rows)}
+      {more_line}
+    </tbody>
+  </table>
+</div>"""
+
+
+def _fmt_dollars(v: float) -> str:
+    av = abs(v)
+    if av >= 1e9:
+        return f"${v/1e9:.1f}B"
+    if av >= 1e6:
+        return f"${v/1e6:.0f}M"
+    if av >= 1e3:
+        return f"${v/1e3:.0f}K"
+    return f"${v:.0f}"
+
+
+def _render_empty_db() -> str:
     return f"""<!DOCTYPE html>
 <html><body style="font-family:sans-serif; padding:40px; background:{_LIGHT};">
-<div style="max-width:600px; margin:0 auto; background:white; padding:24px; border-radius:8px; border-left:3px solid {_ORANGE};">
+<div style="max-width:{_MAX_WIDTH}; margin:0 auto; background:white; padding:24px; border-radius:6px; border-left:3px solid {_AMBER};">
 <h2 style="margin:0 0 8px; color:{_NAVY};">No Products in Database</h2>
-<p style="color:#374151;">Run <code>python scripts/import_product_tracker.py</code> to populate the rex_products table.</p>
+<p style="color:#374151;">Run the product tracker import to populate the rex_products table.</p>
 </div></body></html>"""

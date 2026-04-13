@@ -1,0 +1,956 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>REX Financial — API Reference</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --navy: #0B1A2B;
+      --navy-light: #132D4A;
+      --teal: #1B9E8C;
+      --teal-light: #E6F7F4;
+      --teal-dark: #158575;
+      --gray-50: #F8FAFB;
+      --gray-100: #F1F4F7;
+      --gray-200: #E2E7ED;
+      --gray-300: #C8D0DA;
+      --gray-400: #9BA5B3;
+      --gray-500: #6B7685;
+      --gray-600: #4A5568;
+      --gray-700: #2D3748;
+      --gray-800: #1A202C;
+      --code-bg: #0D1B2A;
+      --code-border: #1E3A5F;
+      --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      --font-mono: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: var(--font-sans);
+      color: var(--gray-700);
+      line-height: 1.6;
+      background: #fff;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* --- Header --- */
+    .site-header {
+      background: var(--navy);
+      color: #fff;
+      padding: 0;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      border-bottom: 3px solid var(--teal);
+    }
+    .header-inner {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 20px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+    .header-brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .header-brand h1 {
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: -0.3px;
+    }
+    .header-brand h1 span {
+      color: var(--teal);
+      font-weight: 400;
+    }
+    .header-version {
+      font-size: 12px;
+      background: rgba(27,158,140,0.15);
+      color: var(--teal);
+      padding: 3px 10px;
+      border-radius: 12px;
+      font-weight: 600;
+    }
+
+    /* --- Layout --- */
+    .page-wrapper {
+      display: flex;
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    /* --- Sidebar nav --- */
+    .sidebar {
+      width: 220px;
+      flex-shrink: 0;
+      position: sticky;
+      top: 80px;
+      align-self: flex-start;
+      padding: 32px 0;
+      max-height: calc(100vh - 80px);
+      overflow-y: auto;
+    }
+    .sidebar-title {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--gray-400);
+      font-weight: 600;
+      margin-bottom: 12px;
+    }
+    .sidebar a {
+      display: block;
+      padding: 6px 12px;
+      font-size: 13px;
+      color: var(--gray-500);
+      text-decoration: none;
+      border-radius: 6px;
+      margin-bottom: 2px;
+      transition: all 0.15s;
+    }
+    .sidebar a:hover {
+      color: var(--navy);
+      background: var(--gray-100);
+    }
+    .sidebar a.active {
+      color: var(--teal-dark);
+      background: var(--teal-light);
+      font-weight: 500;
+    }
+
+    /* --- Main content --- */
+    .content {
+      flex: 1;
+      min-width: 0;
+      padding: 40px 0 80px 48px;
+    }
+
+    /* --- Sections --- */
+    section {
+      margin-bottom: 56px;
+    }
+    section:last-child {
+      margin-bottom: 0;
+    }
+
+    h2 {
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--navy);
+      margin-bottom: 16px;
+      letter-spacing: -0.3px;
+      padding-top: 16px;
+    }
+    h3 {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--navy);
+      margin-bottom: 12px;
+    }
+    p {
+      margin-bottom: 16px;
+      color: var(--gray-600);
+    }
+
+    /* --- Endpoint blocks --- */
+    .endpoint {
+      border: 1px solid var(--gray-200);
+      border-radius: 10px;
+      margin-bottom: 40px;
+      overflow: hidden;
+    }
+    .endpoint-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 16px 20px;
+      background: var(--gray-50);
+      border-bottom: 1px solid var(--gray-200);
+    }
+    .method-badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 5px;
+      font-size: 12px;
+      font-weight: 700;
+      font-family: var(--font-mono);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .method-get {
+      background: var(--teal-light);
+      color: var(--teal-dark);
+    }
+    .endpoint-path {
+      font-family: var(--font-mono);
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--navy);
+    }
+    .endpoint-body {
+      padding: 20px;
+    }
+    .endpoint-desc {
+      margin-bottom: 20px;
+      font-size: 15px;
+    }
+
+    /* --- Parameter tables --- */
+    .param-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+      margin-bottom: 20px;
+    }
+    .param-table th {
+      text-align: left;
+      padding: 8px 12px;
+      background: var(--gray-50);
+      border-bottom: 2px solid var(--gray-200);
+      color: var(--gray-500);
+      font-weight: 600;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .param-table td {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--gray-100);
+      vertical-align: top;
+    }
+    .param-table tr:last-child td {
+      border-bottom: none;
+    }
+    .param-name {
+      font-family: var(--font-mono);
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--navy);
+    }
+    .param-type {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--gray-400);
+    }
+    .param-required {
+      color: #D64545;
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    /* --- Code blocks --- */
+    .code-tabs {
+      display: flex;
+      gap: 0;
+      border-bottom: 1px solid var(--code-border);
+      background: var(--code-bg);
+      border-radius: 8px 8px 0 0;
+    }
+    .code-tab {
+      padding: 8px 16px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--gray-400);
+      cursor: pointer;
+      border: none;
+      background: none;
+      border-bottom: 2px solid transparent;
+      transition: all 0.15s;
+    }
+    .code-tab:hover {
+      color: #fff;
+    }
+    .code-tab.active {
+      color: var(--teal);
+      border-bottom-color: var(--teal);
+    }
+    .code-panel {
+      display: none;
+    }
+    .code-panel.active {
+      display: block;
+    }
+    pre {
+      background: var(--code-bg);
+      border-radius: 0 0 8px 8px;
+      padding: 16px 20px;
+      overflow-x: auto;
+      font-family: var(--font-mono);
+      font-size: 13px;
+      line-height: 1.6;
+      color: #C9D1D9;
+    }
+    pre.standalone {
+      border-radius: 8px;
+    }
+    code {
+      font-family: var(--font-mono);
+      font-size: 13px;
+    }
+    .inline-code {
+      background: var(--gray-100);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 13px;
+      color: var(--navy);
+    }
+    /* Syntax colors */
+    .str { color: #A5D6FF; }
+    .key { color: #7EE787; }
+    .num { color: #FFA657; }
+    .cmt { color: #8B949E; }
+    .kw { color: #FF7B72; }
+    .fn { color: #D2A8FF; }
+
+    /* --- Info boxes --- */
+    .info-box {
+      padding: 16px 20px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      font-size: 14px;
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+    }
+    .info-box-icon {
+      flex-shrink: 0;
+      width: 20px;
+      height: 20px;
+      margin-top: 1px;
+    }
+    .info-blue {
+      background: #EFF6FF;
+      border-left: 3px solid #3B82F6;
+      color: #1E40AF;
+    }
+    .info-amber {
+      background: #FFFBEB;
+      border-left: 3px solid #F59E0B;
+      color: #92400E;
+    }
+
+    /* --- Footer --- */
+    .site-footer {
+      border-top: 1px solid var(--gray-200);
+      padding: 32px 24px;
+      text-align: center;
+      color: var(--gray-400);
+      font-size: 13px;
+    }
+    .site-footer a {
+      color: var(--teal);
+      text-decoration: none;
+    }
+    .site-footer a:hover {
+      text-decoration: underline;
+    }
+
+    /* --- Response label --- */
+    .response-label {
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--gray-400);
+      margin-bottom: 8px;
+    }
+
+    /* --- Dividers --- */
+    hr {
+      border: none;
+      border-top: 1px solid var(--gray-200);
+      margin: 40px 0;
+    }
+
+    /* --- Mobile --- */
+    @media (max-width: 768px) {
+      .sidebar { display: none; }
+      .content { padding: 24px 0 60px; }
+      .page-wrapper { padding: 0 16px; }
+      .header-inner { padding: 16px; }
+      .header-brand h1 { font-size: 17px; }
+      h2 { font-size: 20px; }
+      .endpoint-header { flex-wrap: wrap; gap: 8px; }
+      .endpoint-path { font-size: 12px; word-break: break-all; }
+      pre { font-size: 12px; padding: 12px 14px; }
+      .param-table { font-size: 13px; }
+      .param-table th, .param-table td { padding: 8px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Header -->
+<header class="site-header">
+  <div class="header-inner">
+    <div class="header-brand">
+      <h1>REX Financial <span>API Reference</span></h1>
+    </div>
+    <div class="header-version">v1</div>
+  </div>
+</header>
+
+<div class="page-wrapper">
+  <!-- Sidebar -->
+  <nav class="sidebar">
+    <div class="sidebar-title">Getting Started</div>
+    <a href="#authentication">Authentication</a>
+    <a href="#base-url">Base URL</a>
+    <a href="#quick-start">Quick Start</a>
+    <div class="sidebar-title" style="margin-top:20px;">Endpoints</div>
+    <a href="#etp-screener">ETP Screener</a>
+    <a href="#rex-summary">REX Summary</a>
+    <a href="#returns">Total Returns</a>
+    <a href="#trusts">Trusts</a>
+    <a href="#funds">Funds</a>
+    <a href="#filings">Recent Filings</a>
+    <div class="sidebar-title" style="margin-top:20px;">Other</div>
+    <a href="#rate-limits">Rate Limits</a>
+    <a href="#errors">Errors</a>
+  </nav>
+
+  <!-- Content -->
+  <main class="content">
+
+    <!-- Introduction -->
+    <section id="introduction">
+      <h2>REX ETP Tracker API</h2>
+      <p>
+        Programmatic access to ETP screener data, SEC filing records, and total return comparisons
+        from the REX Financial Intelligence Hub. All responses are JSON.
+      </p>
+    </section>
+
+    <!-- Authentication -->
+    <section id="authentication">
+      <h2>Authentication</h2>
+      <p>
+        All API requests require an <span class="inline-code">X-API-Key</span> header.
+        Contact the REX team to request an API key.
+      </p>
+      <pre class="standalone"><span class="kw">X-API-Key:</span> <span class="str">your-api-key-here</span></pre>
+      <div class="info-box info-amber">
+        <svg class="info-box-icon" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/></svg>
+        <div>Keep your API key private. Do not expose it in client-side code or public repositories.</div>
+      </div>
+    </section>
+
+    <!-- Base URL -->
+    <section id="base-url">
+      <h2>Base URL</h2>
+      <pre class="standalone">{{ base_url }}/api/v1</pre>
+    </section>
+
+    <!-- Quick Start -->
+    <section id="quick-start">
+      <h2>Quick Start</h2>
+      <p>Here are examples of how to call the API in different languages.</p>
+
+      <div class="code-tabs" data-group="quickstart">
+        <button class="code-tab active" data-tab="curl">cURL</button>
+        <button class="code-tab" data-tab="python">Python</button>
+        <button class="code-tab" data-tab="javascript">JavaScript</button>
+      </div>
+      <div class="code-panel active" data-tab="curl" data-group="quickstart">
+<pre><span class="cmt"># Get all REX products</span>
+curl -H <span class="str">"X-API-Key: YOUR_KEY"</span> \
+  <span class="str">"{{ base_url }}/api/v1/etp/screener?scope=rex"</span>
+
+<span class="cmt"># Get recent 485BPOS filings from the last 7 days</span>
+curl -H <span class="str">"X-API-Key: YOUR_KEY"</span> \
+  <span class="str">"{{ base_url }}/api/v1/filings/recent?days=7&form=485BPOS"</span></pre>
+      </div>
+      <div class="code-panel" data-tab="python" data-group="quickstart">
+<pre><span class="kw">import</span> requests
+
+API_KEY = <span class="str">"YOUR_KEY"</span>
+BASE    = <span class="str">"{{ base_url }}/api/v1"</span>
+headers = {<span class="str">"X-API-Key"</span>: API_KEY}
+
+<span class="cmt"># Get all REX products</span>
+resp = requests.<span class="fn">get</span>(<span class="str">f"</span>{BASE}<span class="str">/etp/screener?scope=rex"</span>, headers=headers)
+data = resp.<span class="fn">json</span>()
+
+<span class="kw">for</span> fund <span class="kw">in</span> data[<span class="str">"funds"</span>]:
+    <span class="fn">print</span>(fund[<span class="str">"ticker"</span>], fund[<span class="str">"aum"</span>])</pre>
+      </div>
+      <div class="code-panel" data-tab="javascript" data-group="quickstart">
+<pre><span class="kw">const</span> API_KEY = <span class="str">"YOUR_KEY"</span>;
+<span class="kw">const</span> BASE    = <span class="str">"{{ base_url }}/api/v1"</span>;
+
+<span class="kw">const</span> res = <span class="kw">await</span> <span class="fn">fetch</span>(<span class="str">`${BASE}/etp/screener?scope=rex`</span>, {
+  headers: { <span class="str">"X-API-Key"</span>: API_KEY }
+});
+<span class="kw">const</span> data = <span class="kw">await</span> res.<span class="fn">json</span>();
+
+console.<span class="fn">log</span>(<span class="str">`${data.count} funds, total records`</span>);
+data.funds.<span class="fn">forEach</span>(f => console.<span class="fn">log</span>(f.ticker, f.aum));</pre>
+      </div>
+    </section>
+
+    <hr>
+
+    <!-- ============================================================ -->
+    <!-- ENDPOINT: ETP Screener -->
+    <!-- ============================================================ -->
+    <section id="etp-screener">
+      <div class="endpoint">
+        <div class="endpoint-header">
+          <span class="method-badge method-get">GET</span>
+          <span class="endpoint-path">/api/v1/etp/screener</span>
+        </div>
+        <div class="endpoint-body">
+          <p class="endpoint-desc">
+            Full ETP screener data with 50+ fields for every active ETF and ETN.
+            Covers AUM, returns, flows, expense ratios, leverage details, and category mappings.
+          </p>
+
+          <h3>Parameters</h3>
+          <table class="param-table">
+            <thead>
+              <tr><th>Name</th><th>Type</th><th>Default</th><th>Description</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><span class="param-name">scope</span></td>
+                <td><span class="param-type">string</span></td>
+                <td><span class="inline-code">all</span></td>
+                <td><span class="inline-code">all</span>, <span class="inline-code">rex</span> (REX products only), or <span class="inline-code">competitors</span> (non-REX)</td>
+              </tr>
+              <tr>
+                <td><span class="param-name">ticker</span></td>
+                <td><span class="param-type">string</span></td>
+                <td>--</td>
+                <td>Comma-separated tickers, e.g. <span class="inline-code">NVDX US,TSLL US</span></td>
+              </tr>
+              <tr>
+                <td><span class="param-name">category</span></td>
+                <td><span class="param-type">string</span></td>
+                <td>--</td>
+                <td>Filter by ETP category: <span class="inline-code">LI</span>, <span class="inline-code">CC</span>, <span class="inline-code">Crypto</span>, <span class="inline-code">Defined</span>, <span class="inline-code">Thematic</span></td>
+              </tr>
+              <tr>
+                <td><span class="param-name">limit</span></td>
+                <td><span class="param-type">int</span></td>
+                <td><span class="inline-code">0</span></td>
+                <td>Max results to return. <span class="inline-code">0</span> = all matching funds.</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div class="response-label">Example Response</div>
+<pre class="standalone">{
+  <span class="key">"funds"</span>: [
+    {
+      <span class="key">"ticker"</span>: <span class="str">"NVDX US"</span>,
+      <span class="key">"fund_name"</span>: <span class="str">"T-REX 2X Long NVIDIA Daily Target ETF"</span>,
+      <span class="key">"issuer_display"</span>: <span class="str">"REX Financial"</span>,
+      <span class="key">"aum"</span>: <span class="num">1250.43</span>,
+      <span class="key">"market_status"</span>: <span class="str">"ACTV"</span>,
+      <span class="key">"etp_category"</span>: <span class="str">"LI"</span>,
+      <span class="key">"total_return_1day"</span>: <span class="num">0.0342</span>,
+      <span class="key">"total_return_ytd"</span>: <span class="num">0.1856</span>,
+      <span class="key">"expense_ratio"</span>: <span class="num">1.05</span>,
+      <span class="key">"fund_flow_1month"</span>: <span class="num">45.2</span>,
+      <span class="key">"inception_date"</span>: <span class="str">"2023-10-18"</span>,
+      <span class="key">"is_singlestock"</span>: <span class="num">1</span>,
+      <span class="key">"uses_leverage"</span>: <span class="num">1</span>,
+      <span class="key">"leverage_amount"</span>: <span class="num">2.0</span>,
+      <span class="cmt">// ... 40+ additional fields</span>
+    }
+  ],
+  <span class="key">"count"</span>: <span class="num">847</span>,
+  <span class="key">"scope"</span>: <span class="str">"all"</span>
+}</pre>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- ENDPOINT: REX Summary -->
+    <!-- ============================================================ -->
+    <section id="rex-summary">
+      <div class="endpoint">
+        <div class="endpoint-header">
+          <span class="method-badge method-get">GET</span>
+          <span class="endpoint-path">/api/v1/etp/rex-summary</span>
+        </div>
+        <div class="endpoint-body">
+          <p class="endpoint-desc">
+            REX product summary with aggregate KPIs: total AUM, fund count, flows, and
+            the best 1-day performer.
+          </p>
+
+          <h3>Parameters</h3>
+          <p style="color:var(--gray-400); font-size:14px;">No parameters required.</p>
+
+          <div class="response-label">Example Response</div>
+<pre class="standalone">{
+  <span class="key">"total_aum_millions"</span>: <span class="num">8542.17</span>,
+  <span class="key">"fund_count"</span>: <span class="num">31</span>,
+  <span class="key">"best_1d_performer"</span>: {
+    <span class="key">"ticker"</span>: <span class="str">"NVDX US"</span>,
+    <span class="key">"fund_name"</span>: <span class="str">"T-REX 2X Long NVIDIA Daily Target ETF"</span>,
+    <span class="key">"suite"</span>: <span class="str">"T-REX"</span>,
+    <span class="key">"aum"</span>: <span class="num">1250.43</span>,
+    <span class="key">"return_1d"</span>: <span class="num">0.0562</span>,
+    <span class="key">"flow_1w"</span>: <span class="num">12.5</span>,
+    <span class="key">"flow_1m"</span>: <span class="num">45.2</span>
+  },
+  <span class="key">"funds"</span>: [
+    <span class="cmt">// Array of all REX funds with same shape as best_1d_performer</span>
+  ]
+}</pre>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- ENDPOINT: Total Returns -->
+    <!-- ============================================================ -->
+    <section id="returns">
+      <div class="endpoint">
+        <div class="endpoint-header">
+          <span class="method-badge method-get">GET</span>
+          <span class="endpoint-path">/api/v1/returns</span>
+        </div>
+        <div class="endpoint-body">
+          <p class="endpoint-desc">
+            Total return comparison data for up to 10 symbols. Returns price series,
+            drawdowns, growth of $10K, annual returns, and summary statistics.
+          </p>
+
+          <h3>Parameters</h3>
+          <table class="param-table">
+            <thead>
+              <tr><th>Name</th><th>Type</th><th>Default</th><th>Description</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><span class="param-name">symbols</span> <span class="param-required">required</span></td>
+                <td><span class="param-type">string</span></td>
+                <td>--</td>
+                <td>Comma-separated tickers, e.g. <span class="inline-code">NVII,NVDY,JEPI</span>. Max 10 symbols.</td>
+              </tr>
+              <tr>
+                <td><span class="param-name">start</span></td>
+                <td><span class="param-type">string</span></td>
+                <td>--</td>
+                <td>Start date in <span class="inline-code">YYYY-MM-DD</span> format. Defaults to earliest available data.</td>
+              </tr>
+              <tr>
+                <td><span class="param-name">end</span></td>
+                <td><span class="param-type">string</span></td>
+                <td>--</td>
+                <td>End date in <span class="inline-code">YYYY-MM-DD</span> format. Defaults to latest available data.</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div class="response-label">Example Response</div>
+<pre class="standalone">{
+  <span class="key">"symbols"</span>: [<span class="str">"NVII"</span>, <span class="str">"NVDY"</span>],
+  <span class="key">"start"</span>: <span class="str">"2024-01-02"</span>,
+  <span class="key">"end"</span>: <span class="str">"2026-04-04"</span>,
+  <span class="key">"prices"</span>: {
+    <span class="key">"dates"</span>: [<span class="str">"2024-01-02"</span>, <span class="str">"2024-01-03"</span>, <span class="str">"..."</span>],
+    <span class="key">"NVII"</span>: [<span class="num">100.0</span>, <span class="num">101.2</span>, <span class="str">"..."</span>],
+    <span class="key">"NVDY"</span>: [<span class="num">100.0</span>, <span class="num">99.8</span>, <span class="str">"..."</span>]
+  },
+  <span class="key">"growth_10k"</span>: {
+    <span class="key">"NVII"</span>: [<span class="num">10000</span>, <span class="num">10120</span>, <span class="str">"..."</span>],
+    <span class="key">"NVDY"</span>: [<span class="num">10000</span>, <span class="num">9980</span>, <span class="str">"..."</span>]
+  },
+  <span class="key">"drawdowns"</span>: { <span class="cmt">/* same shape as prices */</span> },
+  <span class="key">"annual_returns"</span>: {
+    <span class="key">"NVII"</span>: {<span class="str">"2024"</span>: <span class="num">0.352</span>, <span class="str">"2025"</span>: <span class="num">0.128</span>},
+    <span class="key">"NVDY"</span>: {<span class="str">"2024"</span>: <span class="num">0.221</span>, <span class="str">"2025"</span>: <span class="num">0.094</span>}
+  },
+  <span class="key">"stats"</span>: {
+    <span class="key">"NVII"</span>: {<span class="key">"total_return"</span>: <span class="num">0.486</span>, <span class="key">"max_drawdown"</span>: <span class="num">-0.312</span>, <span class="str">"..."</span>},
+    <span class="key">"NVDY"</span>: {<span class="key">"total_return"</span>: <span class="num">0.321</span>, <span class="key">"max_drawdown"</span>: <span class="num">-0.187</span>, <span class="str">"..."</span>}
+  }
+}</pre>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- ENDPOINT: Trusts -->
+    <!-- ============================================================ -->
+    <section id="trusts">
+      <div class="endpoint">
+        <div class="endpoint-header">
+          <span class="method-badge method-get">GET</span>
+          <span class="endpoint-path">/api/v1/trusts</span>
+        </div>
+        <div class="endpoint-body">
+          <p class="endpoint-desc">
+            List all monitored SEC trusts with fund counts. The tracker monitors 194 trusts
+            covering leveraged ETFs, inverse products, crypto filings, and more.
+          </p>
+
+          <h3>Parameters</h3>
+          <table class="param-table">
+            <thead>
+              <tr><th>Name</th><th>Type</th><th>Default</th><th>Description</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><span class="param-name">active_only</span></td>
+                <td><span class="param-type">bool</span></td>
+                <td><span class="inline-code">true</span></td>
+                <td>If <span class="inline-code">true</span>, returns only active trusts.</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div class="response-label">Example Response</div>
+<pre class="standalone">[
+  {
+    <span class="key">"id"</span>: <span class="num">1</span>,
+    <span class="key">"cik"</span>: <span class="str">"0001710350"</span>,
+    <span class="key">"name"</span>: <span class="str">"Rex ETF Trust"</span>,
+    <span class="key">"slug"</span>: <span class="str">"rex-etf-trust"</span>,
+    <span class="key">"is_rex"</span>: <span class="num">true</span>,
+    <span class="key">"is_active"</span>: <span class="num">true</span>,
+    <span class="key">"fund_count"</span>: <span class="num">24</span>
+  },
+  {
+    <span class="key">"id"</span>: <span class="num">2</span>,
+    <span class="key">"cik"</span>: <span class="str">"0001479026"</span>,
+    <span class="key">"name"</span>: <span class="str">"Direxion Shares ETF Trust"</span>,
+    <span class="key">"slug"</span>: <span class="str">"direxion-shares-etf-trust"</span>,
+    <span class="key">"is_rex"</span>: <span class="num">false</span>,
+    <span class="key">"is_active"</span>: <span class="num">true</span>,
+    <span class="key">"fund_count"</span>: <span class="num">87</span>
+  }
+]</pre>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- ENDPOINT: Funds -->
+    <!-- ============================================================ -->
+    <section id="funds">
+      <div class="endpoint">
+        <div class="endpoint-header">
+          <span class="method-badge method-get">GET</span>
+          <span class="endpoint-path">/api/v1/funds</span>
+        </div>
+        <div class="endpoint-body">
+          <p class="endpoint-desc">
+            Query funds with optional status and trust filters. Returns filing details,
+            SEC identifiers, and current effectiveness status for each fund.
+          </p>
+
+          <h3>Parameters</h3>
+          <table class="param-table">
+            <thead>
+              <tr><th>Name</th><th>Type</th><th>Default</th><th>Description</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><span class="param-name">status</span></td>
+                <td><span class="param-type">string</span></td>
+                <td>--</td>
+                <td><span class="inline-code">EFFECTIVE</span>, <span class="inline-code">PENDING</span>, or <span class="inline-code">DELAYED</span></td>
+              </tr>
+              <tr>
+                <td><span class="param-name">trust</span></td>
+                <td><span class="param-type">string</span></td>
+                <td>--</td>
+                <td>Partial trust name search (case-insensitive)</td>
+              </tr>
+              <tr>
+                <td><span class="param-name">limit</span></td>
+                <td><span class="param-type">int</span></td>
+                <td><span class="inline-code">100</span></td>
+                <td>Max results to return.</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div class="response-label">Example Response</div>
+<pre class="standalone">[
+  {
+    <span class="key">"id"</span>: <span class="num">1042</span>,
+    <span class="key">"trust_name"</span>: <span class="str">"Rex ETF Trust"</span>,
+    <span class="key">"fund_name"</span>: <span class="str">"T-REX 2X Long NVIDIA Daily Target ETF"</span>,
+    <span class="key">"ticker"</span>: <span class="str">"NVDX"</span>,
+    <span class="key">"status"</span>: <span class="str">"EFFECTIVE"</span>,
+    <span class="key">"status_reason"</span>: <span class="str">"485BPOS"</span>,
+    <span class="key">"effective_date"</span>: <span class="str">"2025-10-01"</span>,
+    <span class="key">"latest_form"</span>: <span class="str">"485BPOS"</span>,
+    <span class="key">"latest_filing_date"</span>: <span class="str">"2025-09-28"</span>,
+    <span class="key">"series_id"</span>: <span class="str">"S000068432"</span>,
+    <span class="key">"class_contract_id"</span>: <span class="str">"C000218765"</span>
+  }
+]</pre>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- ENDPOINT: Recent Filings -->
+    <!-- ============================================================ -->
+    <section id="filings">
+      <div class="endpoint">
+        <div class="endpoint-header">
+          <span class="method-badge method-get">GET</span>
+          <span class="endpoint-path">/api/v1/filings/recent</span>
+        </div>
+        <div class="endpoint-body">
+          <p class="endpoint-desc">
+            Recent SEC filings across all monitored trusts. Filter by form type
+            and time window to track new registrations and amendments.
+          </p>
+
+          <h3>Parameters</h3>
+          <table class="param-table">
+            <thead>
+              <tr><th>Name</th><th>Type</th><th>Default</th><th>Description</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><span class="param-name">days</span></td>
+                <td><span class="param-type">int</span></td>
+                <td><span class="inline-code">1</span></td>
+                <td>Number of days to look back from today.</td>
+              </tr>
+              <tr>
+                <td><span class="param-name">form</span></td>
+                <td><span class="param-type">string</span></td>
+                <td>--</td>
+                <td>Filter by SEC form type, e.g. <span class="inline-code">485BPOS</span>, <span class="inline-code">497</span>, <span class="inline-code">485BXT</span></td>
+              </tr>
+              <tr>
+                <td><span class="param-name">limit</span></td>
+                <td><span class="param-type">int</span></td>
+                <td><span class="inline-code">50</span></td>
+                <td>Max results to return.</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div class="response-label">Example Response</div>
+<pre class="standalone">[
+  {
+    <span class="key">"id"</span>: <span class="num">26841</span>,
+    <span class="key">"trust_name"</span>: <span class="str">"Direxion Shares ETF Trust"</span>,
+    <span class="key">"accession_number"</span>: <span class="str">"0001398344-26-006234"</span>,
+    <span class="key">"form"</span>: <span class="str">"485BPOS"</span>,
+    <span class="key">"filing_date"</span>: <span class="str">"2026-04-04"</span>,
+    <span class="key">"primary_link"</span>: <span class="str">"https://www.sec.gov/Archives/edgar/data/..."</span>
+  },
+  {
+    <span class="key">"id"</span>: <span class="num">26839</span>,
+    <span class="key">"trust_name"</span>: <span class="str">"ProShares Trust II"</span>,
+    <span class="key">"accession_number"</span>: <span class="str">"0001398344-26-006210"</span>,
+    <span class="key">"form"</span>: <span class="str">"497"</span>,
+    <span class="key">"filing_date"</span>: <span class="str">"2026-04-04"</span>,
+    <span class="key">"primary_link"</span>: <span class="str">"https://www.sec.gov/Archives/edgar/data/..."</span>
+  }
+]</pre>
+        </div>
+      </div>
+    </section>
+
+    <hr>
+
+    <!-- Rate Limits -->
+    <section id="rate-limits">
+      <h2>Rate Limits</h2>
+      <p>
+        There is no formal rate limit enforced on the API. That said, please be reasonable with
+        request volume. If you need to poll for updates, once per minute is more than sufficient --
+        the underlying data refreshes daily.
+      </p>
+      <div class="info-box info-blue">
+        <svg class="info-box-icon" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/></svg>
+        <div>ETP screener data and filings update once daily. Total returns data is sourced live per request.</div>
+      </div>
+    </section>
+
+    <!-- Errors -->
+    <section id="errors">
+      <h2>Errors</h2>
+      <p>The API uses standard HTTP status codes. Error responses include a JSON body with a <span class="inline-code">detail</span> field.</p>
+      <table class="param-table">
+        <thead>
+          <tr><th>Code</th><th>Meaning</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><span class="param-name">400</span></td><td>Bad request -- missing or invalid parameters</td></tr>
+          <tr><td><span class="param-name">401</span></td><td>Invalid or missing API key</td></tr>
+          <tr><td><span class="param-name">404</span></td><td>Resource not found (e.g. unknown symbol in returns)</td></tr>
+          <tr><td><span class="param-name">502</span></td><td>Upstream data fetch failed (total returns)</td></tr>
+          <tr><td><span class="param-name">503</span></td><td>API not configured (server-side key missing)</td></tr>
+        </tbody>
+      </table>
+      <div class="response-label" style="margin-top:20px;">Error Response Format</div>
+<pre class="standalone">{
+  <span class="key">"detail"</span>: <span class="str">"Invalid API key"</span>
+}</pre>
+    </section>
+
+  </main>
+</div>
+
+<!-- Footer -->
+<footer class="site-footer">
+  REX Financial Intelligence Hub &mdash; API v1<br>
+  Questions? Contact <a href="mailto:relasmar@rexfin.com">relasmar@rexfin.com</a>
+</footer>
+
+<!-- Tab switching -->
+<script>
+document.querySelectorAll('.code-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    const group = tab.closest('.code-tabs').dataset.group;
+    const target = tab.dataset.tab;
+    // Deactivate all tabs and panels in this group
+    document.querySelectorAll(`.code-tabs[data-group="${group}"] .code-tab`).forEach(t => t.classList.remove('active'));
+    document.querySelectorAll(`.code-panel[data-group="${group}"]`).forEach(p => p.classList.remove('active'));
+    // Activate clicked tab and its panel
+    tab.classList.add('active');
+    document.querySelector(`.code-panel[data-group="${group}"][data-tab="${target}"]`).classList.add('active');
+  });
+});
+
+// Sidebar active state on scroll
+const sections = document.querySelectorAll('section[id]');
+const sidebarLinks = document.querySelectorAll('.sidebar a');
+
+function updateSidebar() {
+  let current = '';
+  sections.forEach(section => {
+    const top = section.offsetTop - 120;
+    if (window.scrollY >= top) {
+      current = section.getAttribute('id');
+    }
+  });
+  sidebarLinks.forEach(link => {
+    link.classList.toggle('active', link.getAttribute('href') === '#' + current);
+  });
+}
+window.addEventListener('scroll', updateSidebar, { passive: true });
+updateSidebar();
+</script>
+
+</body>
+</html>

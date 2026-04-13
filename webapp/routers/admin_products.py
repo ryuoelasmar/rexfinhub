@@ -23,7 +23,7 @@ templates = Jinja2Templates(directory=str(Path(__file__).parent.parent / "templa
 
 ADMIN_PASSWORD = "ryu123"
 VALID_STATUSES = ["Research", "Target List", "Filed", "Awaiting Effective", "Listed", "Delisted"]
-VALID_SUITES = ["T-REX", "Premium Income", "Growth & Income", "IncomeMax", "Crypto", "Thematic", "Autocallable", "T-Bill"]
+VALID_SUITES = ["T-REX", "Premium Income", "Growth & Income", "IncomeMax", "Crypto", "Thematic", "Autocallable", "T-Bill", "MicroSectors ETN"]
 
 
 def _check_auth(request: Request) -> bool:

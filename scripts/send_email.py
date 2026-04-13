@@ -142,7 +142,7 @@ def _build_intelligence_brief(db) -> str:
 
 def _build_filing_screener(db) -> str:
     from screener.filing_screener_report import build_filing_screener_report
-    return build_filing_screener_report(top_n=30, min_score=50.0)
+    return build_filing_screener_report(max_picks=5)
 
 
 def _build_product_status(db) -> str:

@@ -213,8 +213,8 @@ def score_candidate(
     elif s['short_interest_ratio'] > 3:
         adj_short = -2
 
-    # COMPOSITE
-    composite = demand_rank + adj_competition + adj_surge + adj_short
+    # COMPOSITE (clamped to 0-100)
+    composite = max(0.0, min(100.0, demand_rank + adj_competition + adj_surge + adj_short))
 
     # RECOMMENDATION
     if not floor_pass and demand_rank < 70:

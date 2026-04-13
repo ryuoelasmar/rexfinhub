@@ -1,29 +1,35 @@
-"""Daily Filing Intelligence Brief — restricted distribution.
+"""Daily Filing Intelligence Brief — executive-first.
 
-Data-driven report covering ALL new filings across the industry.
-Answers: What did competitors file today? What underliers are contested?
-Where does REX stand in each race?
+One question: what does Scott need to act on today?
 
-V1: Pure data and tables. No AI commentary.
+Three sections only:
+  1. Action Required — file/monitor/alert items with reasons
+  2. Competitive Races — underliers with multiple filers, REX gaps first
+  3. Effectives This Week — next 7 days, grouped by filing
+
+No strategy watch, no pipeline summary, no raw filings dump.
+Filings are grouped by accession number so a 485APOS with 10 funds shows as 1 row.
 """
 from __future__ import annotations
 
 import logging
+import re
 from collections import defaultdict
 from datetime import date, datetime, timedelta
 
-from sqlalchemy import select, func, distinct
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 log = logging.getLogger(__name__)
 
 DASHBOARD_URL = "https://rex-etp-tracker.onrender.com"
 
-# ---- Color palette (shared with email_alerts) ----
-_NAVY = "#1a1a2e"
-_GREEN = "#059669"
+# Unified design tokens
+_MAX_WIDTH = "680px"
+_NAVY = "#0f172a"
 _RED = "#dc2626"
-_ORANGE = "#d97706"
+_AMBER = "#d97706"
+_GREEN = "#059669"
 _BLUE = "#2563eb"
 _GRAY = "#64748b"
 _LIGHT = "#f8fafc"
@@ -32,122 +38,51 @@ _WHITE = "#ffffff"
 
 
 def build_intelligence_brief(db: Session, lookback_days: int = 1) -> str:
-    """Build the daily filing intelligence brief HTML.
-
-    Args:
-        db: Database session
-        lookback_days: How many days back to scan (1 = today + yesterday)
-
-    Returns:
-        Complete HTML email string
-    """
-    from webapp.models import Trust, Filing, FundExtraction, FundStatus, RexProduct
-
+    """Build the daily intelligence brief HTML."""
     today = date.today()
     since = today - timedelta(days=lookback_days)
 
-    # 1. New filings (all 485 forms since cutoff)
-    new_filings = _gather_new_filings(db, since)
+    actions = _gather_actions(db, today)
+    races = _gather_races(db, today)
+    effectives = _gather_effectives_grouped(db, today, days_ahead=7)
 
-    # 2. Competitive races (underliers with multiple filers)
-    races = _gather_races(db)
-
-    # 3. Upcoming effectiveness (next 14 days)
-    upcoming = _gather_upcoming(db, today)
-
-    # 4. REX pipeline summary
-    pipeline = _gather_rex_pipeline(db)
-
-    # 5. Strategy watch (income/autocallable/thematic new entrants)
-    strategy_watch = _gather_strategy_watch(db, since)
-
-    # Build HTML
-    html = _render_brief(
-        new_filings=new_filings,
-        races=races,
-        upcoming=upcoming,
-        pipeline=pipeline,
-        strategy_watch=strategy_watch,
-        since=since,
-        today=today,
-    )
-    return html
+    return _render(actions=actions, races=races, effectives=effectives, since=since, today=today)
 
 
-def _gather_new_filings(db: Session, since: date) -> list[dict]:
-    """All 485 filings since cutoff, with fund-level detail."""
-    from webapp.models import Trust, Filing, FundExtraction
+# ---------------------------------------------------------------------------
+# Data gathering
+# ---------------------------------------------------------------------------
 
+def _extract_underlier(fund_name: str) -> str | None:
+    """Extract underlier ticker from a 2X fund name."""
+    if not fund_name:
+        return None
+    name = fund_name.upper()
+    m = re.search(r'2X\s+(?:LONG|INVERSE|SHORT)\s+([A-Z]{1,5})\s', name)
+    if m:
+        return m.group(1)
+    m = re.search(r'DAILY\s+TARGET[^A-Z]*([A-Z]{2,5})\s', name)
+    if m:
+        return m.group(1)
+    return None
+
+
+def _gather_actions(db: Session, today: date) -> list[dict]:
+    """Generate action items from the data.
+
+    Actions driven by real signals:
+      - FILE: An underlier has a competitor filing with effective date in <60 days, REX has not filed
+      - MONITOR: REX has filed but a competitor will go effective earlier
+      - ALERT: A REX fund has a new delaying amendment or extension
+    """
+    from webapp.models import FundStatus, Trust, Filing
+
+    actions = []
+
+    # Pull pending 2X funds across all issuers
     rows = db.execute(
         select(
-            Trust.name.label("trust_name"),
-            Trust.is_rex,
-            Trust.cik,
-            Filing.form,
-            Filing.filing_date,
-            Filing.accession_number,
-            FundExtraction.series_name,
-            FundExtraction.effective_date,
-            FundExtraction.class_symbol,
-        )
-        .join(Trust, Trust.id == Filing.trust_id)
-        .outerjoin(FundExtraction, FundExtraction.filing_id == Filing.id)
-        .where(Filing.filing_date >= since)
-        .where(Filing.form.ilike("485%"))
-        .order_by(Filing.filing_date.desc(), Trust.is_rex.desc())
-    ).all()
-
-    # Group by trust + filing
-    grouped = defaultdict(lambda: {
-        "trust_name": "", "is_rex": False, "cik": "", "form": "",
-        "filing_date": "", "accession": "", "funds": [], "effective_dates": set(),
-    })
-    for r in rows:
-        key = r.accession_number or f"{r.trust_name}_{r.filing_date}"
-        g = grouped[key]
-        g["trust_name"] = r.trust_name or ""
-        g["is_rex"] = r.is_rex
-        g["cik"] = r.cik or ""
-        g["form"] = r.form or ""
-        g["filing_date"] = str(r.filing_date) if r.filing_date else ""
-        g["accession"] = r.accession_number or ""
-        if r.series_name:
-            g["funds"].append({
-                "name": r.series_name,
-                "ticker": r.class_symbol or "",
-                "effective_date": str(r.effective_date) if r.effective_date else "",
-            })
-        if r.effective_date:
-            g["effective_dates"].add(str(r.effective_date))
-
-    result = []
-    for g in grouped.values():
-        # Deduplicate funds by name
-        seen = set()
-        unique_funds = []
-        for f in g["funds"]:
-            key = f["name"].upper()
-            if key not in seen:
-                seen.add(key)
-                unique_funds.append(f)
-        g["funds"] = unique_funds
-        g["fund_count"] = len(unique_funds)
-        result.append(g)
-
-    # Sort: REX first, then by fund count
-    result.sort(key=lambda x: (-int(x["is_rex"]), -x["fund_count"]))
-    return result
-
-
-def _gather_races(db: Session) -> list[dict]:
-    """Underliers with products from multiple issuers (competitive races)."""
-    from webapp.models import FundStatus, Trust
-
-    # All PENDING or recently EFFECTIVE funds with recognizable underlier patterns
-    pending = db.execute(
-        select(
             FundStatus.fund_name,
-            FundStatus.ticker,
             FundStatus.status,
             FundStatus.effective_date,
             FundStatus.latest_form,
@@ -156,383 +91,378 @@ def _gather_races(db: Session) -> list[dict]:
             Trust.is_rex,
         )
         .join(Trust, Trust.id == FundStatus.trust_id)
-        .where(FundStatus.status.in_(["PENDING", "EFFECTIVE"]))
         .where(FundStatus.fund_name.ilike("%2X%"))
-        .order_by(FundStatus.effective_date.asc())
+        .where(FundStatus.status.in_(["PENDING", "EFFECTIVE"]))
     ).all()
 
-    # Group by extracted underlier
-    underlier_map = defaultdict(list)
-    for r in pending:
-        name = r.fund_name or ""
-        # Extract underlier from fund name (e.g., "T-REX 2X Long TSEM Daily" -> "TSEM")
-        underlier = _extract_underlier(name)
-        if not underlier:
+    # Group by underlier
+    by_ul = defaultdict(list)
+    for r in rows:
+        ul = _extract_underlier(r.fund_name)
+        if not ul:
             continue
-        underlier_map[underlier].append({
-            "fund_name": name,
-            "ticker": r.ticker or "",
+        by_ul[ul].append(r)
+
+    cutoff_60 = today + timedelta(days=60)
+
+    for ul, entries in by_ul.items():
+        has_rex = any(e.is_rex for e in entries)
+        # Earliest competitor effective date
+        competitors = [e for e in entries if not e.is_rex and e.effective_date]
+        rex_funds = [e for e in entries if e.is_rex]
+
+        if not competitors:
+            continue
+
+        earliest_comp = min(competitors, key=lambda e: e.effective_date)
+
+        # FILE: No REX fund on this underlier, competitor going effective soon
+        if not has_rex and earliest_comp.effective_date <= cutoff_60:
+            days = (earliest_comp.effective_date - today).days
+            actions.append({
+                "type": "FILE",
+                "underlier": ul,
+                "title": f"FILE {ul}",
+                "detail": f"{earliest_comp.trust_name} effective {earliest_comp.effective_date.strftime('%b %d')} ({days}d). REX not filed.",
+                "severity": "high",
+                "urgency": days,
+            })
+            continue
+
+        # MONITOR: REX filed but is behind a competitor
+        if has_rex:
+            rex_earliest = [e for e in rex_funds if e.effective_date]
+            if rex_earliest:
+                rex_min = min(rex_earliest, key=lambda e: e.effective_date)
+                if earliest_comp.effective_date < rex_min.effective_date:
+                    comp_days = (earliest_comp.effective_date - today).days
+                    gap = (rex_min.effective_date - earliest_comp.effective_date).days
+                    actions.append({
+                        "type": "MONITOR",
+                        "underlier": ul,
+                        "title": f"MONITOR {ul}",
+                        "detail": f"{earliest_comp.trust_name} effective {earliest_comp.effective_date.strftime('%b %d')} ({comp_days}d). REX is {gap}d behind.",
+                        "severity": "medium",
+                        "urgency": comp_days,
+                    })
+
+    # ALERT: REX funds with delaying amendments filed in last 3 days
+    recent = db.execute(
+        select(
+            Filing.form,
+            Filing.filing_date,
+            FundStatus.fund_name,
+            Trust.name.label("trust_name"),
+        )
+        .join(Trust, Trust.id == Filing.trust_id)
+        .outerjoin(FundStatus, FundStatus.trust_id == Trust.id)
+        .where(Trust.is_rex == True)
+        .where(Filing.filing_date >= today - timedelta(days=3))
+        .where(Filing.form.in_(["485BXT", "485APOS"]))
+    ).all()
+
+    for r in recent:
+        if r.form == "485BXT":
+            ul = _extract_underlier(r.fund_name or "")
+            title = f"ALERT: REX 485BXT"
+            if ul:
+                title = f"ALERT: REX {ul} extension"
+            actions.append({
+                "type": "ALERT",
+                "underlier": ul or "",
+                "title": title,
+                "detail": f"Extension filed {r.filing_date.strftime('%b %d')}. Effective date may shift.",
+                "severity": "medium",
+                "urgency": 999,  # deprioritize vs file/monitor
+            })
+
+    # Sort: FILE first (by urgency), then MONITOR, then ALERT
+    type_order = {"FILE": 0, "MONITOR": 1, "ALERT": 2}
+    actions.sort(key=lambda a: (type_order.get(a["type"], 9), a["urgency"]))
+
+    return actions[:5]
+
+
+def _gather_races(db: Session, today: date) -> list[dict]:
+    """Underliers with 2+ issuers filing. REX gaps sorted first."""
+    from webapp.models import FundStatus, Trust
+
+    rows = db.execute(
+        select(
+            FundStatus.fund_name,
+            FundStatus.ticker,
+            FundStatus.status,
+            FundStatus.effective_date,
+            Trust.name.label("trust_name"),
+            Trust.is_rex,
+        )
+        .join(Trust, Trust.id == FundStatus.trust_id)
+        .where(FundStatus.status.in_(["PENDING", "EFFECTIVE"]))
+        .where(FundStatus.fund_name.ilike("%2X%"))
+    ).all()
+
+    by_ul = defaultdict(list)
+    for r in rows:
+        ul = _extract_underlier(r.fund_name)
+        if not ul:
+            continue
+        by_ul[ul].append({
             "trust": r.trust_name or "",
             "status": r.status,
-            "effective_date": str(r.effective_date) if r.effective_date else "",
-            "filing_date": str(r.latest_filing_date) if r.latest_filing_date else "",
+            "effective_date": r.effective_date,
+            "ticker": r.ticker or "",
             "is_rex": r.is_rex,
         })
 
-    # Only return underliers with 2+ issuers
     races = []
-    for underlier, entries in underlier_map.items():
-        trusts = set(e["trust"] for e in entries)
-        if len(trusts) >= 2:
-            races.append({
-                "underlier": underlier,
-                "issuer_count": len(trusts),
-                "entries": sorted(entries, key=lambda x: x.get("effective_date") or "9999"),
-                "has_rex": any(e["is_rex"] for e in entries),
-            })
+    for ul, entries in by_ul.items():
+        trusts = {e["trust"] for e in entries}
+        if len(trusts) < 2:
+            continue
 
-    races.sort(key=lambda x: (-int(x["has_rex"]), -x["issuer_count"]))
-    return races
+        # Earliest effective date
+        dated = [e for e in entries if e["effective_date"]]
+        earliest = min(e["effective_date"] for e in dated) if dated else None
+        has_rex = any(e["is_rex"] for e in entries)
+
+        # Dedupe by trust+status, keep earliest effective
+        by_trust = {}
+        for e in sorted(entries, key=lambda x: (x["effective_date"] or date(2099, 1, 1))):
+            key = e["trust"]
+            if key not in by_trust:
+                by_trust[key] = e
+
+        races.append({
+            "underlier": ul,
+            "issuers": list(by_trust.values()),
+            "issuer_count": len(by_trust),
+            "earliest": earliest,
+            "has_rex": has_rex,
+        })
+
+    # Sort: REX gaps first (competition exists, REX missing), then by urgency
+    def sort_key(r):
+        gap_priority = 0 if not r["has_rex"] else 1
+        urgency = (r["earliest"] - today).days if r["earliest"] else 9999
+        return (gap_priority, urgency)
+
+    races.sort(key=sort_key)
+    return races[:10]
 
 
-def _extract_underlier(fund_name: str) -> str | None:
-    """Extract stock ticker from a 2X fund name."""
-    import re
-    name = fund_name.upper()
-    # Pattern: "2X LONG TSEM DAILY" or "2X INVERSE NVDA DAILY"
-    m = re.search(r'2X\s+(?:LONG|INVERSE|SHORT)\s+([A-Z]{1,5})\s', name)
-    if m:
-        return m.group(1)
-    # Pattern: "Leveraged ... TSEM Daily"
-    m = re.search(r'(?:LEVERAGED?|LEVERAGE)\s+.*?([A-Z]{2,5})\s+DAILY', name)
-    if m:
-        return m.group(1)
-    return None
+def _gather_effectives_grouped(db: Session, today: date, days_ahead: int = 7) -> list[dict]:
+    """Funds going effective in next N days, grouped by filing.
 
+    If 10 funds share one accession number, they appear as ONE row with fund_count=10.
+    """
+    from webapp.models import FundStatus, Trust, Filing, FundExtraction
 
-def _gather_upcoming(db: Session, today: date) -> list[dict]:
-    """Funds going effective in next 14 days."""
-    from webapp.models import FundStatus, Trust
+    cutoff = today + timedelta(days=days_ahead)
 
-    cutoff = today + timedelta(days=14)
+    # Pull pending funds with effective date in window
     rows = db.execute(
         select(
             FundStatus.fund_name,
             FundStatus.ticker,
             FundStatus.effective_date,
             FundStatus.latest_form,
+            FundStatus.trust_id,
             Trust.name.label("trust_name"),
             Trust.is_rex,
+            FundExtraction.filing_id,
+            Filing.accession_number,
         )
         .join(Trust, Trust.id == FundStatus.trust_id)
+        .outerjoin(FundExtraction, FundExtraction.series_id == FundStatus.series_id)
+        .outerjoin(Filing, Filing.id == FundExtraction.filing_id)
         .where(FundStatus.status == "PENDING")
         .where(FundStatus.effective_date.isnot(None))
         .where(FundStatus.effective_date >= today)
         .where(FundStatus.effective_date <= cutoff)
-        .order_by(FundStatus.effective_date.asc())
-        .limit(30)
     ).all()
 
-    return [
-        {
-            "fund_name": r.fund_name,
-            "ticker": r.ticker or "",
-            "trust": r.trust_name,
-            "effective_date": str(r.effective_date),
-            "days_left": (r.effective_date - today).days,
-            "is_rex": r.is_rex,
-        }
-        for r in rows
-    ]
+    # Group by (trust, effective_date, form) — closest we can get to filing-level
+    grouped = defaultdict(lambda: {
+        "trust": "", "is_rex": False, "effective_date": None,
+        "form": "", "funds": [], "fund_count": 0,
+    })
+    for r in rows:
+        key = (r.trust_name, str(r.effective_date), r.latest_form or "")
+        g = grouped[key]
+        g["trust"] = r.trust_name or ""
+        g["is_rex"] = r.is_rex
+        g["effective_date"] = r.effective_date
+        g["form"] = r.latest_form or ""
+        if r.fund_name:
+            g["funds"].append({"name": r.fund_name, "ticker": r.ticker or ""})
+
+    result = []
+    seen = set()
+    for g in grouped.values():
+        # Dedupe funds within a group
+        unique_funds = []
+        for f in g["funds"]:
+            if f["name"] not in seen:
+                unique_funds.append(f)
+                seen.add(f["name"])
+        g["funds"] = unique_funds
+        g["fund_count"] = len(unique_funds)
+        if g["fund_count"] > 0:
+            result.append(g)
+        seen.clear()  # reset per group for deduping within group only
+
+    result.sort(key=lambda x: x["effective_date"])
+    return result
 
 
-def _gather_rex_pipeline(db: Session) -> dict:
-    """REX product pipeline counts from the rex_products table."""
-    from webapp.models import RexProduct
+# ---------------------------------------------------------------------------
+# Rendering — clean, fixed-width, no emojis, no slop
+# ---------------------------------------------------------------------------
 
-    try:
-        total = db.query(RexProduct).count()
-        if total == 0:
-            return {"available": False}
+def _render(*, actions, races, effectives, since, today) -> str:
+    header = _render_header(today)
+    actions_section = _render_actions(actions)
+    races_section = _render_races(races, today)
+    effectives_section = _render_effectives(effectives, today)
 
-        statuses = {}
-        for status, count in db.query(RexProduct.status, func.count(RexProduct.id)).group_by(RexProduct.status).all():
-            statuses[status] = count
+    body = "\n".join([header, actions_section, races_section, effectives_section])
 
-        return {
-            "available": True,
-            "total": total,
-            "listed": statuses.get("Listed", 0),
-            "filed": statuses.get("Filed", 0),
-            "awaiting": statuses.get("Awaiting Effective", 0),
-            "research": statuses.get("Research", 0),
-            "target_list": statuses.get("Target List", 0),
-            "delisted": statuses.get("Delisted", 0),
-        }
-    except Exception:
-        return {"available": False}
-
-
-def _gather_strategy_watch(db: Session, since: date) -> list[dict]:
-    """New income/autocallable/ODTE/thematic filings."""
-    from webapp.models import Trust, Filing, FundExtraction
-
-    keywords = ["%income%", "%covered call%", "%autocall%", "%ODTE%",
-                "%0DTE%", "%premium%", "%yield%", "%option%"]
-    conditions = [FundExtraction.series_name.ilike(kw) for kw in keywords]
-
-    from sqlalchemy import or_
-    rows = db.execute(
-        select(
-            Trust.name.label("trust_name"),
-            Trust.is_rex,
-            Filing.form,
-            Filing.filing_date,
-            FundExtraction.series_name,
-            FundExtraction.effective_date,
-        )
-        .join(Trust, Trust.id == Filing.trust_id)
-        .join(FundExtraction, FundExtraction.filing_id == Filing.id)
-        .where(Filing.filing_date >= since)
-        .where(Filing.form.ilike("485%"))
-        .where(or_(*conditions))
-        .order_by(Filing.filing_date.desc())
-        .limit(20)
-    ).all()
-
-    return [
-        {
-            "trust": r.trust_name,
-            "fund_name": r.series_name,
-            "form": r.form,
-            "filing_date": str(r.filing_date) if r.filing_date else "",
-            "effective_date": str(r.effective_date) if r.effective_date else "",
-            "is_rex": r.is_rex,
-        }
-        for r in rows
-    ]
-
-
-# ---- HTML Rendering ----
-
-def _render_brief(*, new_filings, races, upcoming, pipeline, strategy_watch, since, today) -> str:
-    """Render the full intelligence brief HTML."""
-    sections = []
-
-    # Header
-    sections.append(f"""
-    <div style="background:{_NAVY}; color:{_WHITE}; padding:20px 24px; border-radius:8px 8px 0 0;">
-      <div style="font-size:11px; text-transform:uppercase; letter-spacing:0.1em; opacity:0.7;">REX Financial — Restricted Distribution</div>
-      <div style="font-size:22px; font-weight:700; margin:4px 0;">Filing Intelligence Brief</div>
-      <div style="font-size:13px; opacity:0.8;">{today.strftime('%A, %B %d, %Y')} | Filings since {since.strftime('%b %d')}</div>
-    </div>
-    """)
-
-    # Executive summary bullets
-    bullets = []
-    if new_filings:
-        total_funds = sum(f["fund_count"] for f in new_filings)
-        rex_filings = [f for f in new_filings if f["is_rex"]]
-        bullets.append(f"<b>{len(new_filings)}</b> trusts filed ({total_funds} funds)")
-        if rex_filings:
-            bullets.append(f"REX filed: {', '.join(f['trust_name'][:30] for f in rex_filings)}")
-    if races:
-        bullets.append(f"<b>{len(races)}</b> competitive races active (2+ issuers on same underlier)")
-    if upcoming:
-        urgent = [u for u in upcoming if u["days_left"] <= 7]
-        if urgent:
-            bullets.append(f"<b>{len(urgent)}</b> funds going effective within 7 days")
-
-    if bullets:
-        sections.append(f"""
-        <div style="background:{_LIGHT}; border-left:3px solid {_BLUE}; padding:14px 20px; margin:0;">
-          <div style="font-size:12px; font-weight:600; color:{_NAVY}; margin-bottom:6px;">KEY HIGHLIGHTS</div>
-          <ul style="margin:0; padding-left:18px; font-size:13px; color:#374151;">
-            {''.join(f'<li style="margin-bottom:4px;">{b}</li>' for b in bullets)}
-          </ul>
-        </div>
-        """)
-
-    # New Filings section
-    if new_filings:
-        rows_html = ""
-        for f in new_filings:
-            rex_badge = f'<span style="background:{_GREEN}; color:{_WHITE}; padding:1px 6px; border-radius:3px; font-size:10px; margin-left:4px;">REX</span>' if f["is_rex"] else ""
-            fund_names = ", ".join(fn["name"][:40] for fn in f["funds"][:3])
-            if len(f["funds"]) > 3:
-                fund_names += f" +{len(f['funds']) - 3} more"
-            eff_dates = ", ".join(sorted(f["effective_dates"]))[:30] if f["effective_dates"] else "--"
-            rows_html += f"""
-            <tr>
-              <td style="padding:8px 10px; border-bottom:1px solid {_BORDER}; font-weight:600;">{f['trust_name'][:35]}{rex_badge}</td>
-              <td style="padding:8px 10px; border-bottom:1px solid {_BORDER};">{f['form']}</td>
-              <td style="padding:8px 10px; border-bottom:1px solid {_BORDER};">{f['filing_date']}</td>
-              <td style="padding:8px 10px; border-bottom:1px solid {_BORDER}; font-size:12px;">{fund_names}</td>
-              <td style="padding:8px 10px; border-bottom:1px solid {_BORDER};">{f['fund_count']}</td>
-            </tr>"""
-
-        sections.append(f"""
-        <div style="padding:16px 20px;">
-          <div style="font-size:14px; font-weight:700; color:{_NAVY}; margin-bottom:10px;">NEW FILINGS ({len(new_filings)} trusts)</div>
-          <table style="width:100%; border-collapse:collapse; font-size:13px;">
-            <thead>
-              <tr style="background:{_LIGHT};">
-                <th style="padding:8px 10px; text-align:left; font-size:11px; text-transform:uppercase; color:{_GRAY}; border-bottom:2px solid {_BORDER};">Trust / Issuer</th>
-                <th style="padding:8px 10px; text-align:left; font-size:11px; text-transform:uppercase; color:{_GRAY}; border-bottom:2px solid {_BORDER};">Form</th>
-                <th style="padding:8px 10px; text-align:left; font-size:11px; text-transform:uppercase; color:{_GRAY}; border-bottom:2px solid {_BORDER};">Filed</th>
-                <th style="padding:8px 10px; text-align:left; font-size:11px; text-transform:uppercase; color:{_GRAY}; border-bottom:2px solid {_BORDER};">Funds</th>
-                <th style="padding:8px 10px; text-align:left; font-size:11px; text-transform:uppercase; color:{_GRAY}; border-bottom:2px solid {_BORDER};">#</th>
-              </tr>
-            </thead>
-            <tbody>{rows_html}</tbody>
-          </table>
-        </div>
-        """)
-
-    # Competitive Races
-    if races:
-        race_html = ""
-        for race in races[:10]:
-            rex_mark = f' <span style="color:{_GREEN}; font-weight:700;">REX IN RACE</span>' if race["has_rex"] else f' <span style="color:{_RED}; font-weight:600;">REX GAP</span>'
-            entries_html = ""
-            for e in race["entries"]:
-                rex_tag = f'<span style="color:{_GREEN}; font-size:10px;"> (REX)</span>' if e["is_rex"] else ""
-                status_color = _GREEN if e["status"] == "EFFECTIVE" else _ORANGE
-                entries_html += f"""
-                <tr>
-                  <td style="padding:4px 10px; font-size:12px; border-bottom:1px solid #f1f5f9;">{e['trust'][:30]}{rex_tag}</td>
-                  <td style="padding:4px 10px; font-size:12px; border-bottom:1px solid #f1f5f9; color:{status_color};">{e['status']}</td>
-                  <td style="padding:4px 10px; font-size:12px; border-bottom:1px solid #f1f5f9;">{e['effective_date'] or '--'}</td>
-                  <td style="padding:4px 10px; font-size:12px; border-bottom:1px solid #f1f5f9;">{e['ticker'] or 'TBD'}</td>
-                </tr>"""
-
-            race_html += f"""
-            <div style="border:1px solid {_BORDER}; border-radius:6px; padding:12px; margin-bottom:10px;">
-              <div style="font-size:14px; font-weight:700; color:{_NAVY};">{race['underlier']} <span style="font-size:12px; color:{_GRAY}; font-weight:400;">({race['issuer_count']} issuers)</span>{rex_mark}</div>
-              <table style="width:100%; border-collapse:collapse; margin-top:6px;">
-                <tr style="font-size:10px; text-transform:uppercase; color:{_GRAY};">
-                  <td style="padding:2px 10px;">Issuer</td><td style="padding:2px 10px;">Status</td><td style="padding:2px 10px;">Effective</td><td style="padding:2px 10px;">Ticker</td>
-                </tr>
-                {entries_html}
-              </table>
-            </div>"""
-
-        sections.append(f"""
-        <div style="padding:16px 20px;">
-          <div style="font-size:14px; font-weight:700; color:{_NAVY}; margin-bottom:10px;">COMPETITIVE RACES ({len(races)} underliers)</div>
-          {race_html}
-        </div>
-        """)
-
-    # Upcoming Effectiveness
-    if upcoming:
-        rows_html = ""
-        for u in upcoming:
-            urgency = ""
-            if u["days_left"] <= 3:
-                urgency = f' style="background:#fef2f2; font-weight:600;"'
-            elif u["days_left"] <= 7:
-                urgency = f' style="background:#fffbeb;"'
-            rex_badge = f'<span style="background:{_GREEN}; color:{_WHITE}; padding:1px 5px; border-radius:3px; font-size:10px; margin-left:3px;">REX</span>' if u["is_rex"] else ""
-            rows_html += f"""
-            <tr{urgency}>
-              <td style="padding:6px 10px; border-bottom:1px solid {_BORDER};">{u['effective_date']}</td>
-              <td style="padding:6px 10px; border-bottom:1px solid {_BORDER}; font-weight:600;">{u['days_left']}d</td>
-              <td style="padding:6px 10px; border-bottom:1px solid {_BORDER};">{u['trust'][:25]}{rex_badge}</td>
-              <td style="padding:6px 10px; border-bottom:1px solid {_BORDER}; font-size:12px;">{u['fund_name'][:45]}</td>
-              <td style="padding:6px 10px; border-bottom:1px solid {_BORDER};">{u['ticker'] or 'TBD'}</td>
-            </tr>"""
-
-        sections.append(f"""
-        <div style="padding:16px 20px;">
-          <div style="font-size:14px; font-weight:700; color:{_NAVY}; margin-bottom:10px;">UPCOMING EFFECTIVENESS (next 14 days)</div>
-          <table style="width:100%; border-collapse:collapse; font-size:13px;">
-            <thead><tr style="background:{_LIGHT}; font-size:11px; text-transform:uppercase; color:{_GRAY};">
-              <th style="padding:6px 10px; text-align:left; border-bottom:2px solid {_BORDER};">Date</th>
-              <th style="padding:6px 10px; text-align:left; border-bottom:2px solid {_BORDER};">In</th>
-              <th style="padding:6px 10px; text-align:left; border-bottom:2px solid {_BORDER};">Trust</th>
-              <th style="padding:6px 10px; text-align:left; border-bottom:2px solid {_BORDER};">Fund</th>
-              <th style="padding:6px 10px; text-align:left; border-bottom:2px solid {_BORDER};">Ticker</th>
-            </tr></thead>
-            <tbody>{rows_html}</tbody>
-          </table>
-        </div>
-        """)
-
-    # Strategy Watch
-    if strategy_watch:
-        rows_html = ""
-        for s in strategy_watch:
-            rex_badge = f'<span style="background:{_GREEN}; color:{_WHITE}; padding:1px 5px; border-radius:3px; font-size:10px; margin-left:3px;">REX</span>' if s["is_rex"] else ""
-            rows_html += f"""
-            <tr>
-              <td style="padding:6px 10px; border-bottom:1px solid {_BORDER};">{s['trust'][:25]}{rex_badge}</td>
-              <td style="padding:6px 10px; border-bottom:1px solid {_BORDER}; font-size:12px;">{s['fund_name'][:50]}</td>
-              <td style="padding:6px 10px; border-bottom:1px solid {_BORDER};">{s['form']}</td>
-              <td style="padding:6px 10px; border-bottom:1px solid {_BORDER};">{s['filing_date']}</td>
-            </tr>"""
-
-        sections.append(f"""
-        <div style="padding:16px 20px;">
-          <div style="font-size:14px; font-weight:700; color:{_NAVY}; margin-bottom:10px;">STRATEGY WATCH (Income / Options / Autocallable)</div>
-          <table style="width:100%; border-collapse:collapse; font-size:13px;">
-            <thead><tr style="background:{_LIGHT}; font-size:11px; text-transform:uppercase; color:{_GRAY};">
-              <th style="padding:6px 10px; text-align:left; border-bottom:2px solid {_BORDER};">Trust</th>
-              <th style="padding:6px 10px; text-align:left; border-bottom:2px solid {_BORDER};">Fund</th>
-              <th style="padding:6px 10px; text-align:left; border-bottom:2px solid {_BORDER};">Form</th>
-              <th style="padding:6px 10px; text-align:left; border-bottom:2px solid {_BORDER};">Filed</th>
-            </tr></thead>
-            <tbody>{rows_html}</tbody>
-          </table>
-        </div>
-        """)
-
-    # REX Pipeline Summary
-    if pipeline.get("available"):
-        sections.append(f"""
-        <div style="padding:16px 20px;">
-          <div style="font-size:14px; font-weight:700; color:{_NAVY}; margin-bottom:10px;">T-REX PIPELINE</div>
-          <div style="display:flex; gap:12px; flex-wrap:wrap;">
-            <div style="background:{_LIGHT}; border:1px solid {_BORDER}; border-radius:6px; padding:10px 16px; text-align:center; min-width:80px;">
-              <div style="font-size:22px; font-weight:800; color:{_GREEN};">{pipeline['listed']}</div>
-              <div style="font-size:10px; color:{_GRAY}; text-transform:uppercase;">Listed</div>
-            </div>
-            <div style="background:{_LIGHT}; border:1px solid {_BORDER}; border-radius:6px; padding:10px 16px; text-align:center; min-width:80px;">
-              <div style="font-size:22px; font-weight:800; color:{_BLUE};">{pipeline['filed']}</div>
-              <div style="font-size:10px; color:{_GRAY}; text-transform:uppercase;">Filed</div>
-            </div>
-            <div style="background:{_LIGHT}; border:1px solid {_BORDER}; border-radius:6px; padding:10px 16px; text-align:center; min-width:80px;">
-              <div style="font-size:22px; font-weight:800; color:{_ORANGE};">{pipeline.get('research', 0) + pipeline.get('target_list', 0)}</div>
-              <div style="font-size:10px; color:{_GRAY}; text-transform:uppercase;">Pipeline</div>
-            </div>
-            <div style="background:{_LIGHT}; border:1px solid {_BORDER}; border-radius:6px; padding:10px 16px; text-align:center; min-width:80px;">
-              <div style="font-size:22px; font-weight:800; color:{_NAVY};">{pipeline['total']}</div>
-              <div style="font-size:10px; color:{_GRAY}; text-transform:uppercase;">Total</div>
-            </div>
-          </div>
-        </div>
-        """)
-
-    # Footer
-    sections.append(f"""
-    <div style="background:{_LIGHT}; padding:14px 20px; border-radius:0 0 8px 8px; border-top:1px solid {_BORDER};">
-      <div style="font-size:11px; color:{_GRAY};">
-        <a href="{DASHBOARD_URL}/dashboard" style="color:{_BLUE};">Dashboard</a> |
-        <a href="{DASHBOARD_URL}/filings/" style="color:{_BLUE};">Filing Explorer</a> |
-        <a href="{DASHBOARD_URL}/filings/evaluator" style="color:{_BLUE};">Stock Evaluator</a>
-      </div>
-      <div style="font-size:10px; color:#94a3b8; margin-top:4px;">
-        Data sourced from SEC EDGAR. Generated {datetime.now().strftime('%Y-%m-%d %H:%M ET')}.
-        Restricted distribution — do not forward.
-      </div>
-    </div>
-    """)
-
-    body = "\n".join(sections)
     return f"""<!DOCTYPE html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Filing Intelligence Brief</title></head>
+<title>Filing Intelligence Brief — {today.strftime('%b %d')}</title></head>
 <body style="margin:0; padding:20px; background:#f1f5f9; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
-<div style="max-width:700px; margin:0 auto; background:{_WHITE}; border-radius:8px; border:1px solid {_BORDER}; overflow:hidden;">
+<div style="max-width:{_MAX_WIDTH}; margin:0 auto; background:{_WHITE}; border-radius:6px; border:1px solid {_BORDER}; overflow:hidden;">
 {body}
-</div></body></html>"""
+</div>
+</body></html>"""
+
+
+def _render_header(today: date) -> str:
+    return f"""
+<div style="padding:20px 24px 16px; border-bottom:1px solid {_BORDER};">
+  <div style="font-size:11px; text-transform:uppercase; letter-spacing:0.08em; color:{_GRAY}; font-weight:600;">REX Financial</div>
+  <div style="font-size:22px; font-weight:700; color:{_NAVY}; margin-top:4px;">Filing Intelligence Brief</div>
+  <div style="font-size:13px; color:{_GRAY}; margin-top:2px;">{today.strftime('%A, %B %d, %Y')}</div>
+</div>"""
+
+
+def _render_actions(actions: list[dict]) -> str:
+    if not actions:
+        return f"""
+<div style="padding:18px 24px; border-bottom:1px solid {_BORDER};">
+  <div style="font-size:11px; text-transform:uppercase; letter-spacing:0.08em; color:{_GRAY}; font-weight:700; margin-bottom:8px;">Action Required</div>
+  <div style="font-size:13px; color:{_GRAY}; font-style:italic;">No action required today.</div>
+</div>"""
+
+    items = []
+    for a in actions:
+        color = _RED if a["severity"] == "high" else _AMBER
+        bg = "#fef2f2" if a["severity"] == "high" else "#fffbeb"
+        items.append(f"""
+  <div style="border-left:3px solid {color}; background:{bg}; padding:10px 14px; margin-bottom:8px; border-radius:0 4px 4px 0;">
+    <div style="font-size:13px; font-weight:700; color:{_NAVY};">{a['title']}</div>
+    <div style="font-size:12px; color:#374151; margin-top:2px;">{a['detail']}</div>
+  </div>""")
+
+    return f"""
+<div style="padding:18px 24px; border-bottom:1px solid {_BORDER};">
+  <div style="font-size:11px; text-transform:uppercase; letter-spacing:0.08em; color:{_GRAY}; font-weight:700; margin-bottom:10px;">Action Required</div>
+  {''.join(items)}
+</div>"""
+
+
+def _render_races(races: list[dict], today: date) -> str:
+    if not races:
+        return f"""
+<div style="padding:18px 24px; border-bottom:1px solid {_BORDER};">
+  <div style="font-size:11px; text-transform:uppercase; letter-spacing:0.08em; color:{_GRAY}; font-weight:700; margin-bottom:8px;">Competitive Races</div>
+  <div style="font-size:13px; color:{_GRAY}; font-style:italic;">No active races.</div>
+</div>"""
+
+    items = []
+    for race in races:
+        # Position label
+        if not race["has_rex"]:
+            status_label = f'<span style="color:{_RED}; font-weight:700; font-size:11px; text-transform:uppercase;">REX Gap</span>'
+        else:
+            status_label = f'<span style="color:{_GREEN}; font-weight:700; font-size:11px; text-transform:uppercase;">REX In</span>'
+
+        issuer_rows = []
+        for e in race["issuers"]:
+            is_rex = e["is_rex"]
+            rex_tag = f'<span style="color:{_GREEN}; font-weight:700; font-size:10px; margin-left:4px;">REX</span>' if is_rex else ""
+            eff = e["effective_date"].strftime('%b %d') if e["effective_date"] else "TBD"
+            trust_short = e["trust"][:30]
+            issuer_rows.append(f"""
+      <tr>
+        <td style="padding:4px 0; font-size:12px; color:#374151;">{trust_short}{rex_tag}</td>
+        <td style="padding:4px 0; font-size:12px; color:{_GRAY}; text-align:right;">{eff}</td>
+      </tr>""")
+
+        items.append(f"""
+  <div style="border:1px solid {_BORDER}; border-radius:4px; padding:10px 14px; margin-bottom:8px;">
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <div style="font-size:14px; font-weight:700; color:{_NAVY}; font-family:monospace;">{race['underlier']}</div>
+      {status_label}
+    </div>
+    <table style="width:100%; border-collapse:collapse; margin-top:6px;">
+      {''.join(issuer_rows)}
+    </table>
+  </div>""")
+
+    return f"""
+<div style="padding:18px 24px; border-bottom:1px solid {_BORDER};">
+  <div style="font-size:11px; text-transform:uppercase; letter-spacing:0.08em; color:{_GRAY}; font-weight:700; margin-bottom:10px;">Competitive Races</div>
+  {''.join(items)}
+</div>"""
+
+
+def _render_effectives(effectives: list[dict], today: date) -> str:
+    if not effectives:
+        return f"""
+<div style="padding:18px 24px;">
+  <div style="font-size:11px; text-transform:uppercase; letter-spacing:0.08em; color:{_GRAY}; font-weight:700; margin-bottom:8px;">Effectives This Week</div>
+  <div style="font-size:13px; color:{_GRAY}; font-style:italic;">No funds going effective in the next 7 days.</div>
+</div>"""
+
+    rows = []
+    for e in effectives:
+        is_rex = e["is_rex"]
+        days_left = (e["effective_date"] - today).days
+        trust_short = e["trust"][:30]
+        rex_tag = f'<span style="color:{_GREEN}; font-weight:700; font-size:10px; margin-left:4px;">REX</span>' if is_rex else ""
+
+        # Fund count display
+        if e["fund_count"] == 1:
+            fund_display = e["funds"][0]["name"][:45]
+        else:
+            first_fund = e["funds"][0]["name"][:30]
+            fund_display = f'{first_fund} <span style="color:{_GRAY};">+{e["fund_count"]-1} more</span>'
+
+        row_bg = "#fef2f2" if days_left <= 2 else ""
+
+        rows.append(f"""
+      <tr style="background:{row_bg};">
+        <td style="padding:8px 0; font-size:12px; color:{_NAVY}; font-weight:600; white-space:nowrap;">{e['effective_date'].strftime('%b %d')}</td>
+        <td style="padding:8px 10px; font-size:12px; color:{_GRAY}; white-space:nowrap;">{days_left}d</td>
+        <td style="padding:8px 10px; font-size:12px; color:#374151;">{trust_short}{rex_tag}</td>
+        <td style="padding:8px 0; font-size:12px; color:#374151;">{fund_display}</td>
+      </tr>""")
+
+    return f"""
+<div style="padding:18px 24px;">
+  <div style="font-size:11px; text-transform:uppercase; letter-spacing:0.08em; color:{_GRAY}; font-weight:700; margin-bottom:10px;">Effectives This Week</div>
+  <table style="width:100%; border-collapse:collapse;">
+    <thead>
+      <tr style="border-bottom:1px solid {_BORDER};">
+        <th style="padding:6px 0; text-align:left; font-size:10px; color:{_GRAY}; text-transform:uppercase; font-weight:600;">Date</th>
+        <th style="padding:6px 10px; text-align:left; font-size:10px; color:{_GRAY}; text-transform:uppercase; font-weight:600;">In</th>
+        <th style="padding:6px 10px; text-align:left; font-size:10px; color:{_GRAY}; text-transform:uppercase; font-weight:600;">Issuer</th>
+        <th style="padding:6px 0; text-align:left; font-size:10px; color:{_GRAY}; text-transform:uppercase; font-weight:600;">Filing</th>
+      </tr>
+    </thead>
+    <tbody>
+      {''.join(rows)}
+    </tbody>
+  </table>
+</div>"""
