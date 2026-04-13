@@ -160,7 +160,8 @@ def _data_date(db) -> str:
 # (title, filename, builder, list_type for DB recipients)
 DAILY_REPORTS = [
     ("REX Daily ETP Report", "daily_filing", _build_daily_filing, "daily"),
-    ("REX Filing Intelligence Brief", "intelligence_brief", _build_intelligence_brief, "intelligence"),
+    # DISABLED (WIP): Intelligence Brief — preview only until data + copy approved
+    # ("REX Filing Intelligence Brief", "intelligence_brief", _build_intelligence_brief, "intelligence"),
 ]
 
 WEEKLY_REPORTS = [
@@ -168,12 +169,13 @@ WEEKLY_REPORTS = [
     ("REX ETP Leverage & Inverse Report", "li_report", _build_li, "li"),
     ("REX ETP Income Report", "income_report", _build_income, "income"),
     ("REX ETP Flow Report", "flow_report", _build_flow, "flow"),
-    ("T-REX Filing Candidate Screener", "filing_screener", _build_filing_screener, "screener"),
+    # DISABLED (WIP): Filing Screener — preview only until data + copy approved
+    # ("T-REX Filing Candidate Screener", "filing_screener", _build_filing_screener, "screener"),
 ]
 
-# Monday-only report (separate from weekly bundle)
+# Monday-only report (separate from weekly bundle) — ALL DISABLED (WIP)
 MONDAY_REPORTS = [
-    ("REX Product Pipeline", "product_status", _build_product_status, "pipeline"),
+    # ("REX Product Pipeline", "product_status", _build_product_status, "pipeline"),
 ]
 
 # Autocall report has its own recipient list (external distribution)
