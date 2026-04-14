@@ -54,14 +54,20 @@ LOCAL_BAKE_DIR = PROJECT_ROOT / "data" / "prebaked_reports"
 
 
 def _load_api_key() -> str:
-    """Read REXFINHUB_API_KEY from .env or environment."""
+    """Read API_KEY from config/.env or environment.
+
+    Matches the convention used by scripts/run_daily.py for Render uploads.
+    """
+    env_val = os.environ.get("API_KEY", "")
+    if env_val:
+        return env_val
     env_file = PROJECT_ROOT / "config" / ".env"
     if env_file.exists():
-        for line in env_file.read_text().splitlines():
+        for line in env_file.read_text(encoding="utf-8").splitlines():
             line = line.strip()
-            if line.startswith("REXFINHUB_API_KEY="):
+            if line.startswith("API_KEY="):
                 return line.split("=", 1)[1].strip().strip('"').strip("'")
-    return os.environ.get("REXFINHUB_API_KEY", "")
+    return ""
 
 
 def _build_daily_filing(db) -> str:
