@@ -35,13 +35,14 @@ USER_AGENT = os.environ.get(
 )
 
 # Same set as atom_watcher.py FORM_QUERIES — keep in sync.
+# S-1/S-3 excluded: they include every non-fund operating company's
+# prospectus (Devon Energy, Lennar Homes, etc.). Rare commodity ETPs
+# that use S-1 (e.g. Grayscale BTC) get added manually via admin.
 ACCEPTED_FORMS = {
     "485APOS", "485BPOS", "485BXT", "485B", "485A",
     "497", "497K", "497J",
     "N-1A", "N-1A/A",
     "N-2", "N-2/A",
-    "S-1", "S-1/A",
-    "S-3", "S-3/A", "S-3ASR",
 }
 
 INDEX_URL = (

@@ -62,14 +62,18 @@ POLL_INTERVAL = int(os.environ.get("POLL_INTERVAL", "60"))
 # Form prefixes to poll, with the EXACT subforms we accept from each.
 # Atom prefix matching is greedy: type=S-1 also returns S-11/A which we
 # DON'T want (S-11 is real estate, not an ETP). Strict client-side filter.
+#
+# IMPORTANT: only fund-specific forms. S-1 and S-3 are used by every
+# non-fund operating company (IPOs, secondaries, shelf registrations),
+# which polluted the trusts table with Devon Energy, Lennar Homes, etc.
+# Rare commodity ETPs that DO use S-1 (e.g. Grayscale BTC) are added
+# manually via the admin trust-CRUD panel.
 FORM_QUERIES = [
     # (atom query type, accepted exact forms)
     ("485", {"485APOS", "485BPOS", "485BXT", "485B", "485A"}),
     ("497", {"497", "497K", "497J"}),
     ("N-1A", {"N-1A", "N-1A/A"}),
     ("N-2", {"N-2", "N-2/A"}),
-    ("S-1", {"S-1", "S-1/A"}),
-    ("S-3", {"S-3", "S-3/A", "S-3ASR"}),
 ]
 
 # Atom XML namespace

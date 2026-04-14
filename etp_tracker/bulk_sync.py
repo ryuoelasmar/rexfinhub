@@ -33,14 +33,15 @@ from .config import USER_AGENT_DEFAULT
 
 log = logging.getLogger(__name__)
 
-# Prospectus forms where genuinely new filers first appear.
-# Excludes 497 variants (supplements) and 485B (short forms) — new CIKs
-# always show up via 485APOS/485BPOS/N-1A/S-1 first.
+# Prospectus forms where genuinely new fund filers first appear.
+# S-1 excluded: bulk_sync's job is to surface TRUST CANDIDATES for admin
+# review, and S-1 is the dominant IPO form for operating companies —
+# 99% of matches would be non-fund. Admin can add Grayscale-style
+# commodity trusts via the trust-CRUD panel if needed.
 ACCEPTED_FORMS = {
     "485APOS", "485BPOS", "485BXT",
     "N-1A", "N-1A/A",
     "N-2", "N-2/A",
-    "S-1", "S-1/A",
 }
 
 _CACHE_DIR = Path(
