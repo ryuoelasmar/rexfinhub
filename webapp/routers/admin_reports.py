@@ -1,18 +1,20 @@
-"""Admin reports preview page.
+"""Admin reports preview page — serves pre-baked static HTML.
 
-One place to review the WIP reports (Intelligence Brief, Filing Candidates,
-Product Pipeline) before approving them for production send. Renders the
-HTML inline with a picker for which report to show.
+The heavy lifting (SQL queries, Bloomberg data loading, template rendering)
+happens on the VPS via scripts/prebake_reports.py. Files are uploaded to
+Render via POST /api/v1/reports/upload/{report_key} and stored at
+data/prebaked_reports/{key}.html. This page just reads the static file.
 
-Separate router file so we don't touch the main admin.py.
+Result: instant page load on Render, no per-view compute cost.
 """
 from __future__ import annotations
 
+import json
 import logging
 from datetime import datetime
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
@@ -24,6 +26,7 @@ router = APIRouter(prefix="/admin/reports", tags=["admin-reports"])
 templates = Jinja2Templates(directory=str(Path(__file__).parent.parent / "templates"))
 
 ADMIN_PASSWORD = "ryu123"
+PREBAKED_DIR = Path("data/prebaked_reports")
 
 
 def _check_auth(request: Request) -> bool:
@@ -33,98 +36,129 @@ def _check_auth(request: Request) -> bool:
     )
 
 
-REPORT_REGISTRY = {
-    "intelligence": {
+# Full report catalog — every report that send_email.py knows about
+REPORT_CATALOG = {
+    "daily_filing": {
+        "name": "Daily Filing Report",
+        "description": "Daily SEC filings digest with market snapshot",
+        "cadence": "Daily",
+        "list_type": "daily",
+    },
+    "weekly_report": {
+        "name": "Weekly ETP Report",
+        "description": "Weekly roll-up of filings, market activity, REX performance",
+        "cadence": "Weekly",
+        "list_type": "weekly",
+    },
+    "li_report": {
+        "name": "Leverage & Inverse Report",
+        "description": "L&I market landscape — Index and Single Stock segments",
+        "cadence": "Weekly",
+        "list_type": "li",
+    },
+    "income_report": {
+        "name": "Income Report",
+        "description": "Covered-call and income ETF landscape",
+        "cadence": "Weekly",
+        "list_type": "income",
+    },
+    "flow_report": {
+        "name": "Flow Report",
+        "description": "Fund flows by category and direction",
+        "cadence": "Weekly",
+        "list_type": "flow",
+    },
+    "autocall_report": {
+        "name": "Autocallable Report",
+        "description": "Autocallable ETF weekly update",
+        "cadence": "Weekly",
+        "list_type": "autocall",
+    },
+    "intelligence_brief": {
         "name": "Filing Intelligence Brief",
-        "description": "Daily — action required, competitive races, effectives this week",
+        "description": "Executive-first daily — action required, competitive races, effectives",
         "cadence": "Daily",
         "list_type": "intelligence",
-        "builder": "etp_tracker.intelligence_brief:build_intelligence_brief",
-        "needs_db": True,
     },
-    "screener": {
+    "filing_screener": {
         "name": "Filing Candidates",
-        "description": "Weekly — top 5 filing picks from foundation_scorer",
+        "description": "Top 5 filing picks from foundation_scorer",
         "cadence": "Weekly",
         "list_type": "screener",
-        "builder": "screener.filing_screener_report:build_filing_screener_report",
-        "needs_db": False,
     },
-    "pipeline": {
+    "product_status": {
         "name": "Product Pipeline",
-        "description": "Monday — REX product lifecycle (Listed / Awaiting / Filed)",
+        "description": "REX product lifecycle: Listed / Awaiting / Filed / Research",
         "cadence": "Monday",
         "list_type": "pipeline",
-        "builder": "etp_tracker.product_status_report:build_product_status_report",
-        "needs_db": True,
     },
 }
 
 
-def _render_report(report_key: str, db: Session) -> tuple[str, str | None]:
-    """Call the report builder for the given key. Returns (html, error)."""
-    meta = REPORT_REGISTRY.get(report_key)
-    if not meta:
-        return "", f"Unknown report: {report_key}"
-
-    module_path, func_name = meta["builder"].split(":")
+def _load_metadata(report_key: str) -> dict:
+    """Load the .meta.json sidecar for a pre-baked report."""
+    meta_path = PREBAKED_DIR / f"{report_key}.meta.json"
+    if not meta_path.exists():
+        return {}
     try:
-        import importlib
-        module = importlib.import_module(module_path)
-        func = getattr(module, func_name)
+        return json.loads(meta_path.read_text())
+    except Exception:
+        return {}
 
-        if meta["needs_db"]:
-            html = func(db)
-        else:
-            html = func()
-        return html, None
-    except Exception as e:
-        log.error("Report render failed for %s: %s", report_key, e, exc_info=True)
-        return "", str(e)
+
+def _report_status(report_key: str) -> dict:
+    """Return status for a report: exists, baked_at, size, etc."""
+    html_path = PREBAKED_DIR / f"{report_key}.html"
+    if not html_path.exists():
+        return {"exists": False, "baked_at": None, "size_bytes": 0}
+
+    meta = _load_metadata(report_key)
+    return {
+        "exists": True,
+        "baked_at": meta.get("baked_at"),
+        "size_bytes": html_path.stat().st_size,
+    }
 
 
 @router.get("/preview", response_class=HTMLResponse)
-def preview_landing(
-    request: Request,
-    report: str | None = Query(default=None),
-    db: Session = Depends(get_db),
-):
-    """Landing page + inline preview of a selected report."""
+def preview_landing(request: Request, db: Session = Depends(get_db)):
+    """Admin landing page listing all pre-baked reports."""
     if not _check_auth(request):
         return RedirectResponse("/admin/", status_code=302)
 
-    selected_html = None
-    selected_error = None
-    selected_meta = None
-    if report and report in REPORT_REGISTRY:
-        selected_meta = REPORT_REGISTRY[report]
-        selected_html, selected_error = _render_report(report, db)
+    # Enrich each report with its current file status
+    enriched = {}
+    for key, meta in REPORT_CATALOG.items():
+        enriched[key] = {**meta, **_report_status(key)}
 
     return templates.TemplateResponse("admin_reports_preview.html", {
         "request": request,
-        "reports": REPORT_REGISTRY,
-        "selected_key": report,
-        "selected_meta": selected_meta,
-        "selected_html": selected_html,
-        "selected_error": selected_error,
+        "reports": enriched,
         "now": datetime.now().strftime("%Y-%m-%d %H:%M"),
+        "prebaked_dir": str(PREBAKED_DIR),
     })
 
 
 @router.get("/preview/{report_key}/raw", response_class=HTMLResponse)
-def preview_raw(
-    report_key: str,
-    request: Request,
-    db: Session = Depends(get_db),
-):
-    """Render a report directly with no admin wrapper. For iframe embedding."""
+def preview_raw(report_key: str, request: Request):
+    """Serve the pre-baked HTML for a report. Instant — no rendering."""
     if not _check_auth(request):
         return HTMLResponse("<h2>Unauthorized</h2>", status_code=401)
 
-    html, error = _render_report(report_key, db)
-    if error:
+    if report_key not in REPORT_CATALOG:
+        return HTMLResponse("<h2>Unknown report</h2>", status_code=404)
+
+    html_path = PREBAKED_DIR / f"{report_key}.html"
+    if not html_path.exists():
         return HTMLResponse(
-            f"<h2>Report error</h2><pre style='color:#dc2626'>{error}</pre>",
-            status_code=500,
+            f"""
+            <html><body style='font-family:sans-serif; padding:40px; background:#f8fafc;'>
+            <div style='max-width:600px; margin:0 auto; background:white; padding:24px; border-radius:6px; border-left:3px solid #d97706;'>
+            <h2 style='margin:0 0 8px; color:#0f172a;'>Not baked yet</h2>
+            <p style='color:#374151;'>This report hasn't been baked yet. Run <code>python scripts/prebake_reports.py</code> on the VPS.</p>
+            </div></body></html>
+            """,
+            status_code=404,
         )
-    return HTMLResponse(html)
+
+    return HTMLResponse(html_path.read_text(encoding="utf-8"))
