@@ -18,7 +18,10 @@ _DEFAULT_CACHE_DIR = os.environ.get("SEC_CACHE_DIR", str(Path(__file__).resolve(
 class SECClient:
     def __init__(self, user_agent: str = USER_AGENT_DEFAULT, request_timeout: int = 30, pause: float = 0.25, cache_dir: Path | str = _DEFAULT_CACHE_DIR):
         self.user_agent = user_agent or USER_AGENT_DEFAULT
-        self.timeout = request_timeout
+        # Use (connect, read) tuple so both phases are bounded.
+        # Scalar timeout in requests only covers the initial connect;
+        # a stalled body-read will hang forever and deadlock the ThreadPoolExecutor.
+        self.timeout = (float(request_timeout), float(request_timeout))
         self.pause = float(pause)
         self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
