@@ -1,0 +1,20 @@
+[Unit]
+Description=REX FinHub SEC Atom Feed Watcher (Tier 1 — near-realtime filing detection)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=jarvis
+WorkingDirectory=/home/jarvis/rexfinhub
+EnvironmentFile=/home/jarvis/rexfinhub/config/.env
+Environment=SEC_CACHE_DIR=/home/jarvis/rexfinhub/cache/sec
+Environment=POLL_INTERVAL=60
+ExecStart=/home/jarvis/venv/bin/python -m etp_tracker.atom_watcher
+Restart=always
+RestartSec=15
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
