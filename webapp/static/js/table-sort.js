@@ -109,20 +109,17 @@
   }
 
   function makeStickyHeaders() {
-    // Mark legacy tables that need sticky headers. CSS (in style.css) does
-    // the actual sticky work via the `.legacy-sticky-table` class.
-    // CSS is used instead of inline styles because:
-    //   1. Respects light/dark theme via CSS custom properties
-    //   2. Avoids clobbering theme switches after page load
-    //   3. Applies per-th (sticky on thead has inconsistent browser support)
-    document.querySelectorAll('table:not(.rt-table)').forEach(function(table) {
-      if (table.classList.contains('legacy-sticky-table')) return;
-      var thead = table.querySelector('thead');
-      if (!thead) return;
-      var hasSortable = thead.querySelector('th.sortable, th[onclick]');
-      if (!hasSortable) return;
-      table.classList.add('legacy-sticky-table');
-    });
+    // No-op. Sticky table headers caused first-row overlap because they were
+    // anchored to top: var(--nav-height) — when you scroll, the first tbody
+    // row goes ABOVE the sticky header (the header is anchored to nav height,
+    // not viewport top) and disappears under it. The working filing_explorer
+    // page uses top: 0 with explicit per-th inline styles.
+    //
+    // Decision: legacy tables (trust_detail, dashboard, fund_detail, etc.)
+    // get NON-sticky headers. The visible distinction comes from the
+    // CSS background + bottom border in style.css. Pages that genuinely
+    // need sticky headers should opt in explicitly via the rt-table system
+    // or use the filing_explorer pattern with inline top:0 sticky.
   }
 
   function initSortableHeaders() {
