@@ -1053,12 +1053,11 @@ def _flow_highlights(data: dict) -> list[str]:
             f"{grand.get('count', 0):,} active ETPs ({grand.get('flow_1w', '$0')} 1W net flow)"
         )
 
-    # 2. REX Financial position
+    # 2. REX Financial position (omit market share — it's always ~0% vs full ETP universe)
     rex = data.get("rex_kpis", {})
     if rex and rex.get("count", 0) > 0:
         bullets.append(
-            f"REX Financial: {rex.get('count', 0)} funds, {rex.get('total_aum', '$0')} AUM "
-            f"({rex.get('market_share', '0.0%')} market share)"
+            f"REX Financial: {rex.get('count', 0)} funds, {rex.get('total_aum', '$0')} AUM"
         )
 
     # 3. Top REX fund mover

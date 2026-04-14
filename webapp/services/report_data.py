@@ -974,10 +974,17 @@ def _compute_email_segment(df: pd.DataFrame, data_aum: pd.DataFrame,
         "issuer_display" if "issuer_display" in df.columns
         else ("issuer" if "issuer" in df.columns else "fund_name")
     )
+    # Fill missing issuer values with "Other" so we don't silently drop funds
+    # (e.g., JEDI had a null issuer_display and disappeared from the Thematic breakdown).
+    # Cast to string first to avoid Categorical "new category" errors.
+    df_fill = df.copy()
+    df_fill[issuer_col] = df_fill[issuer_col].astype("string")
+    df_fill[issuer_col] = df_fill[issuer_col].fillna("Other")
+    df_fill.loc[df_fill[issuer_col].str.strip() == "", issuer_col] = "Other"
     issuers = []
-    for issuer, grp in df.groupby(issuer_col, observed=True):
-        if not issuer or (isinstance(issuer, float) and math.isnan(issuer)):
-            continue
+    for issuer, grp in df_fill.groupby(issuer_col, observed=True):
+        if not issuer:
+            issuer = "Other"
         aum = float(grp["aum"].sum())
         iss = {
             "issuer": str(issuer),
@@ -1003,18 +1010,36 @@ def _compute_email_segment(df: pd.DataFrame, data_aum: pd.DataFrame,
     issuers.sort(key=lambda x: x["aum"], reverse=True)
 
     # Top 10 / Bottom 10 by 1W flow
-    # Only show actual inflows (>0) and outflows (<0), no overlap
+    # Small categories (<= 10 funds): show ALL funds regardless of flow direction
+    # so zero-flow funds stay visible (e.g., Thematic: BMAX/DADS/JEDI often at 0).
+    # Large categories: top inflows (>0) + top outflows (<0), no overlap.
     sorted_df = df.sort_values("fund_flow_1week", ascending=False)
-    inflow_df = sorted_df[sorted_df["fund_flow_1week"] > 0].head(10)
-    top10 = _segment_fund_rows(inflow_df, total_aum)
-    top10_tickers = set(inflow_df["ticker_clean"].tolist()) if "ticker_clean" in inflow_df.columns else set()
-    outflow_df = sorted_df[sorted_df["fund_flow_1week"] < 0]
-    if "ticker_clean" in outflow_df.columns:
-        outflow_df = outflow_df[~outflow_df["ticker_clean"].isin(top10_tickers)]
-    bottom10 = _segment_fund_rows(
-        outflow_df.tail(10).sort_values("fund_flow_1week", ascending=True),
-        total_aum,
-    )
+    if len(df) <= 10:
+        top10 = _segment_fund_rows(
+            sorted_df[sorted_df["fund_flow_1week"] >= 0],
+            total_aum,
+        )
+        top10_tickers = set(
+            sorted_df[sorted_df["fund_flow_1week"] >= 0]["ticker_clean"].tolist()
+        ) if "ticker_clean" in sorted_df.columns else set()
+        outflow_df = sorted_df[sorted_df["fund_flow_1week"] < 0]
+        if "ticker_clean" in outflow_df.columns:
+            outflow_df = outflow_df[~outflow_df["ticker_clean"].isin(top10_tickers)]
+        bottom10 = _segment_fund_rows(
+            outflow_df.sort_values("fund_flow_1week", ascending=True),
+            total_aum,
+        )
+    else:
+        inflow_df = sorted_df[sorted_df["fund_flow_1week"] > 0].head(10)
+        top10 = _segment_fund_rows(inflow_df, total_aum)
+        top10_tickers = set(inflow_df["ticker_clean"].tolist()) if "ticker_clean" in inflow_df.columns else set()
+        outflow_df = sorted_df[sorted_df["fund_flow_1week"] < 0]
+        if "ticker_clean" in outflow_df.columns:
+            outflow_df = outflow_df[~outflow_df["ticker_clean"].isin(top10_tickers)]
+        bottom10 = _segment_fund_rows(
+            outflow_df.tail(10).sort_values("fund_flow_1week", ascending=True),
+            total_aum,
+        )
 
     return {
         "kpis": kpis,
