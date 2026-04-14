@@ -183,65 +183,38 @@ def run_pipeline(ciks: list[str], overrides: dict | None = None, since: str | No
 
     # Step 3: Extract filings (parallel - I/O bound, biggest bottleneck)
     # Auto-adjust per-worker pause to keep aggregate rate under 10 req/s
+    # The SEC client (connect, read) timeout fix in sec_client.py is what
+    # prevents deadlocks — individual read() calls can't hang forever.
     effective_pause = max(pause, max_workers * 0.1)
     workers = min(max_workers, len(trusts))
-    # Per-trust task timeout: even with SEC client (connect, read) timeouts, a
-    # trust with many slow filings can take long. 10 min per trust is generous
-    # enough for large issuers (Direxion ~200 filings) but prevents indefinite
-    # hangs. Futures that exceed this are marked as errors and the pool moves on.
-    PER_TRUST_TIMEOUT = 600  # 10 minutes
     if workers > 1:
         lock = threading.Lock()
         pbar = tqdm(total=len(trusts), desc=f"Extract (Step 3, {workers}w)", leave=False)
 
         changed_trusts = set()
-        pool = ThreadPoolExecutor(max_workers=workers)
-        try:
+        with ThreadPoolExecutor(max_workers=workers) as pool:
             futures = {
                 pool.submit(_step3_worker, t, output_root, user_agent,
                             request_timeout, effective_pause, cache_dir,
                             since, until, etf_only): t
                 for t in trusts
             }
-            pending = set(futures.keys())
-            while pending:
-                # as_completed with timeout raises TimeoutError if nothing completes
-                # within PER_TRUST_TIMEOUT. That lets us detect a stuck pool.
+            for future in as_completed(futures):
+                trust_name = futures[future]
                 try:
-                    done = set()
-                    for future in as_completed(pending, timeout=PER_TRUST_TIMEOUT):
-                        done.add(future)
-                        trust_name = futures[future]
-                        try:
-                            result = future.result(timeout=1)
-                        except Exception as e:
-                            log.error("Step 3 error for %s: %s", trust_name, e)
-                            result = {"new": 0, "skipped": 0, "errors": 1, "strategies": {}}
-                        with lock:
-                            metrics.new_filings += result.get("new", 0)
-                            metrics.skipped_filings += result.get("skipped", 0)
-                            metrics.errors += result.get("errors", 0)
-                            for strat, count in result.get("strategies", {}).items():
-                                metrics.add_strategy(strat, count)
-                            if result.get("new", 0) > 0:
-                                changed_trusts.add(trust_name)
-                            pbar.update(1)
-                    pending -= done
-                except TimeoutError:
-                    # Nothing completed in PER_TRUST_TIMEOUT seconds — abort stuck tasks.
-                    stuck = [futures[f] for f in pending]
-                    log.error(
-                        "Step 3 stalled — no trust completed in %ds. Cancelling %d stuck trusts: %s",
-                        PER_TRUST_TIMEOUT, len(stuck), stuck[:5],
-                    )
-                    for f in pending:
-                        f.cancel()
-                        with lock:
-                            metrics.errors += 1
-                            pbar.update(1)
-                    pending = set()
-        finally:
-            pool.shutdown(wait=False, cancel_futures=True)
+                    result = future.result()
+                except Exception as e:
+                    log.error("Step 3 error for %s: %s", trust_name, e)
+                    result = {"new": 0, "skipped": 0, "errors": 1, "strategies": {}}
+                with lock:
+                    metrics.new_filings += result.get("new", 0)
+                    metrics.skipped_filings += result.get("skipped", 0)
+                    metrics.errors += result.get("errors", 0)
+                    for strat, count in result.get("strategies", {}).items():
+                        metrics.add_strategy(strat, count)
+                    if result.get("new", 0) > 0:
+                        changed_trusts.add(trust_name)
+                    pbar.update(1)
         pbar.close()
     else:
         # Single-worker fallback
