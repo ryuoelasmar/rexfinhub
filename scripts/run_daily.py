@@ -448,6 +448,15 @@ def upload_db_to_render():
 
     try:
         print("  Preparing lean Render upload...", end=" ", flush=True)
+        # WAL checkpoint first — the watcher daemons write continuously,
+        # so .db-wal typically holds the most recent minutes of inserts.
+        # Without TRUNCATE, shutil.copy2 grabs a stale main-file snapshot
+        # and Render ends up missing all recently-added trusts/filings.
+        src = sqlite3.connect(str(db_path), isolation_level=None)
+        try:
+            src.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        finally:
+            src.close()
         shutil.copy2(db_path, render_db)
         conn = sqlite3.connect(str(render_db), isolation_level=None)
         # MINIMAL drop list — only tables the live webapp NEVER queries.
