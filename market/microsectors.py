@@ -31,6 +31,12 @@ _RELIABLE_TICKERS = {
     "SHNY", "DULL", "GDXU", "GDXD",
 }
 
+# Matured / delisted ETNs that legitimately have $0 AUM — not a staleness
+# signal. Excluded from the freshness warning.
+_DEAD_TICKERS = {
+    "FNGA",  # Matured January 8, 2038 ETN, permanently zeroed
+}
+
 # Period lookback in trading days
 _PERIOD_DAYS = {
     "fund_flow_1day": 1,
@@ -81,6 +87,36 @@ def read_overrides(xl: pd.ExcelFile) -> dict[str, dict]:
         log.warning("Failed to read MicroSectors sheets: %s", e)
         return {}
 
+    # Freshness check: the most recent row in aum_daily must have values
+    # for at least the top tickers. If the Bloomberg file was saved mid-
+    # update (file written at ~17:02 EDT, values populated over the next
+    # ~15min), dropna() would silently pick yesterday's value and under-
+    # report AUM by 5-10%. That's exactly what caused the 2026-04-14
+    # "$274M short" daily report bug.
+    stale_today = []
+    today = pd.Timestamp.now().normalize()
+    if not aum_daily.empty:
+        last_row_date = aum_daily.index[-1].normalize() if len(aum_daily) else None
+        if last_row_date is not None and last_row_date >= today - pd.Timedelta(days=1):
+            # Last row is today or yesterday — check if any reliable ticker
+            # has NaN on that row (= Bloomberg file mid-update)
+            last_row = aum_daily.iloc[-1]
+            for ticker in _RELIABLE_TICKERS:
+                if ticker in _DEAD_TICKERS:
+                    continue  # known-dead, legitimately NaN every day
+                if ticker in aum_daily.columns and pd.isna(last_row.get(ticker)):
+                    stale_today.append(ticker)
+
+    if stale_today:
+        log.warning(
+            "MicroSectors FRESHNESS: %d tickers have NaN on latest row (%s): %s — "
+            "report AUM will silently fall back to prior day. Re-run after Bloomberg "
+            "file fully populates (~17:15 EDT).",
+            len(stale_today),
+            aum_daily.index[-1].strftime("%Y-%m-%d") if len(aum_daily) else "unknown",
+            ", ".join(sorted(stale_today)),
+        )
+
     overrides = {}
     for ticker in _RELIABLE_TICKERS:
         ticker_us = f"{ticker} US"
@@ -107,6 +143,9 @@ def read_overrides(xl: pd.ExcelFile) -> dict[str, dict]:
         log.info("MicroSectors: %d tickers overridden (e.g. %s AUM=%.2fM)",
                  len(overrides), sample, sample_aum if isinstance(sample_aum, (int, float)) else 0)
 
+    # Expose the staleness report via a well-known attribute so callers can
+    # check before trusting the overrides. Keeps the signature stable.
+    overrides["__stale_tickers__"] = stale_today  # type: ignore[assignment]
     return overrides
 
 
@@ -114,6 +153,8 @@ def apply_overrides(df: pd.DataFrame, overrides: dict[str, dict]) -> pd.DataFram
     """Override AUM and flow columns for MicroSectors tickers.
 
     Works with both prefixed (t_w4.aum) and non-prefixed (aum) column names.
+    Keys starting with '__' are side-channel metadata (e.g. staleness
+    reports) and are skipped.
     """
     if not overrides:
         return df
@@ -123,6 +164,10 @@ def apply_overrides(df: pd.DataFrame, overrides: dict[str, dict]) -> pd.DataFram
 
     count = 0
     for ticker_us, vals in overrides.items():
+        if ticker_us.startswith("__"):
+            continue  # side-channel metadata, not a real ticker
+        if not isinstance(vals, dict):
+            continue
         mask = df["ticker"] == ticker_us
         if not mask.any():
             continue
@@ -134,6 +179,19 @@ def apply_overrides(df: pd.DataFrame, overrides: dict[str, dict]) -> pd.DataFram
 
     log.info("MicroSectors: applied overrides to %d tickers", count)
     return df
+
+
+def get_stale_tickers(overrides: dict) -> list[str]:
+    """Extract the staleness report from read_overrides() output.
+
+    Returns a list of ticker short-codes whose most recent AUM row was NaN
+    (i.e. Bloomberg file saved mid-update). Empty list means the data is
+    fresh. Always safe to call — returns [] if not present.
+    """
+    if not overrides:
+        return []
+    stale = overrides.get("__stale_tickers__", [])
+    return list(stale) if stale else []
 
 
 # ---------------------------------------------------------------------------

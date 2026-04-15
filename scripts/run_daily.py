@@ -41,7 +41,15 @@ NOTES_PROJECT = Path("C:/Projects/structured-notes")
 
 
 def _market_synced_today() -> bool:
-    """Check if market data was already synced from Bloomberg today (e.g. by watcher)."""
+    """Check if market data was already synced from Bloomberg today.
+
+    Looks for any completed pipeline run started today, regardless of
+    source_file. The old logic excluded source_file='auto' runs, which
+    matched every Bloomberg timer run (all of which use source_file='auto'),
+    making this always return False and forcing the daily pipeline to
+    re-run market sync — the cascade that caused 2026-04-14's disk-full
+    pipeline failure.
+    """
     from webapp.database import init_db, SessionLocal
     from sqlalchemy import text
     from datetime import date
@@ -52,7 +60,7 @@ def _market_synced_today() -> bool:
         today_str = date.today().isoformat()
         row = db.execute(text(
             "SELECT id FROM mkt_pipeline_runs "
-            "WHERE source_file != 'auto' AND started_at >= :today "
+            "WHERE status = 'completed' AND started_at >= :today "
             "ORDER BY id DESC LIMIT 1"
         ), {"today": today_str}).fetchone()
         return row is not None
@@ -543,6 +551,35 @@ def main():
     today = datetime.now().strftime("%Y-%m-%d %H:%M")
     print(f"=== REX Full Sync ({today}) ===")
 
+    # === Preflight: disk free check ===
+    # 2026-04-14: cache/web silently grew to 18 GB, filled the 38 GB VPS
+    # disk, and crashed market sync mid-INSERT with "database or disk is
+    # full" — rolling back 7k rows and aborting the whole pipeline. Abort
+    # NOW if disk is tight, before any writes. Cheap and saves an incident.
+    try:
+        import shutil as _shutil
+        _total, _used, _free = _shutil.disk_usage(str(PROJECT_ROOT))
+        _free_gb = _free / (1024**3)
+        _used_pct = 100.0 * _used / _total
+        print(f"Disk: {_free_gb:.1f} GB free ({_used_pct:.0f}% used)")
+        if _free_gb < 2.0:
+            msg = (
+                f"DISK CRITICAL: only {_free_gb:.1f} GB free ({_used_pct:.0f}% used). "
+                f"Aborting before any writes. Clear ~/rexfinhub/cache/web and retry."
+            )
+            print(msg)
+            try:
+                from etp_tracker.email_alerts import send_critical_alert
+                send_critical_alert(
+                    "Daily Pipeline Aborted: Disk Critical",
+                    f"<strong>{msg}</strong><br><br>Run: <code>rm -rf ~/rexfinhub/cache/web/*</code> on VPS.",
+                )
+            except Exception:
+                pass
+            sys.exit(2)
+    except Exception as _e:
+        print(f"  Disk check failed (non-fatal): {_e}")
+
     changed_trusts = None
     critical_ok = True  # Tracks whether critical steps (SEC, DB sync, market) succeeded
     errors = []  # Collects error descriptions for final summary
@@ -677,6 +714,36 @@ def main():
                 scrape_total_returns()
             except Exception as e:
                 print(f"  Total returns scrape failed: {e}")
+
+        # === Prebake reports ===
+        # All data is now fresh (market sync + classification + total returns).
+        # Bake the 9 HTML reports from the current VPS DB state and push them
+        # to Render's static store. Done BEFORE the DB upload so the reports
+        # and the live data arrive on Render in a consistent snapshot, and
+        # so preview = truth: what you preview on /admin/reports/preview is
+        # literally the HTML that would ship in the email.
+        print("\n[8.5/12] Pre-baking reports + uploading to Render...")
+        try:
+            import subprocess as _subp
+            _res = _subp.run(
+                [sys.executable, str(PROJECT_ROOT / "scripts" / "prebake_reports.py")],
+                cwd=str(PROJECT_ROOT),
+                timeout=600,
+                capture_output=True,
+                text=True,
+            )
+            if _res.returncode == 0:
+                # Tail the last few INFO lines so the daily log shows what baked
+                out_lines = [l for l in _res.stdout.splitlines() if "INFO" in l and ("baked" in l.lower() or "summary" in l.lower() or "uploaded" in l.lower())]
+                for line in out_lines[-12:]:
+                    print(f"  {line}")
+            else:
+                print(f"  Prebake failed (non-fatal): exit={_res.returncode}")
+                print(f"  stderr tail: {_res.stderr[-400:]}")
+                errors.append("Prebake failed")
+        except Exception as e:
+            print(f"  Prebake failed (non-fatal): {e}")
+            errors.append(f"Prebake: {e}")
 
         # === Upload phase ===
         print("\n[9/12] Compacting DB...")

@@ -13,6 +13,75 @@ except Exception:
 import os
 
 _DEFAULT_CACHE_DIR = os.environ.get("SEC_CACHE_DIR", str(Path(__file__).resolve().parent.parent / "cache" / "sec"))
+# Hard cap on cache/web total size (in MB). Above this, the oldest files
+# (by mtime) are evicted on next SECClient init. 5 GB is comfortable for
+# the watcher workload and leaves plenty of room on a 38 GB VPS disk.
+# Overridable via env for targeted tuning.
+_CACHE_MAX_MB = int(os.environ.get("SEC_CACHE_MAX_MB", "5000"))
+# Check interval — only actually walk the tree every N seconds of wall
+# clock. Prevents multiple workers from all pruning at once.
+_CACHE_PRUNE_INTERVAL_SEC = int(os.environ.get("SEC_CACHE_PRUNE_INTERVAL", "3600"))
+
+
+def _prune_web_cache(cache_dir: Path, max_mb: int) -> dict:
+    """LRU-prune cache_dir/web to stay under max_mb.
+
+    Walks the bucketed cache, totals size, and if above the cap deletes
+    oldest files (by mtime) until we're back under. Safe to call on startup
+    of every worker — races are benign because os.unlink of a missing file
+    is tolerated.
+
+    Returns a summary dict for logging: {initial_mb, evicted_files, final_mb}.
+    """
+    web = cache_dir / "web"
+    if not web.exists():
+        return {"initial_mb": 0, "evicted_files": 0, "final_mb": 0}
+
+    marker = cache_dir / ".last_prune"
+    # Skip if we pruned recently (avoids storm on parallel worker startup)
+    if marker.exists():
+        age = time.time() - marker.stat().st_mtime
+        if age < _CACHE_PRUNE_INTERVAL_SEC:
+            return {"initial_mb": 0, "evicted_files": 0, "final_mb": 0, "skipped": True}
+
+    files = []
+    total = 0
+    for p in web.rglob("*"):
+        if p.is_file():
+            try:
+                stat = p.stat()
+                files.append((stat.st_mtime, stat.st_size, p))
+                total += stat.st_size
+            except OSError:
+                continue
+
+    initial_mb = total // (1024 * 1024)
+    cap_bytes = max_mb * 1024 * 1024
+    evicted = 0
+
+    if total > cap_bytes:
+        files.sort(key=lambda x: x[0])  # oldest first
+        for mtime, size, path in files:
+            if total <= cap_bytes:
+                break
+            try:
+                path.unlink()
+                total -= size
+                evicted += 1
+            except OSError:
+                continue
+
+    try:
+        marker.parent.mkdir(parents=True, exist_ok=True)
+        marker.touch()
+    except OSError:
+        pass
+
+    return {
+        "initial_mb": initial_mb,
+        "evicted_files": evicted,
+        "final_mb": total // (1024 * 1024),
+    }
 
 
 class SECClient:
@@ -33,6 +102,20 @@ class SECClient:
         self.session.mount("http://", adapter)
         (self.cache_dir / "submissions").mkdir(parents=True, exist_ok=True)
         (self.cache_dir / "web").mkdir(parents=True, exist_ok=True)
+
+        # LRU-prune cache/web at init so we don't silently balloon to 20 GB
+        # like we did on 2026-04-14. Cheap when already under cap (hits the
+        # skipped branch via the .last_prune marker).
+        try:
+            import logging as _logging
+            summary = _prune_web_cache(self.cache_dir, _CACHE_MAX_MB)
+            if summary.get("evicted_files"):
+                _logging.getLogger(__name__).info(
+                    "SEC cache pruned: %d MB -> %d MB (evicted %d files)",
+                    summary["initial_mb"], summary["final_mb"], summary["evicted_files"],
+                )
+        except Exception:
+            pass  # prune is best-effort, never block client init
 
     def _hash_url(self, url: str) -> str:
         return hashlib.sha256(url.encode("utf-8")).hexdigest()

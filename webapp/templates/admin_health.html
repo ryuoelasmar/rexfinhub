@@ -1,0 +1,170 @@
+{% extends "base.html" %}
+{% block title %}Health — REX Admin{% endblock %}
+
+{% block content %}
+<style>
+  .hs-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 16px;
+    margin: 20px 0;
+  }
+  .hs-card {
+    background: var(--card-bg, #fff);
+    border: 1px solid var(--border, #e2e8f0);
+    border-radius: 8px;
+    padding: 16px 18px;
+  }
+  .hs-card h3 {
+    margin: 0 0 10px 0;
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--muted, #64748b);
+    font-weight: 600;
+  }
+  .hs-card.ok    { border-left: 4px solid #059669; }
+  .hs-card.warn  { border-left: 4px solid #d97706; }
+  .hs-card.fail  { border-left: 4px solid #dc2626; }
+  .hs-card.neutral { border-left: 4px solid #64748b; }
+  .hs-big {
+    font-size: 22px;
+    font-weight: 700;
+    color: #0f172a;
+    margin-bottom: 4px;
+  }
+  .hs-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 13px;
+    padding: 3px 0;
+  }
+  .hs-label { color: #64748b; }
+  .hs-value {
+    color: #0f172a;
+    font-weight: 500;
+    text-align: right;
+  }
+  .hs-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+  }
+  .hs-badge.ok { background: #d1fae5; color: #065f46; }
+  .hs-badge.warn { background: #fef3c7; color: #92400e; }
+  .hs-badge.fail { background: #fee2e2; color: #991b1b; }
+  [data-theme="dark"] .hs-card { background: #1e293b; border-color: #334155; }
+  [data-theme="dark"] .hs-big { color: #f1f5f9; }
+  [data-theme="dark"] .hs-value { color: #f1f5f9; }
+</style>
+
+<div class="header">
+  <h1>System health</h1>
+  <div class="date">Snapshot at {{ now }}</div>
+</div>
+
+<div class="hs-grid">
+
+  {# Disk #}
+  {% set disk_class = 'ok' if disk.free_gb and disk.free_gb >= 5 else ('warn' if disk.free_gb and disk.free_gb >= 2 else 'fail') %}
+  <div class="hs-card {{ disk_class }}">
+    <h3>VPS disk</h3>
+    {% if disk.error %}
+      <div class="hs-big">?</div>
+      <div class="hs-row"><span class="hs-label">error</span><span class="hs-value">{{ disk.error[:60] }}</span></div>
+    {% else %}
+      <div class="hs-big">{{ disk.free_gb }} GB free</div>
+      <div class="hs-row"><span class="hs-label">used</span><span class="hs-value">{{ disk.used_pct }}%</span></div>
+      <div class="hs-row"><span class="hs-label">total</span><span class="hs-value">{{ disk.total_gb }} GB</span></div>
+    {% endif %}
+  </div>
+
+  {# Pipeline #}
+  {% set pipe_class = 'ok' if pipeline.status == 'completed' else ('warn' if pipeline.status == 'running' else 'fail') %}
+  <div class="hs-card {{ pipe_class }}">
+    <h3>Latest market pipeline</h3>
+    {% if pipeline.id %}
+      <div class="hs-big">#{{ pipeline.id }} <span class="hs-badge {{ pipe_class }}">{{ pipeline.status }}</span></div>
+      <div class="hs-row"><span class="hs-label">started</span><span class="hs-value">{{ pipeline.age }}</span></div>
+      {% if pipeline.duration_sec %}<div class="hs-row"><span class="hs-label">duration</span><span class="hs-value">{{ pipeline.duration_sec }}s</span></div>{% endif %}
+      {% if pipeline.source_file %}<div class="hs-row"><span class="hs-label">source</span><span class="hs-value">{{ pipeline.source_file }}</span></div>{% endif %}
+      {% if pipeline.error %}<div class="hs-row"><span class="hs-label">error</span><span class="hs-value">{{ pipeline.error[:80] }}</span></div>{% endif %}
+    {% else %}
+      <div class="hs-big">none</div>
+    {% endif %}
+  </div>
+
+  {# Last send #}
+  {% set send_class = 'ok' if last_send.allowed else 'warn' %}
+  <div class="hs-card {{ send_class }}">
+    <h3>Last email send</h3>
+    {% if last_send.found %}
+      <div class="hs-big">{{ last_send.age }}</div>
+      <div class="hs-row"><span class="hs-label">subject</span><span class="hs-value">{{ (last_send.subject or '')[:40] }}</span></div>
+      <div class="hs-row"><span class="hs-label">recipients</span><span class="hs-value">{{ last_send.recipient_count }}</span></div>
+      <div class="hs-row"><span class="hs-label">allowed</span><span class="hs-value">{{ 'yes' if last_send.allowed else 'no' }}</span></div>
+    {% else %}
+      <div class="hs-big">never</div>
+    {% endif %}
+  </div>
+
+  {# Send gate #}
+  {% set gate_class = 'neutral' %}
+  <div class="hs-card {{ gate_class }}">
+    <h3>Send gate</h3>
+    {% if send_gate.exists %}
+      <div class="hs-big">
+        {% if send_gate.enabled %}<span class="hs-badge warn">OPEN</span>{% else %}<span class="hs-badge ok">LOCKED</span>{% endif %}
+      </div>
+      <div class="hs-row"><span class="hs-label">.send_enabled</span><span class="hs-value">{{ send_gate.raw }}</span></div>
+    {% else %}
+      <div class="hs-big">missing file</div>
+    {% endif %}
+  </div>
+
+  {# Watchers (SEC alert queue) #}
+  {% set w_class = 'fail' if watchers.failed > 0 else ('warn' if watchers.pending > 50 else 'ok') %}
+  <div class="hs-card {{ w_class }}">
+    <h3>Filing watchers</h3>
+    <div class="hs-big">{{ watchers.pending }} pending</div>
+    <div class="hs-row"><span class="hs-label">done</span><span class="hs-value">{{ watchers.done }}</span></div>
+    <div class="hs-row"><span class="hs-label">failed</span><span class="hs-value">{{ watchers.failed }}</span></div>
+    <div class="hs-row"><span class="hs-label">newest alert</span><span class="hs-value">{{ watchers.newest_age }}</span></div>
+  </div>
+
+  {# Live feed #}
+  <div class="hs-card neutral">
+    <h3>Live feed</h3>
+    <div class="hs-big">{{ live_feed.rows }} rows</div>
+    <div class="hs-row"><span class="hs-label">newest</span><span class="hs-value">{{ live_feed.newest_age }}</span></div>
+  </div>
+
+  {# Prebake #}
+  {% set pb_class = 'ok' if prebake.files == 9 else ('warn' if prebake.files > 0 else 'fail') %}
+  <div class="hs-card {{ pb_class }}">
+    <h3>Prebaked reports</h3>
+    <div class="hs-big">{{ prebake.files }} / 9</div>
+    {% if prebake.dir_exists %}
+      <div class="hs-row"><span class="hs-label">newest bake</span><span class="hs-value">{{ prebake.newest_age }}</span></div>
+    {% else %}
+      <div class="hs-row"><span class="hs-label">dir</span><span class="hs-value">missing</span></div>
+    {% endif %}
+  </div>
+
+  {# DB counts #}
+  <div class="hs-card neutral">
+    <h3>Database</h3>
+    <div class="hs-big">{{ db_counts.trusts_active }} trusts</div>
+    <div class="hs-row"><span class="hs-label">filings</span><span class="hs-value">{{ db_counts.filings }}</span></div>
+    <div class="hs-row"><span class="hs-label">fund statuses</span><span class="hs-value">{{ db_counts.fund_statuses }}</span></div>
+  </div>
+
+</div>
+
+<p style="font-size:12px; color:var(--muted); margin-top:20px;">
+  JSON version: <a href="/admin/health.json">/admin/health.json</a>
+</p>
+{% endblock %}
