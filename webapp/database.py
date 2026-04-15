@@ -88,6 +88,52 @@ def get_holdings_db():
         db.close()
 
 
+# --- Live feed: separate database that survives main-DB swaps ---
+#
+# Why separate: the daily /api/v1/db/upload replaces etp_tracker.db wholesale.
+# If live_feed lives in that DB, every upload wipes the rolling feed. A
+# dedicated file avoids that — the daily upload only touches etp_tracker.db,
+# so live_feed.db keeps its rows across uploads.
+LIVE_FEED_DB_PATH = PROJECT_ROOT / "data" / "live_feed.db"
+
+live_feed_engine = create_engine(
+    f"sqlite:///{LIVE_FEED_DB_PATH}",
+    connect_args={"check_same_thread": False},
+    echo=False,
+)
+
+
+@event.listens_for(live_feed_engine, "connect")
+def _set_live_feed_pragma(dbapi_connection, connection_record):
+    cursor = dbapi_connection.cursor()
+    cursor.execute("PRAGMA journal_mode=WAL")
+    cursor.execute("PRAGMA busy_timeout=30000")
+    cursor.close()
+
+
+LiveFeedSessionLocal = sessionmaker(bind=live_feed_engine)
+
+
+class LiveFeedBase(DeclarativeBase):
+    pass
+
+
+def init_live_feed_db():
+    """Create the live_feed table in its dedicated database file."""
+    LIVE_FEED_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    from webapp.models import LiveFeedItem  # noqa: F401 — registers the table
+    LiveFeedBase.metadata.create_all(bind=live_feed_engine)
+
+
+def get_live_feed_db():
+    """FastAPI dependency: yields a live-feed DB session, auto-closes."""
+    db = LiveFeedSessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
 def init_db():
     """Create all tables if they don't exist, and migrate missing columns."""
     import logging
@@ -113,7 +159,7 @@ def init_db():
         MktMasterData, MktTimeSeries, MktReportCache, MktStockData,
         MktFundClassification, MktMarketStatus, MktGlobalEtp,
         TrustRequest, DigestSubscriber,
-        FilingAlert, TrustCandidate, LiveFeedItem,
+        FilingAlert, TrustCandidate,
     )
     Base.metadata.create_all(bind=engine)
     _migrate_missing_columns()

@@ -16,6 +16,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, BackgroundTasks, 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from webapp.database import get_live_feed_db
 from webapp.dependencies import get_db
 from webapp.models import Trust, Filing, FundStatus, PipelineRun
 
@@ -632,7 +633,7 @@ def total_returns_api(
 async def live_push(
     request: Request,
     _: None = Depends(verify_api_key),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_live_feed_db),
 ):
     """Push a single filing into the live feed.
 
@@ -740,7 +741,7 @@ async def live_push(
 def live_recent(
     since: str = "",
     limit: int = 50,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_live_feed_db),
 ):
     """Poll for filings newer than `since`. No auth — this is a public feed.
 

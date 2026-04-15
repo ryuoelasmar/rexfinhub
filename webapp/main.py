@@ -182,6 +182,10 @@ async def lifespan(app: FastAPI):
     """Startup: initialize database, pre-warm all caches. Shutdown: cleanup."""
     init_db()
     log.info("Database initialized.")
+    # Live feed DB — separate file so daily DB uploads don't wipe it
+    from webapp.database import init_live_feed_db
+    init_live_feed_db()
+    log.info("Live feed database initialized (data/live_feed.db).")
     if os.environ.get("ENABLE_13F"):
         from webapp.database import init_holdings_db
         init_holdings_db()

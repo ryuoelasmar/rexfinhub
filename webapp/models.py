@@ -13,7 +13,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from webapp.database import Base, HoldingsBase
+from webapp.database import Base, HoldingsBase, LiveFeedBase
 
 
 class Trust(Base):
@@ -916,16 +916,13 @@ class TrustCandidate(Base):
     )
 
 
-class LiveFeedItem(Base):
+class LiveFeedItem(LiveFeedBase):
     """Rolling real-time feed of new filings surfaced by the atom watcher.
 
-    Separate from filing_alerts because:
-      1. Written via a lightweight per-row POST that bypasses the Render
-         DB-swap restart (which takes ~4 minutes and 502s every page).
-      2. Pruned to a rolling window (last 500 rows / 48 hours) so reads
-         are cheap and the table never grows unbounded.
-      3. Not included in the daily DB upload — live data flows through a
-         separate code path so the daily upload can't clobber fresh rows.
+    Lives in a DEDICATED database file (data/live_feed.db) so the daily
+    DB upload (which replaces etp_tracker.db wholesale) cannot wipe it.
+    That dedicated DB is managed by init_live_feed_db() / LiveFeedBase /
+    live_feed_engine in webapp/database.py.
 
     VPS single_filing_worker POSTs each successful enrichment to
     /api/v1/live/push on Render, which UPSERTs one row here.
