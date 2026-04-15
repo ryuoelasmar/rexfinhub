@@ -260,12 +260,28 @@ async def upload_db(
         shutil.move(tmp_path, str(DB_PATH))
 
         init_db()
+        # Schedule cache re-warm in the background so the upload handler
+        # can return immediately. Running _prewarm_caches() inline with a
+        # big freshly-swapped DB can take minutes, during which the POST
+        # connection times out and Render flags the worker as stuck —
+        # producing "Response ended prematurely" and a multi-minute
+        # recovery window. The background thread also catches its own
+        # failures so a broken prewarm never takes the service down.
         try:
-            from webapp.main import _prewarm_caches
-            _prewarm_caches()
+            import threading
+            def _warm():
+                try:
+                    from webapp.main import _prewarm_caches
+                    _prewarm_caches()
+                except Exception as _warm_exc:
+                    import logging
+                    logging.getLogger(__name__).warning(
+                        "Background cache re-warm failed (non-fatal): %s", _warm_exc
+                    )
+            threading.Thread(target=_warm, name="post-upload-warm", daemon=True).start()
         except Exception as e:
             import logging
-            logging.getLogger(__name__).warning("Cache re-warm after DB upload failed (non-fatal): %s", e)
+            logging.getLogger(__name__).warning("Could not schedule cache re-warm: %s", e)
 
         in_mb = total_in / 1_000_000
         out_mb = total_out / 1_000_000
