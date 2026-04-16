@@ -382,8 +382,8 @@ def main():
             from webapp.services.bbg_file import get_bloomberg_file
             bbg_path = get_bloomberg_file()
             bbg_age_hours = (datetime.now().timestamp() - bbg_path.stat().st_mtime) / 3600
-            if bbg_age_hours > 26:
-                print(f"\n  ABORT: Bloomberg file is {bbg_age_hours:.0f}h old (max 26h). Not sending stale reports.")
+            if bbg_age_hours > 12:
+                print(f"\n  ABORT: Bloomberg file is {bbg_age_hours:.0f}h old (max 12h). Not sending stale reports.")
                 print(f"  File: {bbg_path}")
                 print(f"  Update Bloomberg data and retry.")
                 sys.exit(1)
