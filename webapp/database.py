@@ -160,7 +160,7 @@ def init_db():
         MktFundClassification, MktMarketStatus, MktGlobalEtp,
         TrustRequest, DigestSubscriber,
         FilingAlert, TrustCandidate,
-        CapMProduct,
+        CapMProduct, CapMTrustAP,
     )
     Base.metadata.create_all(bind=engine)
     _migrate_missing_columns()

@@ -26,7 +26,7 @@ import pandas as pd
 from sqlalchemy import text
 
 from webapp.database import init_db, SessionLocal
-from webapp.models import CapMProduct
+from webapp.models import CapMProduct, CapMTrustAP
 
 DEFAULT_FILE = Path.home() / "Downloads" / "Capital Markets Product List .xlsx"
 
@@ -381,6 +381,103 @@ def import_capm(file_path: str, dry_run: bool = False) -> dict:
     return {"total": len(all_products), "inserted": inserted, "updated": updated}
 
 
+def read_trust_aps(wb_path: str) -> list[dict]:
+    """Read the 'Trust & APs' sheet and return a list of {trust, ap, order} rows.
+
+    The sheet lays trusts out horizontally: trust names sit on row 3 (1-indexed
+    row 4) in columns D/F/H/J (0-indexed 3, 5, 7, 9), and each trust's APs are
+    listed vertically in the same column beneath it. Blank columns (E/G/I) are
+    spacer columns used for visual separation.
+    """
+    import openpyxl
+    wb = openpyxl.load_workbook(wb_path, data_only=True)
+    ws = wb["Trust & APs"]
+
+    rows = list(ws.iter_rows(values_only=True))
+    wb.close()
+
+    # Find the trust-header row: the first row that has >= 2 non-empty cells
+    # past column C and whose contents look like trust names (contain "Trust" or "Fund").
+    header_row_idx = None
+    for i, row in enumerate(rows[:10]):
+        vals = [(_clean(c), idx) for idx, c in enumerate(row) if _clean(c)]
+        trust_like = [v for v, _ in vals if v and ("trust" in v.lower() or "fund" in v.lower())]
+        if len(trust_like) >= 2:
+            header_row_idx = i
+            break
+
+    if header_row_idx is None:
+        print("  Trust & APs: could not locate header row; skipping")
+        return []
+
+    header_row = rows[header_row_idx]
+    trust_columns: list[tuple[int, str]] = []
+    for col_idx, cell in enumerate(header_row):
+        name = _clean(cell)
+        if name:
+            trust_columns.append((col_idx, name))
+
+    records: list[dict] = []
+    for col_idx, trust_name in trust_columns:
+        order = 0
+        for row in rows[header_row_idx + 1:]:
+            if col_idx >= len(row):
+                continue
+            ap = _clean(row[col_idx])
+            if not ap:
+                continue
+            order += 1
+            records.append({
+                "trust_name": trust_name,
+                "ap_name": ap,
+                "sort_order": order,
+            })
+
+    return records
+
+
+def import_trust_aps(file_path: str, dry_run: bool = False) -> int:
+    """Import the Trust & APs sheet into capm_trust_aps. Returns rows upserted."""
+    records = read_trust_aps(file_path)
+    print(f"  Trust & APs: {len(records)} (trust, AP) rows parsed")
+
+    if not records:
+        return 0
+
+    if dry_run:
+        current = None
+        for r in records:
+            if r["trust_name"] != current:
+                current = r["trust_name"]
+                print(f"    {current}")
+            print(f"      {r['sort_order']:2d}. {r['ap_name']}")
+        return len(records)
+
+    init_db()
+    db = SessionLocal()
+    try:
+        # Replace strategy: clear existing rows, then insert fresh. The sheet
+        # is the source of truth and is small enough (< 50 rows) that a wipe-
+        # and-reload is cleaner than per-row upserts.
+        db.query(CapMTrustAP).delete()
+        for r in records:
+            db.add(CapMTrustAP(
+                trust_name=r["trust_name"],
+                ap_name=r["ap_name"],
+                sort_order=r["sort_order"],
+            ))
+        db.commit()
+        print(f"  Trust & APs: wrote {len(records)} rows")
+    except Exception as e:
+        db.rollback()
+        print(f"  Trust & APs ERROR: {e}")
+        raise
+    finally:
+        db.close()
+
+    return len(records)
+
+
 def main():
     parser = argparse.ArgumentParser(description="Import Capital Markets Product List from Excel")
     parser.add_argument("--file", type=str, default=str(DEFAULT_FILE),
@@ -395,6 +492,7 @@ def main():
         sys.exit(1)
 
     import_capm(str(file_path), dry_run=args.dry_run)
+    import_trust_aps(str(file_path), dry_run=args.dry_run)
 
 
 if __name__ == "__main__":

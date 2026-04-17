@@ -46,10 +46,13 @@ def capm_page(
     request: Request,
     suite: str | None = None,
     q: str | None = None,
+    tab: str | None = None,
     db: Session = Depends(get_db),
 ):
     """Capital Markets product list page."""
-    from webapp.models import CapMProduct
+    from webapp.models import CapMProduct, CapMTrustAP
+
+    active_tab = "trust_aps" if tab == "trust_aps" else "products"
 
     query = db.query(CapMProduct)
 
@@ -71,6 +74,17 @@ def capm_page(
         CapMProduct.suite_source.asc().nulls_last(),
         CapMProduct.ticker.asc(),
     ).all()
+
+    # Trust & APs — always loaded so the tab is instantly available
+    trust_aps = (
+        db.query(CapMTrustAP)
+        .order_by(
+            CapMTrustAP.trust_name.asc(),
+            CapMTrustAP.sort_order.asc().nulls_last(),
+            CapMTrustAP.ap_name.asc(),
+        )
+        .all()
+    )
 
     # Summary stats
     total = db.query(CapMProduct).count()
@@ -100,6 +114,9 @@ def capm_page(
 
     is_admin = request.session.get("is_admin", False)
 
+    # Count distinct trusts shown on the Trust & APs tab
+    trust_count = len({r.trust_name for r in trust_aps})
+
     return templates.TemplateResponse("capm.html", {
         "request": request,
         "products": products,
@@ -111,6 +128,9 @@ def capm_page(
         "filter_suite": suite or "",
         "filter_q": q or "",
         "is_admin": is_admin,
+        "trust_aps": trust_aps,
+        "trust_count": trust_count,
+        "active_tab": active_tab,
     })
 
 

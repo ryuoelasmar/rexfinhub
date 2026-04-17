@@ -916,6 +916,30 @@ class TrustCandidate(Base):
     )
 
 
+class CapMTrustAP(Base):
+    """Capital Markets — Trust and Authorized Participants registry.
+
+    One row per (trust, AP) pair. The source Excel sheet ("Trust & APs")
+    lays trusts out as four side-by-side columns, each with that trust's
+    authorized participants listed vertically. We normalize that into a
+    long-format table so filtering/sorting on the web is trivial.
+    """
+    __tablename__ = "capm_trust_aps"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    trust_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    ap_name: Mapped[str | None] = mapped_column(String(200))
+    sort_order: Mapped[int | None] = mapped_column(Integer)  # position within the trust's AP list
+    notes: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("trust_name", "ap_name", name="uq_capm_trust_ap"),
+        Index("idx_capm_trust_name", "trust_name"),
+    )
+
+
 class CapMProduct(Base):
     """Capital Markets product list — operational and classification data."""
     __tablename__ = "capm_products"

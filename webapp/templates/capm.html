@@ -34,6 +34,16 @@ h1 { font-size:22px; font-weight:700; color:#0f172a; margin:0 0 4px; }
 .suite-tab.active { background:#0f172a; color:#fff; border-color:#0f172a; }
 .suite-tab .count { opacity:0.7; margin-left:4px; font-size:11px; }
 
+.section-tabs { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:14px; border-bottom:1px solid #e5e7eb; padding-bottom:0; }
+.section-tab {
+  padding:8px 18px; border:1px solid #e5e7eb; border-bottom:none;
+  border-radius:6px 6px 0 0; font-size:13px; background:#f8fafc; color:#64748b;
+  text-decoration:none; font-weight:600; position:relative; top:1px;
+}
+.section-tab:hover { color:#0f172a; }
+.section-tab.active { background:#fff; color:#0f172a; border-color:#e5e7eb; }
+.section-tab .count { opacity:0.7; margin-left:6px; font-size:11px; font-weight:500; }
+
 .table-scroll { overflow-x:auto; background:#fff; border:1px solid #e5e7eb; border-radius:6px; }
 table.capm { width:100%; border-collapse:collapse; font-size:12px; }
 table.capm th {
@@ -95,6 +105,9 @@ table.capm tr:hover { background:#fafbfc; }
 [data-theme="dark"] .table-scroll { background:var(--card-bg); border-color:var(--border-subtle); }
 [data-theme="dark"] .suite-tab { background:var(--card-bg); border-color:var(--border-subtle); color:var(--text-secondary); }
 [data-theme="dark"] .suite-tab.active { background:var(--text-primary); color:var(--bg-primary); }
+[data-theme="dark"] .section-tabs { border-color:var(--border-subtle); }
+[data-theme="dark"] .section-tab { background:var(--bg-secondary); border-color:var(--border-subtle); color:var(--text-secondary); }
+[data-theme="dark"] .section-tab.active { background:var(--card-bg); color:var(--text-primary); }
 [data-theme="dark"] .modal-box { background:var(--card-bg); }
 [data-theme="dark"] .modal h2 { color:var(--text-primary); }
 [data-theme="dark"] .filter-bar input, [data-theme="dark"] .filter-bar select { background:var(--bg-secondary); border-color:var(--border-subtle); color:var(--text-primary); }
@@ -135,6 +148,18 @@ table.capm tr:hover { background:#fafbfc; }
     </div>
   </div>
 
+  <!-- Section tabs: Products | Trust & APs -->
+  <div class="section-tabs">
+    <a href="/capm/{% if filter_suite %}?suite={{ filter_suite }}{% if filter_q %}&q={{ filter_q }}{% endif %}{% elif filter_q %}?q={{ filter_q }}{% endif %}"
+       class="section-tab {% if active_tab == 'products' %}active{% endif %}">
+      Products <span class="count">{{ total }}</span>
+    </a>
+    <a href="/capm/?tab=trust_aps" class="section-tab {% if active_tab == 'trust_aps' %}active{% endif %}">
+      Trust &amp; APs <span class="count">{{ trust_count }}</span>
+    </a>
+  </div>
+
+  {% if active_tab == 'products' %}
   <!-- Suite tabs -->
   <div class="suite-tabs">
     <a href="/capm/{% if filter_q %}?q={{ filter_q }}{% endif %}" class="suite-tab {% if not filter_suite %}active{% endif %}">All <span class="count">{{ total }}</span></a>
@@ -166,16 +191,16 @@ table.capm tr:hover { background:#fafbfc; }
         <tr>
           <th class="rt-sortable" data-sort-col="0" data-sort-type="text">Ticker</th>
           <th class="rt-sortable" data-sort-col="1" data-sort-type="text">Fund Name</th>
-          <th class="rt-sortable" data-sort-col="2" data-sort-type="text">Suite</th>
-          <th class="rt-sortable" data-sort-col="3" data-sort-type="date">Inception</th>
-          <th class="rt-sortable" data-sort-col="4" data-sort-type="text">Exchange</th>
-          <th class="rt-sortable" data-sort-col="5" data-sort-type="num">CU Size</th>
-          <th class="rt-sortable" data-sort-col="6" data-sort-type="num">Fixed Fee</th>
-          <th class="rt-sortable" data-sort-col="7" data-sort-type="text">LMM</th>
-          <th class="rt-sortable" data-sort-col="8" data-sort-type="text">Custodian</th>
-          <th class="rt-sortable" data-sort-col="9" data-sort-type="text">Leverage</th>
-          <th class="rt-sortable" data-sort-col="10" data-sort-type="text">Direction</th>
-          <th class="rt-sortable" data-sort-col="11" data-sort-type="text">Underlier</th>
+          <th class="rt-sortable" data-sort-col="2" data-sort-type="text">BB Ticker</th>
+          <th class="rt-sortable" data-sort-col="3" data-sort-type="date">Inception Date</th>
+          <th class="rt-sortable" data-sort-col="4" data-sort-type="text">Trust</th>
+          <th class="rt-sortable" data-sort-col="5" data-sort-type="text">Exchange</th>
+          <th class="rt-sortable" data-sort-col="6" data-sort-type="num">CU Size</th>
+          <th class="rt-sortable" data-sort-col="7" data-sort-type="num">Fixed Fee</th>
+          <th class="rt-sortable" data-sort-col="8" data-sort-type="text">Variable Fee</th>
+          <th class="rt-sortable" data-sort-col="9" data-sort-type="text">Cut Off</th>
+          <th class="rt-sortable" data-sort-col="10" data-sort-type="text">Custodian</th>
+          <th class="rt-sortable" data-sort-col="11" data-sort-type="text">LMM</th>
           <th>Prospectus</th>
           {% if is_admin %}<th></th>{% endif %}
         </tr>
@@ -185,28 +210,16 @@ table.capm tr:hover { background:#fafbfc; }
         <tr>
           <td class="ticker-col">{{ p.ticker or '--' }}</td>
           <td class="name-col" title="{{ p.fund_name }}">{{ p.fund_name[:55] }}{% if p.fund_name|length > 55 %}...{% endif %}</td>
-          <td>
-            {% if p.suite_source %}
-              <span class="suite-pill suite-{{ p.suite_source }}">{{ p.suite_source }}</span>
-            {% else %}
-              <span class="suite-pill suite-none">--</span>
-            {% endif %}
-          </td>
+          <td>{{ p.bb_ticker or '--' }}</td>
           <td>{{ p.inception_date.strftime('%Y-%m-%d') if p.inception_date else '--' }}</td>
+          <td title="{{ p.trust or '' }}">{{ (p.trust or '--')[:28] }}{% if p.trust and p.trust|length > 28 %}...{% endif %}</td>
           <td>{{ p.exchange or '--' }}</td>
           <td data-sort="{{ p.cu_size or '' }}">{{ p.cu_size or '--' }}</td>
           <td data-sort="{{ p.fixed_fee or '' }}">{{ p.fixed_fee or '--' }}</td>
-          <td>{{ p.lmm or '--' }}</td>
+          <td>{{ p.variable_fee or '--' }}</td>
+          <td>{{ p.cut_off or '--' }}</td>
           <td>{{ p.custodian or '--' }}</td>
-          <td>{{ p.leverage or '--' }}</td>
-          <td>
-            {% if p.direction %}
-              <span class="dir-{{ p.direction }}">{{ p.direction }}</span>
-            {% else %}
-              --
-            {% endif %}
-          </td>
-          <td title="{{ p.underlying_name or '' }}">{{ (p.underlying_ticker or p.underlying_name or '--')[:20] }}</td>
+          <td>{{ p.lmm or '--' }}</td>
           <td>
             {% if p.prospectus_link %}
               <a href="{{ p.prospectus_link }}" target="_blank" rel="noopener" class="prospect-icon" title="View prospectus">PDF</a>
@@ -243,6 +256,45 @@ table.capm tr:hover { background:#fafbfc; }
     <h3>No products found</h3>
     <p>{% if filter_q or filter_suite %}Try adjusting your filters.{% else %}Run the import script to populate data.{% endif %}</p>
   </div>
+  {% endif %}
+
+  {% else %}
+  <!-- Trust & APs tab -->
+  <div class="action-bar">
+    <span style="font-size:12px; color:#64748b;">
+      {{ trust_aps|length }} authorized-participant mapping{{ '' if trust_aps|length == 1 else 's' }} across {{ trust_count }} trust{{ '' if trust_count == 1 else 's' }}
+    </span>
+  </div>
+
+  {% if trust_aps %}
+  <div class="table-scroll">
+    <table class="capm rt-table" id="trustApsTable">
+      <thead>
+        <tr>
+          <th class="rt-sortable" data-sort-col="0" data-sort-type="text">Trust</th>
+          <th class="rt-sortable" data-sort-col="1" data-sort-type="num">#</th>
+          <th class="rt-sortable" data-sort-col="2" data-sort-type="text">Authorized Participant</th>
+          <th class="rt-sortable" data-sort-col="3" data-sort-type="text">Notes</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in trust_aps %}
+        <tr>
+          <td>{{ r.trust_name }}</td>
+          <td data-sort="{{ r.sort_order or 0 }}">{{ r.sort_order or '--' }}</td>
+          <td>{{ r.ap_name or '--' }}</td>
+          <td>{{ r.notes or '--' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty-state">
+    <h3>No trust / AP data</h3>
+    <p>Run <code>python scripts/import_capm.py</code> to populate from the Excel workbook.</p>
+  </div>
+  {% endif %}
   {% endif %}
 
 </div>
