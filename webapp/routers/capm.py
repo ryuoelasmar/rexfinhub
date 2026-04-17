@@ -16,7 +16,7 @@ import logging
 from datetime import date, datetime
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, Form, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import func, or_
@@ -207,52 +207,90 @@ def export_csv(
     )
 
 
+# Whitelist of fields that /capm/update/{id} will write.
+# Maps form field name -> (CapMProduct attribute, type_coercer).
+# Anything not in this map is silently ignored — keeps injection attack
+# surface tight.
+_CAPM_UPDATE_FIELDS = {
+    "fund_name":         ("fund_name",         "str_required"),
+    "ticker":            ("ticker",            "str_or_none"),
+    "bb_ticker":         ("bb_ticker",         "str_or_none"),
+    "suite_source":      ("suite_source",      "suite_or_none"),
+    "exchange":          ("exchange",          "str_or_none"),
+    "cu_size":           ("cu_size",           "str_or_none"),
+    "fixed_fee":         ("fixed_fee",         "str_or_none"),
+    "variable_fee":      ("variable_fee",      "str_or_none"),
+    "cut_off":           ("cut_off",           "str_or_none"),
+    "custodian":         ("custodian",         "str_or_none"),
+    "lmm":               ("lmm",               "str_or_none"),
+    "direction":         ("direction",         "str_or_none"),
+    "leverage":          ("leverage",          "str_or_none"),
+    "underlying_ticker": ("underlying_ticker", "str_or_none"),
+    "underlying_name":   ("underlying_name",   "str_or_none"),
+    "inception_date":    ("inception_date",    "date"),
+    "notes":             ("notes",             "str_or_none"),
+}
+
+
+def _coerce_capm(coerce_type: str, raw: str):
+    """Coerce a raw form string into a CapMProduct attribute value."""
+    s = (raw or "").strip()
+    if coerce_type == "str_required":
+        if not s:
+            raise HTTPException(400, "Value cannot be empty")
+        return s
+    if coerce_type == "str_or_none":
+        return s or None
+    if coerce_type == "suite_or_none":
+        if not s:
+            return None
+        if s not in VALID_SUITES:
+            raise HTTPException(400, f"Invalid suite. Valid: {VALID_SUITES}")
+        return s
+    if coerce_type == "date":
+        return _parse_date(s)
+    raise HTTPException(500, f"Unknown coercer: {coerce_type}")
+
+
 @router.post("/update/{product_id}")
-def update_product(
+async def update_product(
     product_id: int,
     request: Request,
-    fund_name: str = Form(...),
-    ticker: str = Form(""),
-    suite_source: str = Form(""),
-    exchange: str = Form(""),
-    cu_size: str = Form(""),
-    fixed_fee: str = Form(""),
-    variable_fee: str = Form(""),
-    custodian: str = Form(""),
-    lmm: str = Form(""),
-    direction: str = Form(""),
-    leverage: str = Form(""),
-    underlying_ticker: str = Form(""),
-    notes: str = Form(""),
     db: Session = Depends(get_db),
 ):
-    """Admin-only: update a CapM product record."""
+    """Admin-only: update a CapM product record.
+
+    Accepts partial updates — only fields that appear in the submitted form
+    are modified. This supports inline cell-by-cell editing on the /capm/
+    page while remaining compatible with full-form submissions.
+    """
     if not request.session.get("is_admin"):
         raise HTTPException(status_code=403, detail="Admin access required")
 
     from webapp.models import CapMProduct
 
+    form = await request.form()
+    submitted = {k: v for k, v in form.items() if k in _CAPM_UPDATE_FIELDS}
+    if not submitted:
+        raise HTTPException(400, "No valid fields submitted")
+
     p = db.query(CapMProduct).filter(CapMProduct.id == product_id).first()
     if not p:
         raise HTTPException(status_code=404, detail="Product not found")
 
-    p.fund_name = fund_name
-    p.ticker = ticker or None
-    p.suite_source = suite_source or None
-    p.exchange = exchange or None
-    p.cu_size = cu_size or None
-    p.fixed_fee = fixed_fee or None
-    p.variable_fee = variable_fee or None
-    p.custodian = custodian or None
-    p.lmm = lmm or None
-    p.direction = direction or None
-    p.leverage = leverage or None
-    p.underlying_ticker = underlying_ticker or None
-    p.notes = notes or None
-    p.updated_at = datetime.utcnow()
+    for form_key, raw_val in submitted.items():
+        attr, coercer = _CAPM_UPDATE_FIELDS[form_key]
+        setattr(p, attr, _coerce_capm(coercer, raw_val if isinstance(raw_val, str) else ""))
 
+    p.updated_at = datetime.utcnow()
     db.commit()
 
-    # Redirect back with filter params preserved
-    suite_param = f"&suite={suite_source}" if suite_source else ""
+    # Inline fetch() call: return JSON rather than redirect.
+    if len(submitted) <= 2:
+        return {"ok": True, "updated": list(submitted.keys())}
+
+    # Full-form submission (legacy): redirect with filter params preserved.
+    suite_param = ""
+    if "suite_source" in submitted and submitted["suite_source"]:
+        suite_param = f"&suite={submitted['suite_source']}"
     return RedirectResponse(url=f"/capm/?msg=updated{suite_param}", status_code=302)

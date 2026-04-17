@@ -260,64 +260,99 @@ def export_csv(
     )
 
 
+# Whitelist of fields that can be updated via /update/{id}.
+# Maps form field name -> (RexProduct attribute, type_coercer).
+# Only fields in this map are writable — anything else is silently ignored.
+_REX_UPDATE_FIELDS = {
+    "name":                     ("name",                     "str_required"),
+    "status":                   ("status",                   "status"),
+    "product_suite":            ("product_suite",            "suite"),
+    "ticker":                   ("ticker",                   "str_or_none"),
+    "underlier":                ("underlier",                "str_or_none"),
+    "direction":                ("direction",                "str_or_none"),
+    "trust":                    ("trust",                    "str_or_none"),
+    "initial_filing_date":      ("initial_filing_date",      "date"),
+    "estimated_effective_date": ("estimated_effective_date", "date"),
+    "target_listing_date":      ("target_listing_date",      "date"),
+    "seed_date":                ("seed_date",                "date"),
+    "official_listed_date":     ("official_listed_date",     "date"),
+    "mgt_fee":                  ("mgt_fee",                  "float_or_none"),
+    "lmm":                      ("lmm",                      "str_or_none"),
+    "exchange":                 ("exchange",                 "str_or_none"),
+    "notes":                    ("notes",                    "str_or_none"),
+}
+
+
+def _coerce(coerce_type: str, raw: str):
+    """Coerce a raw form string into the target Python value."""
+    s = (raw or "").strip()
+    if coerce_type == "str_required":
+        if not s:
+            raise HTTPException(400, "Value cannot be empty")
+        return s
+    if coerce_type == "str_or_none":
+        return s or None
+    if coerce_type == "status":
+        if s not in VALID_STATUSES:
+            raise HTTPException(400, f"Invalid status. Valid: {VALID_STATUSES}")
+        return s
+    if coerce_type == "suite":
+        if s not in VALID_SUITES:
+            raise HTTPException(400, f"Invalid suite. Valid: {VALID_SUITES}")
+        return s
+    if coerce_type == "date":
+        return _parse_date(s)
+    if coerce_type == "float_or_none":
+        if not s:
+            return None
+        try:
+            return float(s)
+        except ValueError:
+            raise HTTPException(400, f"Invalid numeric value: {s!r}")
+    raise HTTPException(500, f"Unknown coercer: {coerce_type}")
+
+
 @router.post("/update/{product_id}")
-def update_product(
+async def update_product(
     product_id: int,
     request: Request,
-    name: str = Form(...),
-    status: str = Form(...),
-    product_suite: str = Form(...),
-    ticker: str = Form(""),
-    underlier: str = Form(""),
-    direction: str = Form(""),
-    trust: str = Form(""),
-    initial_filing_date: str = Form(""),
-    estimated_effective_date: str = Form(""),
-    target_listing_date: str = Form(""),
-    seed_date: str = Form(""),
-    official_listed_date: str = Form(""),
-    mgt_fee: str = Form(""),
-    lmm: str = Form(""),
-    exchange: str = Form(""),
-    notes: str = Form(""),
     db: Session = Depends(get_db),
 ):
-    """Update a product record — all editable fields."""
+    """Update a product record.
+
+    Accepts partial updates — only fields present in the form are modified.
+    This supports inline cell-by-cell editing on the pipeline-products page
+    while remaining compatible with full-form submissions.
+    """
     if not _check_auth(request):
+        # Inline fetch() clients want a clean 403, not a redirect.
+        if request.headers.get("accept", "").startswith("application/json") or \
+           request.headers.get("x-requested-with") == "fetch":
+            raise HTTPException(403, "Admin access required")
         return RedirectResponse(url="/admin/", status_code=302)
 
     from webapp.models import RexProduct
 
-    if status not in VALID_STATUSES:
-        raise HTTPException(400, f"Invalid status. Valid: {VALID_STATUSES}")
-    if product_suite not in VALID_SUITES:
-        raise HTTPException(400, f"Invalid suite. Valid: {VALID_SUITES}")
+    form = await request.form()
+    submitted = {k: v for k, v in form.items() if k in _REX_UPDATE_FIELDS}
+    if not submitted:
+        raise HTTPException(400, "No valid fields submitted")
 
     p = db.query(RexProduct).filter(RexProduct.id == product_id).first()
     if not p:
         raise HTTPException(404, "Product not found")
 
-    p.name = name
-    p.status = status
-    p.product_suite = product_suite
-    p.ticker = ticker or None
-    p.underlier = underlier or None
-    p.direction = direction or None
-    p.trust = trust or None
-    p.initial_filing_date = _parse_date(initial_filing_date)
-    p.estimated_effective_date = _parse_date(estimated_effective_date)
-    p.target_listing_date = _parse_date(target_listing_date)
-    p.seed_date = _parse_date(seed_date)
-    p.official_listed_date = _parse_date(official_listed_date)
-    try:
-        p.mgt_fee = float(mgt_fee) if mgt_fee else None
-    except ValueError:
-        p.mgt_fee = None
-    p.lmm = lmm or None
-    p.exchange = exchange or None
-    p.notes = notes or None
+    for form_key, raw_val in submitted.items():
+        attr, coercer = _REX_UPDATE_FIELDS[form_key]
+        setattr(p, attr, _coerce(coercer, raw_val if isinstance(raw_val, str) else ""))
+
     p.updated_at = datetime.utcnow()
     db.commit()
+
+    # If this looks like an inline fetch() call (single field, not a full form),
+    # return a tiny 200 instead of a redirect.
+    if len(submitted) <= 2:
+        return {"ok": True, "updated": list(submitted.keys())}
 
     return RedirectResponse(url="/admin/products/?msg=updated", status_code=302)
 

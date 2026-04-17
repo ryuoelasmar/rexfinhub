@@ -76,6 +76,16 @@ table.capm tr:hover { background:#fafbfc; }
 }
 .btn-edit:hover { background:#f8fafc; border-color:#1F3864; color:#0f172a; }
 
+/* Inline edit affordance (admin only) */
+.admin-edit td[data-field] { cursor:pointer; position:relative; }
+.admin-edit td[data-field]:hover { background:#eef2ff; outline:1px dashed #6366f1; outline-offset:-1px; }
+.admin-edit td[data-field] input,
+.admin-edit td[data-field] select { width:100%; box-sizing:border-box; padding:3px 6px; font-size:12px; font-family:inherit; border:1px solid #1F3864; border-radius:3px; background:#fff; color:#0f172a; }
+.edit-hint { font-size:11px; color:#64748b; margin-bottom:8px; padding:6px 10px; background:#eef2ff; border:1px solid #c7d2fe; border-radius:4px; }
+.edit-toast { position:fixed; bottom:20px; right:20px; background:#059669; color:#fff; padding:10px 16px; border-radius:4px; font-size:13px; font-weight:500; box-shadow:0 4px 12px rgba(0,0,0,0.15); z-index:2000; opacity:0; transition:opacity 0.2s; }
+.edit-toast.show { opacity:1; }
+.edit-toast.error { background:#dc2626; }
+
 .msg-banner { background:#ecfdf5; border:1px solid #10b981; border-left:3px solid #059669; border-radius:4px; padding:10px 14px; margin-bottom:16px; font-size:13px; color:#047857; }
 
 /* Edit modal */
@@ -185,8 +195,11 @@ table.capm tr:hover { background:#fafbfc; }
   </div>
 
   {% if products %}
+  {% if is_admin %}
+  <div class="edit-hint">Click any cell to edit &middot; Enter to save &middot; Esc to cancel</div>
+  {% endif %}
   <div class="table-scroll">
-    <table class="capm rt-table" id="capmTable">
+    <table class="capm rt-table {% if is_admin %}admin-edit{% endif %}" id="capmTable">
       <thead>
         <tr>
           <th class="rt-sortable" data-sort-col="0" data-sort-type="text">Ticker</th>
@@ -202,24 +215,23 @@ table.capm tr:hover { background:#fafbfc; }
           <th class="rt-sortable" data-sort-col="10" data-sort-type="text">Custodian</th>
           <th class="rt-sortable" data-sort-col="11" data-sort-type="text">LMM</th>
           <th>Prospectus</th>
-          {% if is_admin %}<th></th>{% endif %}
         </tr>
       </thead>
       <tbody>
         {% for p in products %}
-        <tr>
-          <td class="ticker-col">{{ p.ticker or '--' }}</td>
-          <td class="name-col" title="{{ p.fund_name }}">{{ p.fund_name[:55] }}{% if p.fund_name|length > 55 %}...{% endif %}</td>
-          <td>{{ p.bb_ticker or '--' }}</td>
-          <td>{{ p.inception_date.strftime('%Y-%m-%d') if p.inception_date else '--' }}</td>
+        <tr data-id="{{ p.id }}">
+          <td class="ticker-col" data-field="ticker">{{ p.ticker or '--' }}</td>
+          <td class="name-col" title="{{ p.fund_name }}" data-field="fund_name">{{ p.fund_name[:55] }}{% if p.fund_name|length > 55 %}...{% endif %}</td>
+          <td data-field="bb_ticker">{{ p.bb_ticker or '--' }}</td>
+          <td data-field="inception_date" data-field-type="date">{{ p.inception_date.strftime('%Y-%m-%d') if p.inception_date else '--' }}</td>
           <td title="{{ p.trust or '' }}">{{ (p.trust or '--')[:28] }}{% if p.trust and p.trust|length > 28 %}...{% endif %}</td>
-          <td>{{ p.exchange or '--' }}</td>
-          <td data-sort="{{ p.cu_size or '' }}">{{ p.cu_size or '--' }}</td>
-          <td data-sort="{{ p.fixed_fee or '' }}">{{ p.fixed_fee or '--' }}</td>
-          <td>{{ p.variable_fee or '--' }}</td>
-          <td>{{ p.cut_off or '--' }}</td>
-          <td>{{ p.custodian or '--' }}</td>
-          <td>{{ p.lmm or '--' }}</td>
+          <td data-field="exchange">{{ p.exchange or '--' }}</td>
+          <td data-sort="{{ p.cu_size or '' }}" data-field="cu_size">{{ p.cu_size or '--' }}</td>
+          <td data-sort="{{ p.fixed_fee or '' }}" data-field="fixed_fee">{{ p.fixed_fee or '--' }}</td>
+          <td data-field="variable_fee">{{ p.variable_fee or '--' }}</td>
+          <td data-field="cut_off">{{ p.cut_off or '--' }}</td>
+          <td data-field="custodian">{{ p.custodian or '--' }}</td>
+          <td data-field="lmm">{{ p.lmm or '--' }}</td>
           <td>
             {% if p.prospectus_link %}
               <a href="{{ p.prospectus_link }}" target="_blank" rel="noopener" class="prospect-icon" title="View prospectus">PDF</a>
@@ -227,25 +239,6 @@ table.capm tr:hover { background:#fafbfc; }
               --
             {% endif %}
           </td>
-          {% if is_admin %}
-          <td>
-            <button class="btn-edit" onclick='openEditModal({{ p.id }}, {{ {
-              "fund_name": p.fund_name or "",
-              "ticker": p.ticker or "",
-              "suite_source": p.suite_source or "",
-              "exchange": p.exchange or "",
-              "cu_size": p.cu_size or "",
-              "fixed_fee": p.fixed_fee or "",
-              "variable_fee": p.variable_fee or "",
-              "custodian": p.custodian or "",
-              "lmm": p.lmm or "",
-              "direction": p.direction or "",
-              "leverage": p.leverage or "",
-              "underlying_ticker": p.underlying_ticker or "",
-              "notes": p.notes or ""
-            } | tojson }})'>Edit</button>
-          </td>
-          {% endif %}
         </tr>
         {% endfor %}
       </tbody>
@@ -299,114 +292,109 @@ table.capm tr:hover { background:#fafbfc; }
 
 </div>
 
-<!-- Edit Modal (admin only) -->
-{% if is_admin %}
-<div class="modal" id="editModal" onclick="if(event.target===this)closeEditModal()">
-  <div class="modal-box">
-    <h2 id="editTitle">Edit Product</h2>
-    <form id="editForm" method="post">
-      <div class="modal-grid">
-        <div class="span-2">
-          <label>Fund Name</label>
-          <input type="text" name="fund_name" id="ef_fund_name" required>
-        </div>
-        <div>
-          <label>Ticker</label>
-          <input type="text" name="ticker" id="ef_ticker">
-        </div>
-        <div>
-          <label>Suite</label>
-          <select name="suite_source" id="ef_suite_source">
-            <option value="">--</option>
-            {% for s in valid_suites %}
-            <option value="{{ s }}">{{ s }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div>
-          <label>Exchange</label>
-          <input type="text" name="exchange" id="ef_exchange">
-        </div>
-        <div>
-          <label>CU Size</label>
-          <input type="text" name="cu_size" id="ef_cu_size">
-        </div>
-        <div>
-          <label>Fixed Fee</label>
-          <input type="text" name="fixed_fee" id="ef_fixed_fee">
-        </div>
-        <div>
-          <label>Variable Fee</label>
-          <input type="text" name="variable_fee" id="ef_variable_fee">
-        </div>
-        <div>
-          <label>Custodian</label>
-          <input type="text" name="custodian" id="ef_custodian">
-        </div>
-        <div>
-          <label>LMM</label>
-          <input type="text" name="lmm" id="ef_lmm">
-        </div>
-        <div>
-          <label>Direction</label>
-          <select name="direction" id="ef_direction">
-            <option value="">--</option>
-            <option value="Long">Long</option>
-            <option value="Short">Short</option>
-            <option value="Inverse">Inverse</option>
-          </select>
-        </div>
-        <div>
-          <label>Leverage</label>
-          <input type="text" name="leverage" id="ef_leverage" placeholder="2X, 3X...">
-        </div>
-        <div>
-          <label>Underlying Ticker</label>
-          <input type="text" name="underlying_ticker" id="ef_underlying_ticker">
-        </div>
-        <div class="span-2">
-          <label>Notes</label>
-          <textarea name="notes" id="ef_notes"></textarea>
-        </div>
-      </div>
-      <div class="modal-actions">
-        <button type="button" class="btn" onclick="closeEditModal()">Cancel</button>
-        <button type="submit" class="btn btn-primary">Save</button>
-      </div>
-    </form>
-  </div>
-</div>
-{% endif %}
 {% endblock %}
 
 {% block scripts %}
-{% if is_admin %}
 <script>
-function openEditModal(id, product) {
-  var form = document.getElementById('editForm');
-  form.action = '/capm/update/' + id;
-  document.getElementById('editTitle').textContent = 'Edit: ' + (product.ticker || product.fund_name);
-  document.getElementById('ef_fund_name').value = product.fund_name || '';
-  document.getElementById('ef_ticker').value = product.ticker || '';
-  document.getElementById('ef_suite_source').value = product.suite_source || '';
-  document.getElementById('ef_exchange').value = product.exchange || '';
-  document.getElementById('ef_cu_size').value = product.cu_size || '';
-  document.getElementById('ef_fixed_fee').value = product.fixed_fee || '';
-  document.getElementById('ef_variable_fee').value = product.variable_fee || '';
-  document.getElementById('ef_custodian').value = product.custodian || '';
-  document.getElementById('ef_lmm').value = product.lmm || '';
-  document.getElementById('ef_direction').value = product.direction || '';
-  document.getElementById('ef_leverage').value = product.leverage || '';
-  document.getElementById('ef_underlying_ticker').value = product.underlying_ticker || '';
-  document.getElementById('ef_notes').value = product.notes || '';
-  document.getElementById('editModal').classList.add('open');
+window._isAdmin = {% if is_admin %}true{% else %}false{% endif %};
+
+{% if is_admin %}
+function showToast(msg, isError) {
+    var t = document.createElement('div');
+    t.className = 'edit-toast' + (isError ? ' error' : '');
+    t.textContent = msg;
+    document.body.appendChild(t);
+    requestAnimationFrame(function() { t.classList.add('show'); });
+    setTimeout(function() {
+        t.classList.remove('show');
+        setTimeout(function() { t.remove(); }, 300);
+    }, 1800);
 }
-function closeEditModal() {
-  document.getElementById('editModal').classList.remove('open');
+
+function makeInlineEditable(tableSelector, updateUrl) {
+    if (!window._isAdmin) return;
+    document.querySelectorAll(tableSelector + ' tbody td[data-field]').forEach(function(td) {
+        td.addEventListener('click', function() {
+            if (td.querySelector('input, select')) return;
+            var field = td.dataset.field;
+            var fieldType = td.dataset.fieldType || 'text';
+            var rowId = td.closest('tr').dataset.id;
+            var oldDisplay = td.textContent.trim();
+            var oldVal = oldDisplay === '--' || oldDisplay === '---' ? '' : oldDisplay;
+
+            var input;
+            if (fieldType === 'select') {
+                input = document.createElement('select');
+                var opts = (td.dataset.fieldOptions || '').split('|');
+                var blank = document.createElement('option');
+                blank.value = ''; blank.textContent = '(none)';
+                input.appendChild(blank);
+                opts.forEach(function(o) {
+                    if (!o) return;
+                    var op = document.createElement('option');
+                    op.value = o; op.textContent = o;
+                    if (o === oldVal) op.selected = true;
+                    input.appendChild(op);
+                });
+            } else if (fieldType === 'date') {
+                input = document.createElement('input');
+                input.type = 'date';
+                input.value = oldVal;
+            } else {
+                input = document.createElement('input');
+                input.type = 'text';
+                input.value = oldVal;
+            }
+
+            var originalHTML = td.innerHTML;
+            td.innerHTML = '';
+            td.appendChild(input);
+            input.focus();
+            if (input.select) try { input.select(); } catch(e) {}
+
+            var saved = false;
+            var save = function() {
+                if (saved) return; saved = true;
+                var newVal = (input.value || '').trim();
+                if (newVal === oldVal) {
+                    td.innerHTML = originalHTML;
+                    return;
+                }
+                var body = new FormData();
+                body.append(field, newVal);
+                fetch(updateUrl.replace('{id}', rowId), { method: 'POST', body: body, credentials: 'same-origin' })
+                    .then(function(res) {
+                        if (res.ok) {
+                            td.textContent = newVal || '--';
+                            td.style.background = '#ecfdf5';
+                            setTimeout(function() { td.style.background = ''; }, 1200);
+                            showToast('Saved');
+                        } else {
+                            td.innerHTML = originalHTML;
+                            showToast('Save failed (' + res.status + ')', true);
+                        }
+                    })
+                    .catch(function(err) {
+                        td.innerHTML = originalHTML;
+                        showToast('Error: ' + err, true);
+                    });
+            };
+            var cancel = function() {
+                if (saved) return; saved = true;
+                td.innerHTML = originalHTML;
+            };
+            input.addEventListener('blur', save);
+            input.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+                if (e.key === 'Escape') { e.preventDefault(); cancel(); }
+            });
+        });
+    });
 }
-document.addEventListener('keydown', function(e) {
-  if (e.key === 'Escape') closeEditModal();
+
+document.addEventListener('DOMContentLoaded', function() {
+    makeInlineEditable('#capmTable', '/capm/update/{id}');
 });
-</script>
 {% endif %}
+</script>
 {% endblock %}
