@@ -1097,55 +1097,69 @@ def _render_daily_html(data: dict, dashboard_url: str = "", custom_message: str 
             + _render_filings_block("Updated Fund Filings", updated_groups, _BLUE, None)
         )
 
-    # --- Upcoming Effectiveness ---
+    # --- Upcoming Effectiveness (REX-only, formatted like fund filings) ---
     pending = data.get("pending", [])
     pending_section = ""
     if pending:
-        # Group by trust, REX first
-        from collections import OrderedDict
-        rex_trusts = OrderedDict()
-        other_trusts = OrderedDict()
+        from collections import OrderedDict as _OD
+        # Group by trust, preserving the date-sorted order from the query.
+        pending_by_trust: _OD = _OD()
         for p in pending:
             trust = p.get("trust_name", "Unknown")
-            is_rex = p.get("is_rex", False)
-            target = rex_trusts if is_rex else other_trusts
-            if trust not in target:
-                target[trust] = {"is_rex": is_rex, "funds": []}
-            target[trust]["funds"].append(p)
+            if trust not in pending_by_trust:
+                pending_by_trust[trust] = {"is_rex": p.get("is_rex", False), "funds": []}
+            pending_by_trust[trust]["funds"].append(p)
 
-        pending_html_parts = []
-        for trust_groups, section_label in [(rex_trusts, "REX"), (other_trusts, None)]:
-            for trust_name, info in trust_groups.items():
-                is_rex = info["is_rex"]
-                funds = info["funds"]
-                trust_disp = _esc(trust_name)
-                if len(trust_disp) > 30:
-                    trust_disp = trust_disp[:27] + "..."
-                badge = ""
-                if is_rex:
-                    badge = (
-                        f' <span style="background:{_BLUE};color:{_WHITE};'
-                        f'padding:1px 5px;border-radius:3px;font-size:8px;'
-                        f'font-weight:700;vertical-align:middle;">REX</span>'
-                    )
-                trust_header = (
-                    f'<tr><td colspan="2" style="padding:6px 8px 2px;font-size:12px;'
-                    f'font-weight:700;color:{_NAVY};">{trust_disp}{badge}</td></tr>'
+        pending_items = []
+        for trust_name, info in pending_by_trust.items():
+            trust_disp = _esc(trust_name)
+            if len(trust_disp) > 35:
+                trust_disp = trust_disp[:32] + "..."
+            badge_html = (
+                f' <span style="background:{_BLUE};color:{_WHITE};'
+                f'padding:1px 6px;border-radius:3px;font-size:9px;'
+                f'font-weight:700;vertical-align:middle;">REX</span>'
+            )
+            trust_label = f"{trust_disp}{badge_html}"
+
+            funds = info["funds"]
+            # Category tags (count each fund once by canonical category)
+            cats: dict[str, int] = {}
+            name_date_pairs = []
+            for f in funds:
+                nm = (f.get("fund_name") or "").strip()
+                cat = _classify_fund(nm)
+                if cat != "other":
+                    cats[cat] = cats.get(cat, 0) + 1
+                eff = f.get("effective_date") or ""
+                name_date_pairs.append((nm, eff))
+
+            cat_tags = ""
+            for cat, cnt in sorted(cats.items(), key=lambda x: x[1], reverse=True):
+                cat_color = {"leveraged": "#e74c3c", "income": "#27ae60", "crypto": "#f39c12"}.get(cat, _GRAY)
+                cat_tags += (
+                    f' <span style="display:inline-block;padding:1px 5px;border-radius:3px;'
+                    f'font-size:9px;color:{_WHITE};background:{cat_color};'
+                    f'margin-left:2px;">{cnt} {cat}</span>'
                 )
-                pending_html_parts.append(trust_header)
-                for fund in funds:
-                    name = _esc(fund.get("fund_name", ""))
-                    if len(name) > 45:
-                        name = name[:42] + "..."
-                    eff_date = _esc(fund.get("effective_date", ""))
-                    pending_html_parts.append(
-                        f'<tr>'
-                        f'<td style="padding:2px 8px 2px 20px;border-bottom:1px solid {_BORDER};'
-                        f'font-size:11px;">{name}</td>'
-                        f'<td style="padding:2px 8px;border-bottom:1px solid {_BORDER};'
-                        f'font-size:10px;text-align:right;color:{_ORANGE};font-weight:600;">{eff_date}</td>'
-                        f'</tr>'
-                    )
+
+            # Summary line: each fund with its effective date in parens
+            summary_chunks = []
+            for nm, eff in name_date_pairs:
+                if eff:
+                    summary_chunks.append(f"{_esc(nm)} ({_esc(eff)})")
+                else:
+                    summary_chunks.append(_esc(nm))
+            summary = ", ".join(summary_chunks) if summary_chunks else f"{len(funds)} funds pending"
+
+            pending_items.append(
+                f'<tr><td style="{_row_rex}">'
+                f'<div style="font-weight:600;margin-bottom:2px;">'
+                f'{trust_label} <span style="font-weight:400;color:{_GRAY};font-size:10px;">PENDING</span>'
+                f'{cat_tags}</div>'
+                f'<div style="font-size:11px;color:{_GRAY};">{summary}</div>'
+                f'</td></tr>'
+            )
 
         pending_section = f"""
 <tr><td style="padding:15px 30px 10px;">
@@ -1154,7 +1168,7 @@ def _render_daily_html(data: dict, dashboard_url: str = "", custom_message: str 
     Upcoming Effectiveness <span style="font-weight:400;color:{_GRAY};font-size:11px;">({len(pending)})</span>
   </div>
   <table width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;">
-    {''.join(pending_html_parts)}
+    {''.join(pending_items)}
   </table>
 </td></tr>"""
 
@@ -1418,8 +1432,11 @@ def _gather_daily_data(db_session, since_date: str | None = None,
 
     filing_groups.sort(key=lambda x: x["_sort"], reverse=True)
 
-    # --- Upcoming launches: PENDING with future expected date ---
-    # Scoped to trusts that actually have ETF products
+    # --- Upcoming Effectiveness: REX-only PENDING funds with future effective date ---
+    # Filter at the fund-name level because some trusts (ETF Opportunities Trust)
+    # host both REX and non-REX issuers. A name must start with REX/T-REX/REX-Osprey
+    # or match MicroSectors (BMO partnership) to qualify.
+    from sqlalchemy import or_, not_
     pending_rows = db_session.execute(
         select(
             FundStatus.fund_name, FundStatus.effective_date,
@@ -1430,7 +1447,25 @@ def _gather_daily_data(db_session, since_date: str | None = None,
         .where(FundStatus.effective_date.isnot(None))
         .where(FundStatus.effective_date >= date_type.today())
         .where(Trust.id.in_(select(_etf_trust_ids.c.trust_id)))
-        .order_by(Trust.is_rex.desc(), FundStatus.effective_date.asc())
+        .where(or_(
+            FundStatus.fund_name.ilike("REX %"),
+            FundStatus.fund_name.ilike("T-REX %"),
+            FundStatus.fund_name.ilike("REX-OSPREY%"),
+            FundStatus.fund_name.ilike("REX-Osprey%"),
+            FundStatus.fund_name.ilike("REX- Osprey%"),
+            FundStatus.fund_name.ilike("MICROSECTORS%"),
+            FundStatus.fund_name.ilike("MicroSectors%"),
+        ))
+        .where(not_(or_(
+            FundStatus.fund_name.ilike("Tuttle%"),
+            FundStatus.fund_name.ilike("TUTTLE%"),
+            FundStatus.fund_name.ilike("Defiance%"),
+            FundStatus.fund_name.ilike("GSR %"),
+            FundStatus.fund_name.ilike("Hedgeye%"),
+            FundStatus.fund_name.ilike("GRANOLA%"),
+            FundStatus.fund_name.ilike("Osprey Bitcoin%"),
+        )))
+        .order_by(FundStatus.effective_date.asc(), Trust.is_rex.desc())
     ).all()
 
     pending = []
