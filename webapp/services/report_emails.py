@@ -224,6 +224,9 @@ def _wrap_email(title: str, accent: str, body: str,
     REX Financial Intelligence Hub &middot; Data sourced from Bloomberg L.P. and REX Shares, LLC
   </div>
   <div style="font-size:10px;color:{_GRAY};margin-top:4px;font-style:italic;">
+    Note: AUM figures are 1 business day lagged (Bloomberg reports T-1 AUM).
+  </div>
+  <div style="font-size:10px;color:{_GRAY};margin-top:4px;font-style:italic;">
     Note: ETN data reflects proprietary share/price data where available. Bloomberg-reported ETN figures may differ.
   </div>
 </td></tr>

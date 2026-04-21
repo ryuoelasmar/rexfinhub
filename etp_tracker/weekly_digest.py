@@ -1170,6 +1170,9 @@ def _render_footer(week_ending: str) -> str:
     To unsubscribe, contact relasmar@rexfin.com
   </div>
   <div style="font-size:9px;color:{_GRAY};text-align:center;margin-top:3px;font-style:italic;">
+    Note: AUM figures are 1 business day lagged (Bloomberg reports T-1 AUM).
+  </div>
+  <div style="font-size:9px;color:{_GRAY};text-align:center;margin-top:3px;font-style:italic;">
     Note: ETN data reflects proprietary share/price data where available. Bloomberg-reported ETN figures may differ.
   </div>
 </td></tr>"""

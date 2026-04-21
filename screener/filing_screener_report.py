@@ -109,6 +109,11 @@ def _render_picks(picks: list) -> str:
 <body style="margin:0; padding:20px; background:#f1f5f9; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
 <div style="max-width:{_MAX_WIDTH}; margin:0 auto; background:{_WHITE}; border-radius:6px; border:1px solid {_BORDER}; overflow:hidden;">
 {body}
+<div style="padding:12px 20px; border-top:1px solid {_BORDER}; background:#f8fafc;">
+  <div style="font-size:10px; color:{_GRAY}; text-align:center; font-style:italic;">
+    Note: AUM figures are 1 business day lagged (Bloomberg reports T-1 AUM).
+  </div>
+</div>
 </div></body></html>"""
 
 
