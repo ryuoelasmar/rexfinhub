@@ -186,8 +186,18 @@ def _date_mm_dd(data: dict) -> str:
 # Email envelope
 # ---------------------------------------------------------------------------
 def _wrap_email(title: str, accent: str, body: str,
-                dashboard_url: str = "", date_str: str = "") -> str:
+                dashboard_url: str = "", date_str: str = "",
+                show_branding: bool = True) -> str:
     dash_link = _esc(dashboard_url) if dashboard_url else ""
+
+    # Branding line: hidden for external-facing reports (e.g. autocall update
+    # that ships to RBC/CAIS) where "REX Financial Intelligence Hub" feels
+    # off-brand alongside partner content.
+    branding_html = (
+        f'  <div style="font-size:11px;color:{_GRAY};">\n'
+        f'    REX Financial Intelligence Hub &middot; Data sourced from Bloomberg L.P. and REX Shares, LLC\n'
+        f'  </div>\n'
+    ) if show_branding else ""
 
     cta = ""
     if dash_link:
@@ -220,10 +230,7 @@ def _wrap_email(title: str, accent: str, body: str,
 
 <!-- Footer -->
 <tr><td style="padding:16px 30px;border-top:1px solid {_BORDER};text-align:center;">
-  <div style="font-size:11px;color:{_GRAY};">
-    REX Financial Intelligence Hub &middot; Data sourced from Bloomberg L.P. and REX Shares, LLC
-  </div>
-  <div style="font-size:10px;color:{_GRAY};margin-top:4px;font-style:italic;">
+{branding_html}  <div style="font-size:10px;color:{_GRAY};margin-top:4px;font-style:italic;">
     Note: AUM figures are 1 business day lagged (Bloomberg reports T-1 AUM).
   </div>
   <div style="font-size:10px;color:{_GRAY};margin-top:4px;font-style:italic;">
@@ -682,12 +689,16 @@ def _flow_bars(inflows: list[dict], outflows: list[dict], n: int = 10) -> str:
 
 
 def _issuer_share_bars(issuers: list[dict], n: int = 6) -> str:
-    """Render a stacked market share bar for top issuers."""
+    """Render a stacked market share bar for top issuers.
+
+    Legend uses inline-block spans inside a wrapping <div> so long issuer
+    names don't run off the right edge of the 640px email container.
+    """
     if not issuers:
         return ""
     top = issuers[:n]
     segments = ""
-    legend = ""
+    legend_items = []
     for i, iss in enumerate(top):
         share = iss.get("market_share", 0)
         color = _CHART_COLORS[i % len(_CHART_COLORS)]
@@ -695,23 +706,27 @@ def _issuer_share_bars(issuers: list[dict], n: int = 6) -> str:
         if share >= 1:
             segments += (f'<td style="width:{share:.1f}%;background:{color};height:22px;'
                          f'font-size:0;line-height:0;">&nbsp;</td>')
-        legend += (f'<td style="padding:3px 6px 3px 0;font-size:10px;color:{_NAVY};'
-                   f'white-space:nowrap;">'
-                   f'<span style="display:inline-block;width:8px;height:8px;'
-                   f'background:{color};border-radius:2px;margin-right:3px;'
-                   f'vertical-align:middle;"></span>'
-                   f'{name} ({share:.1f}%)</td>')
+        legend_items.append(
+            f'<span style="display:inline-block;padding:3px 10px 3px 0;font-size:10px;'
+            f'color:{_NAVY};white-space:nowrap;">'
+            f'<span style="display:inline-block;width:8px;height:8px;'
+            f'background:{color};border-radius:2px;margin-right:3px;'
+            f'vertical-align:middle;"></span>'
+            f'{name} ({share:.1f}%)</span>'
+        )
 
     other_share = 100 - sum(iss.get("market_share", 0) for iss in top)
     if other_share > 1:
         segments += (f'<td style="width:{other_share:.1f}%;background:{_BORDER};height:22px;'
                      f'font-size:0;line-height:0;">&nbsp;</td>')
-        legend += (f'<td style="padding:3px 6px 3px 0;font-size:10px;color:{_GRAY};'
-                   f'white-space:nowrap;">'
-                   f'<span style="display:inline-block;width:8px;height:8px;'
-                   f'background:{_BORDER};border-radius:2px;margin-right:3px;'
-                   f'vertical-align:middle;"></span>'
-                   f'Other ({other_share:.1f}%)</td>')
+        legend_items.append(
+            f'<span style="display:inline-block;padding:3px 10px 3px 0;font-size:10px;'
+            f'color:{_GRAY};white-space:nowrap;">'
+            f'<span style="display:inline-block;width:8px;height:8px;'
+            f'background:{_BORDER};border-radius:2px;margin-right:3px;'
+            f'vertical-align:middle;"></span>'
+            f'Other ({other_share:.1f}%)</span>'
+        )
 
     return (
         f'<tr><td style="padding:8px 30px 4px;">'
@@ -720,37 +735,40 @@ def _issuer_share_bars(issuers: list[dict], n: int = 6) -> str:
         f'<table width="100%" cellpadding="0" cellspacing="0" border="0" '
         f'style="border-collapse:collapse;border-radius:6px;overflow:hidden;">'
         f'<tr>{segments}</tr></table>'
-        f'<table cellpadding="0" cellspacing="0" border="0" style="margin-top:6px;">'
-        f'<tr>{legend}</tr></table>'
+        f'<div style="margin-top:6px;line-height:1.6;">{"".join(legend_items)}</div>'
         f'</td></tr>'
     )
 
 
 def _flow_share_bar(issuers: list[dict], n: int = 6) -> str:
-    """Market share bar with REX highlighted in green, others in blue/gray."""
+    """Market share bar with REX highlighted in green, others in blue/gray.
+
+    Legend wraps via inline-block spans to prevent "Other" + long issuer
+    names from overflowing the right edge of the 640px email container.
+    """
     if not issuers:
         return ""
     top = issuers[:n]
     segments_html = ""
-    legend = ""
+    legend_items: list[str] = []
     for i, iss in enumerate(top):
         share = iss.get("market_share", 0)
         is_rex = iss.get("is_rex", False)
         color = _REX_GREEN if is_rex else _CHART_COLORS[i % len(_CHART_COLORS)]
         name = _esc(iss["issuer"][:18])
-        label_style = f"font-weight:700;" if is_rex else ""
+        weight = "font-weight:700;" if is_rex else ""
         if share >= 1:
             segments_html += (
                 f'<td style="width:{share:.1f}%;background:{color};height:22px;'
                 f'font-size:0;line-height:0;">&nbsp;</td>'
             )
-        legend += (
-            f'<td style="padding:3px 6px 3px 0;font-size:10px;color:{_NAVY};'
-            f'white-space:nowrap;{label_style}">'
+        legend_items.append(
+            f'<span style="display:inline-block;padding:3px 10px 3px 0;font-size:10px;'
+            f'color:{_NAVY};white-space:nowrap;{weight}">'
             f'<span style="display:inline-block;width:8px;height:8px;'
             f'background:{color};border-radius:2px;margin-right:3px;'
             f'vertical-align:middle;"></span>'
-            f'{name} ({share:.1f}%)</td>'
+            f'{name} ({share:.1f}%)</span>'
         )
 
     other_share = 100 - sum(iss.get("market_share", 0) for iss in top)
@@ -759,13 +777,13 @@ def _flow_share_bar(issuers: list[dict], n: int = 6) -> str:
             f'<td style="width:{other_share:.1f}%;background:{_BORDER};height:22px;'
             f'font-size:0;line-height:0;">&nbsp;</td>'
         )
-        legend += (
-            f'<td style="padding:3px 6px 3px 0;font-size:10px;color:{_GRAY};'
-            f'white-space:nowrap;">'
+        legend_items.append(
+            f'<span style="display:inline-block;padding:3px 10px 3px 0;font-size:10px;'
+            f'color:{_GRAY};white-space:nowrap;">'
             f'<span style="display:inline-block;width:8px;height:8px;'
             f'background:{_BORDER};border-radius:2px;margin-right:3px;'
             f'vertical-align:middle;"></span>'
-            f'Other ({other_share:.1f}%)</td>'
+            f'Other ({other_share:.1f}%)</span>'
         )
 
     return (
@@ -775,8 +793,7 @@ def _flow_share_bar(issuers: list[dict], n: int = 6) -> str:
         f'<table width="100%" cellpadding="0" cellspacing="0" border="0" '
         f'style="border-collapse:collapse;border-radius:6px;overflow:hidden;">'
         f'<tr>{segments_html}</tr></table>'
-        f'<table cellpadding="0" cellspacing="0" border="0" style="margin-top:6px;">'
-        f'<tr>{legend}</tr></table>'
+        f'<div style="margin-top:6px;line-height:1.6;">{"".join(legend_items)}</div>'
         f'</td></tr>'
     )
 
@@ -1105,61 +1122,11 @@ def _flow_highlights(data: dict) -> list[str]:
 # Flow-specific metrics (differentiate from L&I/Income reports)
 # ---------------------------------------------------------------------------
 def _flow_metrics_row(cat_kpis: dict, rex_kpis: dict, issuers: list[dict]) -> str:
-    """Compact flow metrics row: capture rate + flow rank + flow momentum.
+    """Flow Capture / Momentum KPI strip — REMOVED per 2026-04-20 review.
 
-    These are flow-specific insights not found in L&I/Income reports.
+    Share Rank + Flow Rank badges are shown in the suite title instead.
     """
-    metrics = []
-
-    # 1. Flow capture rate: REX 1W flow / category 1W flow
-    cat_flow_raw = cat_kpis.get("flow_1w_raw", 0)
-    rex_flow_raw = rex_kpis.get("flow_1w_raw", 0)
-    if cat_flow_raw and abs(cat_flow_raw) > 0 and rex_kpis.get("count", 0) > 0:
-        capture = rex_flow_raw / cat_flow_raw * 100
-        if capture != 0:
-            sign = "+" if capture >= 0 else ""
-            cap_color = _GREEN if capture >= 0 else _RED
-            metrics.append(
-                f'<td style="padding:6px 10px;text-align:center;">'
-                f'<div style="font-size:14px;font-weight:700;color:{cap_color};">{sign}{capture:.1f}%</div>'
-                f'<div style="font-size:8px;color:{_GRAY};text-transform:uppercase;">Flow Capture</div></td>'
-            )
-
-    # 2. Flow Rank and Share Rank are now shown as badges in the suite title.
-    #    Removed from metrics row to avoid duplication.
-
-    # 3. Flow momentum: 1W vs 1M direction
-    rex_1w = rex_kpis.get("flow_1w_raw", 0)
-    rex_1m = rex_kpis.get("flow_1m_raw", 0)
-    if rex_kpis.get("count", 0) > 0 and (rex_1w or rex_1m):
-        if rex_1w > 0 and rex_1m > 0:
-            momentum = "Sustained"
-            mom_color = _GREEN
-        elif rex_1w > 0 and rex_1m <= 0:
-            momentum = "Turning"
-            mom_color = _GREEN
-        elif rex_1w <= 0 and rex_1m > 0:
-            momentum = "Fading"
-            mom_color = _ORANGE
-        else:
-            momentum = "Weak"
-            mom_color = _RED
-        metrics.append(
-            f'<td style="padding:6px 10px;text-align:center;">'
-            f'<div style="font-size:14px;font-weight:700;color:{mom_color};">{momentum}</div>'
-            f'<div style="font-size:8px;color:{_GRAY};text-transform:uppercase;">Momentum</div></td>'
-        )
-
-    if not metrics:
-        return ""
-
-    return (
-        f'<tr><td style="padding:6px 30px 4px;">'
-        f'<table width="100%" cellpadding="0" cellspacing="0" border="0" '
-        f'style="background:{_LIGHT};border-radius:6px;border:1px solid {_BORDER};">'
-        f'<tr>{"".join(metrics)}</tr>'
-        f'</table></td></tr>'
-    )
+    return ""
 
 
 # ---------------------------------------------------------------------------
@@ -1763,17 +1730,9 @@ def build_autocall_email(dashboard_url: str = "", db=None) -> tuple[str, list]:
         f'</div></td></tr>'
     )
 
-    html = _wrap_email(title, _NAVY, body, dashboard_url, date_str)
-    # Strip footer — this is an external report
-    html = html.replace(
-        f'<!-- Footer -->\n<tr><td style="padding:16px 30px;border-top:1px solid {_BORDER};text-align:center;">\n'
-        f'  <div style="font-size:11px;color:{_GRAY};">\n'
-        f'    REX Financial Intelligence Hub &middot; Data sourced from Bloomberg L.P. and REX Shares, LLC\n'
-        f'  </div>\n'
-        f'  <div style="font-size:10px;color:{_GRAY};margin-top:4px;font-style:italic;">\n'
-        f'    Note: ETN data reflects proprietary share/price data where available. Bloomberg-reported ETN figures may differ.\n'
-        f'  </div>\n'
-        f'</td></tr>', '')
+    # External report (ships to RBC/CAIS): drop the "REX Financial Intelligence
+    # Hub" branding line. Keep AUM T-1 and ETN methodology notes.
+    html = _wrap_email(title, _NAVY, body, dashboard_url, date_str, show_branding=False)
     return html, []
 
 

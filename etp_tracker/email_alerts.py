@@ -844,9 +844,12 @@ def _daily_highlights_box(bullets: list[str]) -> str:
 
 
 def _daily_highlights(data: dict) -> list[str]:
-    """Generate 3-5 executive highlights for the daily filing report.
+    """Generate executive highlights for the daily filing report.
 
-    Focused on market-wide ETP activity; REX-specific KPIs live on the REX dashboard.
+    Focus: actual new fund names filed today, market-wide snapshot, and
+    recent launches. The old "N trusts filed" + "X went effective" counts
+    were removed — they're abstract and the full filings section already
+    lists every trust.
     """
     bullets = []
     snapshot = data.get("market_snapshot")
@@ -861,28 +864,33 @@ def _daily_highlights(data: dict) -> list[str]:
         if aum_fmt:
             bullets.append(f"ETP market: {count:,} active products, {aum_fmt} AUM ({flow_1d} 1D net flow)")
 
-    # 2. New launches (7d)
+    # 2. NEW fund filings today (series_ids never seen in any prior 485 filing).
+    # Show actual fund names, newest first. Cap the listed names at 6 so the
+    # highlights block stays scannable; the full list lives in the Filings section.
+    filing_groups = data.get("filing_groups", [])
+    new_funds: list[str] = []
+    for fg in filing_groups:
+        if not fg.get("is_new"):
+            continue
+        # relevant_funds (leveraged/income/crypto) come first, then others
+        for nm in fg.get("relevant_funds", []):
+            if nm and nm not in new_funds:
+                new_funds.append(nm)
+        for nm in fg.get("other_funds", []):
+            if nm and nm not in new_funds:
+                new_funds.append(nm)
+    if new_funds:
+        preview = ", ".join(new_funds[:6])
+        extra = len(new_funds) - 6
+        if extra > 0:
+            preview = f"{preview} (+{extra} more)"
+        bullets.append(f"New fund filings today: {preview}")
+
+    # 3. New launches (7d)
     launches = data.get("launches", [])
     if launches:
         tickers = ", ".join(l.get("ticker", "?") for l in launches[:4] if l.get("ticker"))
         bullets.append(f"{len(launches)} new ETP launches this week ({tickers})")
-
-    # 3. Filing activity
-    filing_groups = data.get("filing_groups", [])
-    total_trusts = len(filing_groups)
-    if total_trusts > 0:
-        bullets.append(f"{total_trusts} trusts filed 485 forms today")
-
-    # 4. Effective / Pending status
-    newly_effective = data.get("newly_effective_1d", 0)
-    total_pending = data.get("total_pending", 0)
-    if newly_effective > 0 or total_pending > 0:
-        parts = []
-        if newly_effective > 0:
-            parts.append(f"{newly_effective:,} fund(s) went effective today")
-        if total_pending > 0:
-            parts.append(f"{total_pending:,} pending effectiveness")
-        bullets.append(" | ".join(parts))
 
     return bullets[:5]
 

@@ -1957,6 +1957,10 @@ _FLOW_SUITES = [
         "rex_suites": ["Autocallable"],
         "peer_category": "Income - Index/Basket/ETF Based",
         "peer_name_filter": r"(?i)autocall",
+        # OR match: funds classified as cc_category=Autocallable (e.g. SBAR US,
+        # Simplify Barrier Income ETF — product is an autocallable structure but
+        # name doesn't contain "autocall").
+        "peer_cc_category": "Autocallable",
     },
     # --- Thematic ---
     {
@@ -2087,6 +2091,12 @@ def get_flow_report(db: Session | None = None) -> dict:
                 peer_mask = peer_mask & master["fund_name"].str.contains(
                     name_filter, case=False, na=False
                 )
+            # OR override: a fund tagged with peer_cc_category (e.g. Autocallable)
+            # should qualify even if its name doesn't match the text filter.
+            cc_cat = suite_cfg.get("peer_cc_category")
+            if cc_cat and "cc_category" in master.columns:
+                cc_mask = (master["cc_category"] == cc_cat) & active_etf_mask
+                peer_mask = peer_mask | cc_mask
         else:
             peer_mask = rex_suite_mask  # fallback: just REX funds
         peer_df = master[peer_mask]

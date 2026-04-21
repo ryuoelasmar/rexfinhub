@@ -1036,6 +1036,8 @@ def _render_etp_overview(kpis: dict, rex_df: pd.DataFrame, master: pd.DataFrame)
         f'</td></tr>'
     )
 
+    # Market-wide only — REX KPIs live on the REX dashboard, not in the
+    # competitive intel email.
     return title_html + _dual_kpi_box(
         market_row=[
             ("Active ETPs", f'{total_count:,}'),
@@ -1043,12 +1045,7 @@ def _render_etp_overview(kpis: dict, rex_df: pd.DataFrame, master: pd.DataFrame)
             ("1W Flow", _fmtf(total_flow_1w), total_flow_1w >= 0),
             ("1M Flow", _fmtf(total_flow_1m), total_flow_1m >= 0),
         ],
-        rex_row=[
-            ("REX Funds", str(num_products)),
-            ("REX AUM", total_aum_fmt),
-            ("REX 1W Flow", flow_1w_fmt, flow_1w_val >= 0),
-            ("REX 1M Flow", flow_1m_fmt, flow_1m_val >= 0),
-        ],
+        rex_row=None,
     )
 
 
@@ -1221,50 +1218,41 @@ def _weekly_highlights(market: dict | None, filing: dict) -> list[str]:
     """Generate 3-5 executive highlights for the weekly report."""
     bullets = []
 
-    # 1. REX AUM + products (use pre-formatted strings)
-    if market:
-        kpis = market.get("kpis", {})
-        aum_fmt = kpis.get("total_aum_fmt", kpis.get("aum_fmt", ""))
-        products = kpis.get("num_products", kpis.get("count", 0))
-        flow_fmt = kpis.get("flow_1w_fmt", "")
-        if aum_fmt:
-            bullets.append(f"REX AUM: {aum_fmt} across {products} products ({flow_fmt} 1W net flow)")
+    # Market-focused highlights — REX-specific KPIs live on the dashboard.
 
-    # 2. Filing activity
+    # 1. Market-wide ETP snapshot
+    if market:
+        master_df = market.get("master", pd.DataFrame())
+        if not master_df.empty:
+            m = master_df.copy()
+            mkt_col = next((c for c in m.columns if c.lower().strip() == "market_status"), None)
+            ft_col = next((c for c in m.columns if c.lower().strip() == "fund_type"), None)
+            if mkt_col:
+                m = m[m[mkt_col] == "ACTV"]
+            if ft_col:
+                m = m[m[ft_col].isin(["ETF", "ETN"])]
+            if "ticker_clean" in m.columns:
+                m = m.drop_duplicates(subset=["ticker_clean"], keep="first")
+            total_aum = float(m["t_w4.aum"].sum()) if "t_w4.aum" in m.columns else 0
+            flow_1w = float(m["t_w4.fund_flow_1week"].sum()) if "t_w4.fund_flow_1week" in m.columns else 0
+            if total_aum:
+                def _fmta(v):
+                    if abs(v) >= 1000: return f"${v/1000:,.1f}B"
+                    if abs(v) >= 1: return f"${v:.1f}M"
+                    return f"${v:.2f}M"
+                sign = "+" if flow_1w >= 0 else ""
+                bullets.append(
+                    f"ETP market: {len(m):,} active products, {_fmta(total_aum)} AUM "
+                    f"({sign}{_fmta(flow_1w)} 1W net flow)"
+                )
+
+    # 2. Filing activity (this week)
     filings = filing.get("fund_filings", 0)
     effective = filing.get("newly_effective", 0)
     if filings > 0:
         bullets.append(f"{filings:,} fund filings this week, {effective:,} newly effective")
 
-    # 3. Top performing REX fund
-    if market:
-        perf = market.get("perf_metrics", {})
-        winners = perf.get("return_1w", {}).get("best5", [])
-        if winners:
-            w = winners[0]
-            bullets.append(
-                f"{w.get('ticker', '')}: {w.get('value_fmt', '')} 1W return -- top REX performer"
-            )
-
-    # 4. Largest REX flow mover
-    if market:
-        rex_df = market.get("rex_df", pd.DataFrame())
-        _flow_col = "t_w4.fund_flow_1week" if "t_w4.fund_flow_1week" in rex_df.columns else "fund_flow_1week"
-        if not rex_df.empty and _flow_col in rex_df.columns:
-            top = rex_df.loc[rex_df[_flow_col].abs().idxmax()]
-            flow_val = top.get(_flow_col, 0)
-            if abs(flow_val) > 0:
-                ticker = top.get("ticker_clean", "")
-                sign = "+" if flow_val >= 0 else ""
-                if abs(flow_val) >= 1_000:
-                    fmt = f"{sign}${flow_val / 1_000:.1f}B"
-                elif abs(flow_val) >= 1:
-                    fmt = f"{sign}${flow_val:.1f}M"
-                else:
-                    fmt = f"{sign}${flow_val:.2f}M"
-                bullets.append(f"{ticker}: {fmt} 1W flow -- top REX mover")
-
-    # 5. Pending funds
+    # 3. Pending funds across tracked trusts
     pending = filing.get("pending_funds", 0)
     if pending > 0:
         bullets.append(f"{pending:,} funds pending effectiveness across tracked trusts")
