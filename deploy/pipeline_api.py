@@ -197,6 +197,194 @@ def upload_render(_: None = Depends(verify_key)):
     return _run_in_background("upload-render", _do)
 
 
+# ---------------------------------------------------------------------------
+# Classification passthrough — Render admin calls these so the writes land on
+# the VPS (source of truth for rules + pipeline), not on Render's ephemeral
+# filesystem where they get clobbered by the nightly DB upload.
+# ---------------------------------------------------------------------------
+
+@app.post("/pipeline/classification/approve/{proposal_id}")
+def classification_approve(proposal_id: int, _: None = Depends(verify_key)):
+    """Approve a ClassificationProposal on the VPS: write to data/rules/*.csv
+    and mark the proposal status=approved. Writes here propagate back to
+    Render on the next DB upload.
+    """
+    import json as _json
+    from webapp.database import init_db, SessionLocal
+    from webapp.models import ClassificationProposal
+    from tools.rules_editor.classify_engine import apply_classifications
+
+    init_db()
+    db = SessionLocal()
+    try:
+        p = db.query(ClassificationProposal).filter(
+            ClassificationProposal.id == proposal_id
+        ).first()
+        if not p:
+            raise HTTPException(404, f"Proposal {proposal_id} not found")
+        if p.status != "pending":
+            return {"status": "already_resolved", "prior_status": p.status,
+                    "ticker": p.ticker}
+
+        candidate = {
+            "ticker": p.ticker,
+            "etp_category": p.proposed_category,
+            "attributes": _json.loads(p.attributes_json or "{}"),
+        }
+        result = apply_classifications([candidate])
+
+        p.status = "approved"
+        p.reviewed_at = datetime.utcnow()
+        db.commit()
+        return {"status": "approved", "ticker": p.ticker,
+                "category": p.proposed_category, "applied": result}
+    finally:
+        db.close()
+
+
+@app.post("/pipeline/classification/reject/{proposal_id}")
+def classification_reject(proposal_id: int, _: None = Depends(verify_key)):
+    """Mark a ClassificationProposal rejected on the VPS."""
+    from webapp.database import init_db, SessionLocal
+    from webapp.models import ClassificationProposal
+
+    init_db()
+    db = SessionLocal()
+    try:
+        p = db.query(ClassificationProposal).filter(
+            ClassificationProposal.id == proposal_id
+        ).first()
+        if not p:
+            raise HTTPException(404, f"Proposal {proposal_id} not found")
+        if p.status != "pending":
+            return {"status": "already_resolved", "prior_status": p.status,
+                    "ticker": p.ticker}
+        p.status = "rejected"
+        p.reviewed_at = datetime.utcnow()
+        db.commit()
+        return {"status": "rejected", "ticker": p.ticker}
+    finally:
+        db.close()
+
+
+# ---------------------------------------------------------------------------
+# One-click "prepare daily reports" — runs the full chain and test-sends every
+# report to a single recipient so the operator can review without touching
+# production distribution lists.
+# ---------------------------------------------------------------------------
+
+@app.post("/pipeline/prepare-daily")
+def prepare_daily(_: None = Depends(verify_key)):
+    """Pull Bloomberg → market sync → prebake → Render upload → test-send to
+    relasmar@rexfin.com. One button, background task, single status report.
+    """
+    def _do():
+        os.environ["SEC_CACHE_DIR"] = str(PROJECT_ROOT / "cache" / "sec")
+        logs: list[str] = []
+
+        # 1. Bloomberg pull from SharePoint
+        try:
+            from webapp.services.graph_files import download_bloomberg_from_sharepoint
+            path = download_bloomberg_from_sharepoint()
+            if not path:
+                logs.append("bloomberg pull FAILED (download returned None)")
+                return " | ".join(logs)
+            logs.append("bloomberg pulled")
+        except Exception as e:
+            logs.append(f"bloomberg pull ERROR: {e}")
+            return " | ".join(logs)
+
+        # 2. Market sync into DB
+        from webapp.database import init_db, SessionLocal
+        from webapp.services.market_sync import sync_market_data
+        init_db()
+        db = SessionLocal()
+        try:
+            r = sync_market_data(db)
+            logs.append(f"market_sync {r.get('master_rows', 0)} rows")
+        except Exception as e:
+            logs.append(f"market_sync ERROR: {e}")
+        finally:
+            db.close()
+
+        # 3. Prebake all 9 reports + upload each to Render
+        try:
+            proc = subprocess.run(
+                [sys.executable, str(PROJECT_ROOT / "scripts" / "prebake_reports.py")],
+                cwd=str(PROJECT_ROOT), capture_output=True, text=True, timeout=1500,
+            )
+            logs.append(f"prebake rc={proc.returncode}")
+        except Exception as e:
+            logs.append(f"prebake ERROR: {e}")
+
+        # 4. DB upload to Render (so the admin site sees new classifications etc.)
+        try:
+            from scripts.run_daily import upload_db_to_render
+            upload_db_to_render()
+            logs.append("db uploaded")
+        except Exception as e:
+            logs.append(f"db upload ERROR: {e}")
+
+        # 5. Test-send every report to relasmar only (bypass gate + production list)
+        try:
+            from etp_tracker.email_alerts import (
+                _send_html_digest, build_digest_html_from_db,
+            )
+            from etp_tracker.weekly_digest import build_weekly_digest_html
+            from webapp.services.report_emails import (
+                build_li_email, build_cc_email, build_flow_email, build_autocall_email,
+            )
+            date_str = datetime.now().strftime("%m/%d/%Y")
+            dash = "https://rexfinhub.com"
+
+            # Open gate briefly so graph_email's internal gate passes.
+            gate = PROJECT_ROOT / "config" / ".send_enabled"
+            original = gate.read_text() if gate.exists() else "false"
+            gate.write_text("true")
+
+            try:
+                init_db()
+                _db = SessionLocal()
+                try:
+                    reports = [
+                        ("REX Daily ETP Report",            "daily",    lambda: (build_digest_html_from_db(_db, dashboard_url=dash, edition="daily"), [])),
+                        ("REX Weekly ETP Report",           "weekly",   lambda: (build_weekly_digest_html(_db, dashboard_url=dash), [])),
+                        ("REX ETP Leverage & Inverse Report","li",      lambda: build_li_email(dashboard_url=dash, db=_db)),
+                        ("REX ETP Income Report",           "income",   lambda: build_cc_email(dashboard_url=dash, db=_db)),
+                        ("REX ETP Flow Report",             "flow",     lambda: build_flow_email(dashboard_url=dash, db=_db)),
+                        ("Autocallable ETF Weekly Update",  "autocall", lambda: build_autocall_email(dashboard_url=dash, db=_db)),
+                    ]
+                    sent = 0
+                    failed: list[str] = []
+                    for title, edition, builder in reports:
+                        try:
+                            html, images = builder()
+                            ok = _send_html_digest(
+                                html_body=html, recipients=["relasmar@rexfin.com"],
+                                subject_override=f"[TEST] {title}: {date_str}",
+                                images=images, edition=edition,
+                            )
+                            if ok:
+                                sent += 1
+                            else:
+                                failed.append(title)
+                        except Exception as e:
+                            failed.append(f"{title}({e})")
+                    logs.append(f"test-sent {sent}/{len(reports)} to relasmar")
+                    if failed:
+                        logs.append(f"send fails: {', '.join(failed)}")
+                finally:
+                    _db.close()
+            finally:
+                gate.write_text(original)
+        except Exception as e:
+            logs.append(f"test-send ERROR: {e}")
+
+        return " | ".join(logs)
+
+    return _run_in_background("prepare-daily", _do)
+
+
 @app.post("/pipeline/recipients/add")
 def add_recipient_api(
     email: str, list_type: str, _: None = Depends(verify_key)

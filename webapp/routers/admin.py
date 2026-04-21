@@ -618,9 +618,41 @@ def classification_scan(request: Request, db: Session = Depends(get_db)):
 def classification_approve(
     request: Request, proposal_id: int, db: Session = Depends(get_db)
 ):
-    """Approve a classification proposal — writes to fund_mapping.csv + attributes CSV."""
+    """Approve a classification proposal.
+
+    On Render, this delegates to the VPS API so the writes hit the real rules
+    CSVs + the authoritative DB. Render's local writes would be wiped by the
+    nightly DB upload from VPS. Locally, still writes directly.
+    """
     if not _is_admin(request):
         return RedirectResponse("/admin/", status_code=302)
+
+    if _ON_RENDER:
+        result = _call_vps(f"/pipeline/classification/approve/{proposal_id}")
+        if not result:
+            return RedirectResponse("/admin/?cls_error=vps_unreachable", status_code=303)
+        status = result.get("status", "error")
+        if status == "approved":
+            # Reflect on Render DB too so the UI updates immediately; the next
+            # DB upload from VPS will make this canonical.
+            try:
+                from webapp.models import ClassificationProposal
+                p = db.query(ClassificationProposal).filter(
+                    ClassificationProposal.id == proposal_id
+                ).first()
+                if p:
+                    p.status = "approved"
+                    p.reviewed_at = datetime.utcnow()
+                    db.commit()
+            except Exception:
+                pass
+            return RedirectResponse(
+                f"/admin/?cls_approved={result.get('ticker', proposal_id)}",
+                status_code=303,
+            )
+        return RedirectResponse(f"/admin/?cls_error={status}", status_code=303)
+
+    # Local dev path (not Render) — write directly.
     try:
         import json as _json
         from webapp.models import ClassificationProposal
@@ -634,13 +666,11 @@ def classification_approve(
         if proposal.status != "pending":
             return RedirectResponse("/admin/?cls_error=already_resolved", status_code=303)
 
-        # Build candidate dict matching apply_classifications() input format
         candidate = {
             "ticker": proposal.ticker,
             "etp_category": proposal.proposed_category,
             "attributes": _json.loads(proposal.attributes_json or "{}"),
         }
-
         apply_classifications([candidate])
 
         proposal.status = "approved"
@@ -658,9 +688,35 @@ def classification_approve(
 def classification_reject(
     request: Request, proposal_id: int, db: Session = Depends(get_db)
 ):
-    """Reject a classification proposal."""
+    """Reject a classification proposal.
+
+    On Render, delegates to the VPS API (authoritative). Locally, writes direct.
+    """
     if not _is_admin(request):
         return RedirectResponse("/admin/", status_code=302)
+
+    if _ON_RENDER:
+        result = _call_vps(f"/pipeline/classification/reject/{proposal_id}")
+        if not result:
+            return RedirectResponse("/admin/?cls_error=vps_unreachable", status_code=303)
+        status = result.get("status", "error")
+        if status == "rejected":
+            try:
+                from webapp.models import ClassificationProposal
+                p = db.query(ClassificationProposal).filter(
+                    ClassificationProposal.id == proposal_id
+                ).first()
+                if p:
+                    p.status = "rejected"
+                    p.reviewed_at = datetime.utcnow()
+                    db.commit()
+            except Exception:
+                pass
+            return RedirectResponse(
+                f"/admin/?cls_rejected={result.get('ticker', proposal_id)}",
+                status_code=303,
+            )
+        return RedirectResponse(f"/admin/?cls_error={status}", status_code=303)
 
     try:
         from webapp.models import ClassificationProposal
@@ -678,6 +734,21 @@ def classification_reject(
         log.error("Classification reject failed: %s", e, exc_info=True)
         from urllib.parse import quote
         return RedirectResponse(f"/admin/?cls_error=reject&msg={quote(str(e)[:120])}", status_code=303)
+
+
+@router.post("/prepare-daily")
+def prepare_daily(request: Request):
+    """One-click daily prep: Bloomberg pull + market sync + prebake + upload
+    + test-send every report to relasmar@rexfin.com.
+
+    Runs in background on VPS. Returns immediately with a status hint.
+    """
+    if not _is_admin(request):
+        return RedirectResponse("/admin/", status_code=302)
+    result = _call_vps("/pipeline/prepare-daily")
+    if result and result.get("status") in ("started", "ok"):
+        return RedirectResponse("/admin/?prep=started", status_code=303)
+    return RedirectResponse("/admin/?prep=error", status_code=303)
 
 
 @router.post("/classification/batch")
