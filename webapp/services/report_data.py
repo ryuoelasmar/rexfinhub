@@ -1010,11 +1010,17 @@ def _compute_email_segment(df: pd.DataFrame, data_aum: pd.DataFrame,
     issuers.sort(key=lambda x: x["aum"], reverse=True)
 
     # Top 10 / Bottom 10 by 1W flow
-    # Small categories (<= 10 funds): show ALL funds regardless of flow direction
-    # so zero-flow funds stay visible (e.g., Thematic: BMAX/DADS/JEDI often at 0).
+    # Small categories (<= 12 funds): show EVERY fund in the peer group.
+    # NaN flow is coerced to 0 so funds with no flow reporting still appear
+    # (e.g., Autocall: SBAR/GraniteShares often have no 1W flow this week).
     # Large categories: top inflows (>0) + top outflows (<0), no overlap.
-    sorted_df = df.sort_values("fund_flow_1week", ascending=False)
-    if len(df) <= 10:
+    _SMALL_CAT_THRESHOLD = 12
+    if len(df) <= _SMALL_CAT_THRESHOLD:
+        _df = df.copy()
+        if "fund_flow_1week" in _df.columns:
+            _df["fund_flow_1week"] = _df["fund_flow_1week"].fillna(0)
+        sorted_df = _df.sort_values("fund_flow_1week", ascending=False)
+        # "top10" = every fund with flow >= 0 (includes exactly-zero funds).
         top10 = _segment_fund_rows(
             sorted_df[sorted_df["fund_flow_1week"] >= 0],
             total_aum,
@@ -1030,6 +1036,7 @@ def _compute_email_segment(df: pd.DataFrame, data_aum: pd.DataFrame,
             total_aum,
         )
     else:
+        sorted_df = df.sort_values("fund_flow_1week", ascending=False)
         inflow_df = sorted_df[sorted_df["fund_flow_1week"] > 0].head(10)
         top10 = _segment_fund_rows(inflow_df, total_aum)
         top10_tickers = set(inflow_df["ticker_clean"].tolist()) if "ticker_clean" in inflow_df.columns else set()
