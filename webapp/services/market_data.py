@@ -356,14 +356,19 @@ def _is_actv(df: pd.DataFrame) -> pd.Series:
 def get_kpis(df: pd.DataFrame) -> dict:
     """Calculate standard KPIs from a filtered dataframe (values in $M).
 
-    Product count uses ACTV filter (excludes liquidated/delisted).
-    AUM/flow totals include all funds (liquidated = $0 anyway).
+    All KPIs (count AND AUM/flow totals) apply the ACTV filter. Liquidated
+    funds ("LIQU") can still carry residual AUM for days after delisting —
+    including them over-reports total AUM (~$16M on 2026-04-21). Pending
+    ("PEND") funds are zero-AUM pre-launch, harmless to include, but keeping
+    the filter tight here makes the exclusion rule consistent.
     """
-    total_aum = float(df["t_w4.aum"].sum()) if "t_w4.aum" in df.columns else 0.0
-    flow_1w = float(df["t_w4.fund_flow_1week"].sum()) if "t_w4.fund_flow_1week" in df.columns else 0.0
-    flow_1m = float(df["t_w4.fund_flow_1month"].sum()) if "t_w4.fund_flow_1month" in df.columns else 0.0
-    flow_3m = float(df["t_w4.fund_flow_3month"].sum()) if "t_w4.fund_flow_3month" in df.columns else 0.0
-    actv_count = int(_is_actv(df).sum())
+    actv_mask = _is_actv(df)
+    actv_df = df[actv_mask]
+    total_aum = float(actv_df["t_w4.aum"].sum()) if "t_w4.aum" in actv_df.columns else 0.0
+    flow_1w = float(actv_df["t_w4.fund_flow_1week"].sum()) if "t_w4.fund_flow_1week" in actv_df.columns else 0.0
+    flow_1m = float(actv_df["t_w4.fund_flow_1month"].sum()) if "t_w4.fund_flow_1month" in actv_df.columns else 0.0
+    flow_3m = float(actv_df["t_w4.fund_flow_3month"].sum()) if "t_w4.fund_flow_3month" in actv_df.columns else 0.0
+    actv_count = int(actv_mask.sum())
     aum_fmt = _fmt_currency(total_aum)
     return {
         "total_aum": total_aum,
@@ -1938,6 +1943,7 @@ def get_aum_goals(db: Session) -> dict | None:
             .filter(
                 MktMasterData.is_rex == True,
                 MktMasterData.aum.isnot(None),
+                MktMasterData.market_status == "ACTV",
             )
             .group_by(MktMasterData.rex_suite)
             .all()
@@ -1960,6 +1966,7 @@ def get_aum_goals(db: Session) -> dict | None:
                     MktMasterData.is_rex == True,
                     MktMasterData.aum.isnot(None),
                     MktMasterData.rex_suite == "Equity Premium Income",
+                    MktMasterData.market_status == "ACTV",
                 )
                 .all()
             )
