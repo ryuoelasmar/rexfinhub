@@ -88,3 +88,7 @@ dmypy.json
 
 # Orchestrator worktrees
 .worktrees/
+
+# Runtime state (added 2026-04-22, Phase A.5 cleanup)
+cache/
+config/.send_enabled

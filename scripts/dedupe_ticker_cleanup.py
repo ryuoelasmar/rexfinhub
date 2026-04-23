@@ -391,6 +391,7 @@ def fix_extractions(
 
     total_null = 0
     log_entries: list[dict] = []
+    mode = "applied" if commit else "proposed"
 
     before_tickers = (
         db.query(FundExtraction)
@@ -402,6 +403,7 @@ def fix_extractions(
         for ext in g["null_rows"]:
             log_entries.append({
                 "kind": "fund_extraction_within_filing",
+                "mode": mode,
                 "trust_name": g["trust_name"],
                 "filing_id": g["filing_id"],
                 "accession_number": g["accession_number"],
@@ -421,6 +423,7 @@ def fix_extractions(
         for ext, filing in g["null_pairs"]:
             log_entries.append({
                 "kind": "fund_extraction_within_trust",
+                "mode": mode,
                 "trust_name": g["trust_name"],
                 "series_id": g["series_id"],
                 "ticker_removed": ext.class_symbol,
@@ -486,10 +489,12 @@ def fix_fund_status(
         .count()
     )
 
+    mode = "applied" if commit else "proposed"
     for g in groups:
         for row in g["null_rows"]:
             log_entries.append({
                 "kind": "fund_status",
+                "mode": mode,
                 "trust_name": g["trust_name"],
                 "ticker_removed": row.ticker,
                 "fund_status_id": row.id,
