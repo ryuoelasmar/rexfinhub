@@ -1080,6 +1080,33 @@ class CboeScanRun(Base):
     )
 
 
+class CboeKnownActive(Base):
+    """All US-listed securities pulled from public sources (NASDAQ screeners,
+    NASDAQ Trader symbol files, SEC EDGAR). Used to split CBOE "taken" rows
+    into truly-active listings vs reservations-without-listings (the intel).
+
+    `base_ticker` is the alpha-only prefix (1-4 chars) used to join against
+    cboe_symbols.ticker. Tickers whose base alpha exceeds 4 chars are skipped
+    (CBOE only exposes 1-4 letter symbols)."""
+    __tablename__ = "cboe_known_active"
+
+    full_ticker: Mapped[str] = mapped_column(String(20), primary_key=True)
+    base_ticker: Mapped[str] = mapped_column(String(4), nullable=False)
+    name: Mapped[str | None] = mapped_column(String(300))
+    sec_type: Mapped[str | None] = mapped_column(String(20))  # stock | etf | other
+    exchange: Mapped[str | None] = mapped_column(String(50))
+    sector: Mapped[str | None] = mapped_column(String(100))
+    industry: Mapped[str | None] = mapped_column(String(100))
+    market_cap: Mapped[float | None] = mapped_column(Float)
+    source: Mapped[str] = mapped_column(String(40), nullable=False)
+    refreshed_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+    __table_args__ = (
+        Index("idx_cboe_known_active_base", "base_ticker"),
+        Index("idx_cboe_known_active_source", "source"),
+    )
+
+
 class LiveFeedItem(LiveFeedBase):
     """Rolling real-time feed of new filings surfaced by the atom watcher.
 

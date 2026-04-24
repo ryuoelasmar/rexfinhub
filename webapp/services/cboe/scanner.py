@@ -71,7 +71,7 @@ class CboeScanner:
     ) -> bool | None:
         headers = {
             "User-Agent": USER_AGENT,
-            "Cookie": f"sessionid={self.cookie}",
+            "Cookie": self.cookie,
             "Accept": "application/json",
         }
         backoff = BASE_BACKOFF

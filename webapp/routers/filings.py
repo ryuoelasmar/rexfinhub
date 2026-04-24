@@ -35,6 +35,20 @@ router = APIRouter()
 templates = Jinja2Templates(directory="webapp/templates")
 log = logging.getLogger(__name__)
 
+
+def _et_time(dt) -> str:
+    """Format a naive UTC datetime as ET ('YYYY-MM-DD HH:MM ET'). Empty string for None."""
+    if dt is None:
+        return ""
+    from datetime import timezone
+    from zoneinfo import ZoneInfo
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(ZoneInfo("America/New_York")).strftime("%Y-%m-%d %H:%M ET")
+
+
+templates.env.filters["et_time"] = _et_time
+
 PROSPECTUS_FORMS = ["485APOS", "485BPOS", "485BXT", "497", "497K"]
 _DATE_RANGE_MAP = {"7": 7, "30": 30, "90": 90, "365": 365}
 
@@ -1050,6 +1064,14 @@ def filings_symbols(
     from webapp.services.cboe.cross_reference import (
         enriched_rows, last_scan, summary_counts,
     )
+    from webapp.services.cboe.live import is_ticker_query, live_check
+
+    # If the search box holds a clean 1-4 letter ticker, hit CBOE live and
+    # upsert before querying — guarantees the row reflects right-now state
+    # rather than whatever the last bulk scan caught.
+    live_refresh: dict | None = None
+    if is_ticker_query(q):
+        live_refresh = live_check(q.strip().upper())
 
     length_int: int | None = None
     if length in ("1", "2", "3", "4"):
@@ -1094,5 +1116,6 @@ def filings_symbols(
         "sort": sort,
         "counts": counts,
         "last_scan": last,
+        "live_refresh": live_refresh,
         "base_qs": base_qs,
     })

@@ -3,10 +3,9 @@ Description=REX FinHub CBOE Symbol Reservation Scanner Timer (daily 03:00 ET)
 
 [Timer]
 # VPS timezone set to America/New_York. Runs in the dead zone before any
-# other pipeline activity (Bloomberg pull = 17:15, daily report = 17:45,
-# bulk-sync = Sun 03:00 — give that one priority on Sunday too).
-# Daily run scans 1-3 letter combos + previously-available + a rolling
-# 50k 4-letter batch (~20k tickers total at default concurrency=10).
+# other pipeline activity (Bloomberg pull = 17:15, daily report = 17:45).
+# Full sweep of all 475k 1-4 letter combos in ~45 min, preceded by a
+# ~30 sec refresh of the NASDAQ + SEC EDGAR known-active universe.
 OnCalendar=Mon..Sun 03:00:00
 Persistent=true
 

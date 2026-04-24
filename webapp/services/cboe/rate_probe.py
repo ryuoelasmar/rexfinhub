@@ -33,7 +33,7 @@ async def _fetch(
 ) -> tuple[int, bool]:
     headers = {
         "User-Agent": USER_AGENT,
-        "Cookie": f"sessionid={cookie}",
+        "Cookie": cookie,
         "Accept": "application/json",
     }
     try:

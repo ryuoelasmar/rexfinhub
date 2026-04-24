@@ -10,11 +10,18 @@
     <div style="font-size:13px; color:#94a3b8;">
       CBOE issuer portal availability across the 1-4 letter ticker universe.
       {% if last_scan %}
-        Last scan: <span style="color:#475569;">{{ last_scan.started_at.strftime('%Y-%m-%d %H:%M UTC') if last_scan.started_at else '-' }}</span>
+        Last scan: <span style="color:#475569;">{{ last_scan.started_at | et_time or '-' }}</span>
         ({{ last_scan.tier or 'tier?' }}, {{ '{:,}'.format(last_scan.tickers_checked or 0) }} tickers,
         {{ last_scan.state_changes_detected or 0 }} flips, status: {{ last_scan.status }}).
       {% else %}
         <span style="color:#94a3b8;">No scans yet.</span>
+      {% endif %}
+      {% if live_refresh %}
+        {% if live_refresh.ok %}
+          &nbsp;·&nbsp;<span style="color:#059669;">Live refresh ✓ at {{ live_refresh.checked_at | et_time }}</span>
+        {% else %}
+          &nbsp;·&nbsp;<span style="color:#dc2626;">Live refresh failed: {{ live_refresh.error }}</span>
+        {% endif %}
       {% endif %}
     </div>
   </div>
@@ -120,7 +127,7 @@
         <td style="padding:7px 12px; color:#475569;">{{ row.issuer or '' }}</td>
         <td style="padding:7px 12px; color:#475569;">{{ row.exchange or '' }}</td>
         <td style="padding:7px 12px; color:#475569;">{{ row.category or '' }}</td>
-        <td style="padding:7px 12px; color:#94a3b8; font-family:'JetBrains Mono', ui-monospace, monospace; font-size:12px;">{{ row.last_checked_at.strftime('%Y-%m-%d %H:%M') if row.last_checked_at else '' }}</td>
+        <td style="padding:7px 12px; color:#94a3b8; font-family:'JetBrains Mono', ui-monospace, monospace; font-size:12px;">{{ row.last_checked_at | et_time }}</td>
       </tr>
       {% else %}
       <tr>

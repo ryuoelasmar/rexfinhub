@@ -1,5 +1,5 @@
 [Unit]
-Description=REX FinHub CBOE Symbol Reservation Scanner (daily tier)
+Description=REX FinHub CBOE Symbol Reservation Scanner (full sweep + known-active refresh)
 After=network-online.target
 Wants=network-online.target
 
@@ -8,9 +8,13 @@ Type=oneshot
 User=jarvis
 WorkingDirectory=/home/jarvis/rexfinhub
 EnvironmentFile=/home/jarvis/rexfinhub/config/.env
-ExecStart=/home/jarvis/venv/bin/python scripts/run_cboe_scan.py --tier daily
-# 6h cap is generous: daily tier should complete in ~30-45 min at concurrency=10
-# and stays well under that even on slower rungs.
+# 1) Refresh the NASDAQ + SEC EDGAR known-active universe (~30 sec).
+#    Used to split CBOE-taken symbols into "active listing" vs "reserved
+#    by competitor" (the intel signal).
+ExecStart=/home/jarvis/venv/bin/python scripts/refresh_cboe_known_active.py
+# 2) Full sweep of the entire 1-4 letter ticker universe (475,254 symbols).
+#    At observed CBOE throughput (~180 req/s), runs in ~45 minutes.
+ExecStart=/home/jarvis/venv/bin/python scripts/run_cboe_scan.py --tier full
 TimeoutStartSec=21600
 StandardOutput=journal
 StandardError=journal
