@@ -15,6 +15,10 @@ ExecStart=/home/jarvis/venv/bin/python scripts/refresh_cboe_known_active.py
 # 2) Full sweep of the entire 1-4 letter ticker universe (475,254 symbols).
 #    At observed CBOE throughput (~180 req/s), runs in ~45 minutes.
 ExecStart=/home/jarvis/venv/bin/python scripts/run_cboe_scan.py --tier full
+# 3) Ship the fresh DB to Render immediately. Otherwise CBOE data would
+#    sit on the VPS until the 17:45 ET daily-pipeline upload — up to
+#    14 hours of staleness for no good reason.
+ExecStart=/home/jarvis/venv/bin/python scripts/run_daily.py --upload
 TimeoutStartSec=21600
 StandardOutput=journal
 StandardError=journal
