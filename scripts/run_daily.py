@@ -683,8 +683,8 @@ def main():
         except Exception as e:
             print(f"  Archive failed: {e}")
 
-        # === Bloomberg file freshness check ===
-        print("\n[5/12] Checking Bloomberg file freshness...")
+        # === Bloomberg file freshness check + force-archive if missing ===
+        print("\n[5/12] Checking Bloomberg file freshness + archiving today's snapshot...")
         try:
             from screener.config import DATA_FILE as _bbg
             _bbg_mtime = datetime.fromtimestamp(_bbg.stat().st_mtime)
@@ -698,6 +698,27 @@ def main():
                 print(f"  Reports will use stale data. Check OneDrive sync.")
             else:
                 print(f"  OK: fresh data from today")
+
+            # Force SharePoint pull + archive if today's history snapshot is missing.
+            # Required for the L&I recommender backtest — snapshots are the time-series
+            # ground truth. Independent of the market-sync skip below.
+            today_str = datetime.now().strftime("%Y-%m-%d")
+            history_file = _bbg.parent / "history" / f"bloomberg_daily_file_{today_str}.xlsm"
+            if not history_file.exists():
+                print(f"  No archive for {today_str} yet — pulling from SharePoint...")
+                try:
+                    from webapp.services.graph_files import download_bloomberg_from_sharepoint
+                    pulled = download_bloomberg_from_sharepoint()
+                    if pulled and history_file.exists():
+                        print(f"  Archived: {history_file.name}")
+                    else:
+                        print(f"  WARNING: archive still missing after pull (Graph API issue?)")
+                        errors.append("Bloomberg archive missing after forced pull")
+                except Exception as pull_e:
+                    print(f"  WARNING: forced pull failed: {pull_e}")
+                    errors.append(f"Bloomberg forced pull: {pull_e}")
+            else:
+                print(f"  Archive for {today_str} already present")
         except Exception as e:
             print(f"  Bloomberg check failed: {e}")
 

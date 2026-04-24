@@ -1,0 +1,45 @@
+{
+  "version": "v0.1",
+  "created": "2026-04-22",
+  "calibration": "priors",
+  "notes": "Initial weights derived from existing screener/config.py plus priors for new pillars. Calibrate via calibrate.py before relying on these for launch decisions.",
+  "data_window": null,
+  "sample_size": null,
+  "pillar_weights": {
+    "liquidity_demand": 0.25,
+    "options_demand": 0.20,
+    "volatility": 0.10,
+    "competitive_whitespace": 0.20,
+    "korean_overnight": 0.10,
+    "social_sentiment": 0.15
+  },
+  "signal_weights_within_pillar": {
+    "liquidity_demand": {
+      "turnover_30d": 0.50,
+      "adv_30d": 0.30,
+      "market_cap": 0.20
+    },
+    "options_demand": {
+      "total_oi": 0.70,
+      "put_call_skew": 0.30
+    },
+    "volatility": {
+      "realized_vol_30d": 0.60,
+      "realized_vol_90d": 0.40
+    },
+    "competitive_whitespace": {
+      "density_score": 1.00
+    },
+    "korean_overnight": {
+      "oc_volume_1w": 0.50,
+      "oc_wow_delta": 0.30,
+      "oc_1w_3m_ratio": 0.20
+    },
+    "social_sentiment": {
+      "mentions_24h": 0.50,
+      "mentions_delta_24h": 0.50
+    }
+  },
+  "ic_per_signal": null,
+  "ic_confidence_interval": null
+}

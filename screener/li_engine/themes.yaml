@@ -1,0 +1,89 @@
+# Theme → ticker mapping for L&I Recommender Engine trending-themes rollup.
+# Seed list; refine as we learn what's actually moving.
+# A ticker can belong to multiple themes. Keep the list tight — the goal is
+# signal concentration, not coverage.
+themes:
+  quantum:
+    - IONQ
+    - RGTI
+    - QBTS
+    - QUBT
+    - HON
+    - IBM
+  memory:
+    - MU
+    - WDC
+    - SNDK
+    - STX
+  semiconductors:
+    - NVDA
+    - AMD
+    - TSM
+    - AVGO
+    - ASML
+    - AMAT
+    - LRCX
+    - INTC
+    - QCOM
+    - MRVL
+    - ARM
+    - SMCI
+  ai_infrastructure:
+    - NVDA
+    - AVGO
+    - SMCI
+    - VRT
+    - DLR
+    - ANET
+    - CRWV
+    - NBIS
+  ai_applications:
+    - PLTR
+    - NOW
+    - CRM
+    - SNOW
+    - MDB
+    - BBAI
+    - SOUN
+  space:
+    - RKLB
+    - ASTS
+    - LUNR
+    - SPCE
+    - BKSY
+    - PL
+  nuclear:
+    - SMR
+    - LEU
+    - BWXT
+    - CEG
+    - VST
+    - OKLO
+  crypto_equity:
+    - MSTR
+    - COIN
+    - HOOD
+    - RIOT
+    - MARA
+    - CLSK
+    - GLXY
+  korea_proxies:
+    - TSM
+    - MRVL
+    - MSFT
+    - TSLA
+    - NFLX
+    - HOOD
+  biotech_gene:
+    - QURE
+    - CRSP
+    - BEAM
+    - NTLA
+    - VRTX
+  ev_battery:
+    - TSLA
+    - RIVN
+    - LCID
+    - NIO
+    - ALB
+    - QS
