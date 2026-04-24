@@ -161,6 +161,7 @@ def init_db():
         TrustRequest, DigestSubscriber,
         FilingAlert, TrustCandidate,
         CapMProduct, CapMTrustAP,
+        CboeSymbol, CboeStateChange, CboeScanRun,
     )
     Base.metadata.create_all(bind=engine)
     _migrate_missing_columns()

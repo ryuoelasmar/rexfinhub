@@ -1,0 +1,16 @@
+[Unit]
+Description=REX FinHub CBOE Symbol Reservation Scanner (daily tier)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=jarvis
+WorkingDirectory=/home/jarvis/rexfinhub
+EnvironmentFile=/home/jarvis/rexfinhub/config/.env
+ExecStart=/home/jarvis/venv/bin/python scripts/run_cboe_scan.py --tier daily
+# 6h cap is generous: daily tier should complete in ~30-45 min at concurrency=10
+# and stays well under that even on slower rungs.
+TimeoutStartSec=21600
+StandardOutput=journal
+StandardError=journal

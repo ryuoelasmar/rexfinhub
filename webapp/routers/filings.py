@@ -1026,3 +1026,73 @@ def _handle_filings_mode(
         "filing_count": filing_count,
         "trust_count": trust_count,
     })
+
+
+# ===================================================================
+# Symbols — CBOE symbol-reservation availability + competitor pipeline intel
+# ===================================================================
+
+@router.get("/symbols")
+def filings_symbols(
+    request: Request,
+    db: Session = Depends(get_db),
+    length: str = Query("all"),
+    state: str = Query("all"),
+    q: str = Query(""),
+    sort: str = Query("last_checked_desc"),
+    page: int = Query(default=1, ge=1),
+    per_page: int = Query(default=100, ge=10, le=500),
+):
+    """CBOE symbol-reservation table — available / reserved / active across the
+    1-4 letter ticker space. Joined to mkt_master_data so taken symbols show
+    fund name + issuer when known; reserved-without-known-fund = competitor
+    pipeline intel."""
+    from webapp.services.cboe.cross_reference import (
+        enriched_rows, last_scan, summary_counts,
+    )
+
+    length_int: int | None = None
+    if length in ("1", "2", "3", "4"):
+        length_int = int(length)
+
+    state_filter: str | None = state if state in ("available", "reserved", "active", "unknown") else None
+
+    if sort not in ("last_checked_desc", "ticker", "length", "state"):
+        sort = "last_checked_desc"
+
+    offset = (page - 1) * per_page
+    rows, total = enriched_rows(
+        db,
+        length=length_int,
+        state=state_filter,
+        search=q.strip() or None,
+        sort=sort,
+        limit=per_page,
+        offset=offset,
+    )
+
+    counts = summary_counts(db)
+    last = last_scan(db)
+    total_pages = max(1, math.ceil(total / per_page)) if total else 1
+
+    base_qs = urllib.parse.urlencode({
+        k: v for k, v in {
+            "length": length, "state": state, "q": q, "sort": sort, "per_page": per_page,
+        }.items() if v not in ("", None, "all")
+    })
+
+    return templates.TemplateResponse("filings_symbols.html", {
+        "request": request,
+        "rows": rows,
+        "total": total,
+        "page": page,
+        "per_page": per_page,
+        "total_pages": total_pages,
+        "length": length,
+        "state": state,
+        "q": q,
+        "sort": sort,
+        "counts": counts,
+        "last_scan": last,
+        "base_qs": base_qs,
+    })

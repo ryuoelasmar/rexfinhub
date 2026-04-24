@@ -1013,6 +1013,73 @@ class CapMProduct(Base):
     )
 
 
+# --- CBOE Symbol Reservation Models ---
+# Tracks availability of 1-4 letter tickers on CBOE's issuer-only symbol
+# reservation portal. Reserved-but-not-active tickers = competitor pipeline intel.
+
+class CboeSymbol(Base):
+    """A ticker in CBOE's symbol-reservation universe.
+
+    One row per 1-4 letter uppercase combo observed by the scanner. `available`
+    is tri-state: null = never scanned, True = free to reserve, False = active
+    or already reserved. The market_data join (ticker -> mkt_master_data.ticker)
+    tells us *why* unavailable symbols are taken.
+    """
+    __tablename__ = "cboe_symbols"
+
+    ticker: Mapped[str] = mapped_column(String(4), primary_key=True)
+    length: Mapped[int] = mapped_column(Integer, nullable=False)
+    available: Mapped[bool | None] = mapped_column(Boolean)
+    last_checked_at: Mapped[datetime | None] = mapped_column(DateTime)
+    first_seen_available_at: Mapped[datetime | None] = mapped_column(DateTime)
+    first_seen_taken_at: Mapped[datetime | None] = mapped_column(DateTime)
+    state_change_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    __table_args__ = (
+        Index("idx_cboe_symbols_available_length", "available", "length"),
+        Index("idx_cboe_symbols_last_checked", "last_checked_at"),
+    )
+
+
+class CboeStateChange(Base):
+    """Append-only log of availability flips. Feeds the "Recent changes" UI."""
+    __tablename__ = "cboe_state_changes"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    ticker: Mapped[str] = mapped_column(String(4), ForeignKey("cboe_symbols.ticker"), nullable=False)
+    old_state: Mapped[str] = mapped_column(String(12), nullable=False)  # available | taken | unknown
+    new_state: Mapped[str] = mapped_column(String(12), nullable=False)
+    detected_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+    __table_args__ = (
+        Index("idx_cboe_state_changes_ticker", "ticker"),
+        Index("idx_cboe_state_changes_detected", "detected_at"),
+    )
+
+
+class CboeScanRun(Base):
+    """One row per scan run. Used to resume interrupted scans and to show
+    "last scan: Nh ago" on the UI."""
+    __tablename__ = "cboe_scan_runs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    started_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime)
+    status: Mapped[str] = mapped_column(String(20), default="running", nullable=False)  # running | completed | failed
+    tier: Mapped[str | None] = mapped_column(String(30))  # 1-letter | 2-letter | 3-letter | daily | 4-letter-batch | full
+    tickers_checked: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    state_changes_detected: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    last_ticker_scanned: Mapped[str | None] = mapped_column(String(4))
+    concurrency: Mapped[int | None] = mapped_column(Integer)
+    error_message: Mapped[str | None] = mapped_column(Text)
+
+    __table_args__ = (
+        Index("idx_cboe_scan_runs_started", "started_at"),
+    )
+
+
 class LiveFeedItem(LiveFeedBase):
     """Rolling real-time feed of new filings surfaced by the atom watcher.
 
