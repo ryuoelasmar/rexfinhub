@@ -1161,13 +1161,16 @@ def _render_daily_html(data: dict, dashboard_url: str = "", custom_message: str 
 
     # Show empty state if NEITHER section has anything (all-quiet day).
     if not new_groups and not updated_groups:
-        filings_section = _render_filings_block(
+        new_filings_section = _render_filings_block(
             "Today's 485 Filings", [], _BLUE, "No 485 filings today."
         )
+        updated_filings_section = ""
     else:
-        filings_section = (
-            _render_filings_block("New Fund Filings", new_groups, _GREEN, None)
-            + _render_filings_block("Updated Fund Filings", updated_groups, _BLUE, None)
+        new_filings_section = _render_filings_block(
+            "New Fund Filings", new_groups, _GREEN, None
+        )
+        updated_filings_section = _render_filings_block(
+            "Updated Fund Filings", updated_groups, _BLUE, None
         )
 
     # --- Upcoming Effectiveness (REX-only, formatted like fund filings) ---
@@ -1308,16 +1311,18 @@ def _render_daily_html(data: dict, dashboard_url: str = "", custom_message: str 
     # 2. ETP Market Overview (market-wide KPIs only)
     # 3. Market Landscape (5-category AUM/flow matrix — sits near the overview)
     # 4. New Fund Launches (newly-listed products from the last 7 days)
-    # 5. Filing Activity (New vs Updated fund filings, today only)
-    # 6. Top Filings of the Day (LLM analysis, between New Filings and Upcoming)
-    # 7. Upcoming Effectiveness, CTA, Footer
+    # 5. New Fund Filings (today only)
+    # 6. Top Filings of the Day (LLM analysis — sits between New and Updated filings)
+    # 7. Updated Fund Filings (today only)
+    # 8. Upcoming Effectiveness, CTA, Footer
     body = (
         header + msg_html + highlights_html
         + market_pulse_section + etp_overview_section
         + landscape_section
         + launches_section
-        + filings_section
+        + new_filings_section
         + top_filings_section
+        + updated_filings_section
         + pending_section
         + cta_section + footer
     )
