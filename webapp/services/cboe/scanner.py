@@ -13,6 +13,7 @@ Auth failure: 401/403 raises AuthError (cookie must be rotated manually).
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import time
 from datetime import datetime
@@ -112,8 +113,19 @@ class CboeScanner:
                         return None
                     async with self._429_lock:
                         self._consecutive_429 = 0
-                    data = await resp.json(content_type=None)
-                    avail = data.get("available")
+                    try:
+                        data = await resp.json(content_type=None)
+                    except (json.JSONDecodeError, UnicodeDecodeError, ValueError) as e:
+                        # CBOE occasionally returns HTML/empty bodies with a 200.
+                        # Treat as transient — back off and retry.
+                        log.warning(
+                            "%s: bad JSON (%s); retry in %.1fs",
+                            ticker, type(e).__name__, backoff,
+                        )
+                        await asyncio.sleep(backoff)
+                        backoff = min(MAX_BACKOFF, backoff * 2)
+                        continue
+                    avail = data.get("available") if isinstance(data, dict) else None
                     return avail if isinstance(avail, bool) else None
             except AuthError:
                 raise
@@ -163,6 +175,10 @@ class CboeScanner:
                     except AuthError as e:
                         auth_failure.append(e)
                         return
+                    except Exception as e:
+                        # Defensive: never let a single ticker take down the sweep.
+                        log.warning("%s: unexpected (%s); skipping", t, type(e).__name__)
+                        avail = None
                 async with buffer_lock:
                     if avail is not None:
                         buffer[t] = avail
