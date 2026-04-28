@@ -293,6 +293,10 @@ def create_app() -> FastAPI:
     from webapp.routers import capm
     app.include_router(capm.router)
 
+    # L&I Strategy Engine — whitespace candidates, filing race, ticker deep-dive
+    from webapp.routers import strategy
+    app.include_router(strategy.router)
+
     # Health check -- Render uses this for zero-downtime deploys.
     # Returns 503 until caches are warm so Render keeps the old instance
     # serving traffic until the new one is fully ready.
