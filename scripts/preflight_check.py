@@ -280,6 +280,15 @@ def audit_previews(db) -> dict:
         ("stock_recs.html",
          PROJECT_ROOT / "reports" / f"li_weekly_v2_{date.today().isoformat()}.html"),
     ]
+
+    # Auto-build stock_recs if missing (the daily prebake doesn't cover it).
+    stock_recs_path = expected[-1][1]
+    if not stock_recs_path.exists():
+        try:
+            from screener.li_engine.analysis.weekly_v2_report import main as _build_stock_recs
+            _build_stock_recs()
+        except Exception:
+            pass  # If the build fails, the audit will report missing — informative either way.
     missing: list[str] = []
     stale: list[str] = []
     for label, path in expected:
@@ -405,34 +414,46 @@ def build_summary_html(audits: list[dict], token: str) -> str:
     elif any(a["status"] == "warn" for a in audits):
         overall = "warn"
 
-    cta = ""
-    if overall != "fail":
-        cta = (
-            f'<div style="margin:24px 0;padding:16px;background:#f4f5f6;border-radius:6px;">'
-            f'<p style="margin:0 0 12px;font-size:14px;"><strong>Token:</strong> '
-            f'<code>{token}</code> (valid 4h)</p>'
-            f'<p style="margin:0;font-size:13px;color:#566573;">'
-            f'On VPS: <code>python scripts/send_all.py --bundle all --send</code> to fire all 7. '
-            f'Add <code>--bundle daily</code> for partial.</p></div>'
-        )
-    else:
-        cta = (
-            f'<div style="margin:24px 0;padding:16px;background:#fef2f2;border-radius:6px;border-left:4px solid #e74c3c;">'
-            f'<strong>HOLD recommended.</strong> Critical audit(s) failed — investigate before send.</div>'
-        )
+    # Big top CTA — visually impossible to miss, replaces the buried mid-page version.
+    # Color signals action: green = safe to GO, amber = warnings to review, red = HOLD.
+    cta_color, cta_bg, cta_border, cta_action = {
+        "pass": ("#27ae60", "#ecfdf5", "#27ae60", "GO recommended — all checks pass"),
+        "warn": ("#e67e22", "#fff7ed", "#e67e22", "GO with caveats — review warnings below"),
+        "fail": ("#e74c3c", "#fef2f2", "#e74c3c", "HOLD recommended — investigate before send"),
+    }[overall]
+
+    dashboard_url = "https://rex-etp-tracker.onrender.com/admin/reports/dashboard"
+
+    cta = (
+        f'<div style="margin:0 0 20px;padding:20px;background:{cta_bg};border-radius:8px;'
+        f'border-left:6px solid {cta_border};">'
+        f'<div style="font-size:18px;font-weight:700;color:{cta_color};margin-bottom:10px;">'
+        f'{cta_action}</div>'
+        f'<div style="margin-bottom:14px;font-size:13px;color:#1a1a2e;">'
+        f'Click <a href="{dashboard_url}" style="color:#0984e3;font-weight:700;">'
+        f'Send-Day Dashboard</a> to GO/HOLD via the admin UI, OR run on VPS:'
+        f'</div>'
+        f'<code style="display:block;background:#1a1a2e;color:#e8e8e8;padding:10px 12px;'
+        f'border-radius:4px;font-size:12px;overflow-x:auto;">'
+        f'python scripts/send_all.py --bundle all --send'
+        f'</code>'
+        f'<div style="font-size:11px;color:#7f8c8d;margin-top:8px;">'
+        f'Token: <code>{token[:8]}…</code> &middot; valid 4h'
+        f'</div></div>'
+    )
 
     return f"""<!DOCTYPE html><html><head><meta charset="UTF-8"></head>
 <body style="font-family:-apple-system,sans-serif;color:#1a1a2e;padding:20px;max-width:720px;">
-<h2 style="margin:0 0 8px;">REX Pre-Send Check &mdash; {_now_et()}</h2>
-<p style="font-size:14px;color:#566573;">Overall: {_status_badge(overall)}</p>
-<table style="width:100%;border-collapse:collapse;margin-top:16px;">
+<h2 style="margin:0 0 8px;">REX Send-Day Summary &mdash; {_now_et()}</h2>
+<p style="font-size:14px;color:#566573;margin:0 0 16px;">Overall: {_status_badge(overall)}</p>
+{cta}
+<table style="width:100%;border-collapse:collapse;margin-top:8px;">
 <thead><tr style="background:#1a1a2e;color:white;">
 <th style="padding:8px 12px;text-align:left;">Audit</th>
 <th style="padding:8px 12px;text-align:left;">Status</th>
 <th style="padding:8px 12px;text-align:left;">Detail</th>
 </tr></thead>
 <tbody>{table}</tbody></table>
-{cta}
 {details_html}
 </body></html>"""
 
@@ -487,8 +508,9 @@ def main():
         try:
             from etp_tracker.email_alerts import send_critical_alert
             ok = send_critical_alert(
-                subject=f"REX Pre-Send Check — {date.today().isoformat()}",
+                subject=f"REX Send-Day Summary — {date.today().isoformat()}",
                 message=summary_html,
+                subject_prefix="[PREFLIGHT]",  # not [ALERT] — this is routine, not a failure
             )
             print(f"  {'SENT' if ok else 'FAILED'}")
         except Exception as e:

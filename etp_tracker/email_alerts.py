@@ -1754,11 +1754,16 @@ _last_alert_time: float = 0
 _ALERT_COOLDOWN = 3600  # 1 hour between alerts
 
 
-def send_critical_alert(subject: str, message: str) -> bool:
+def send_critical_alert(subject: str, message: str,
+                         subject_prefix: str = "[ALERT]") -> bool:
     """Send a critical alert email to relasmar@rexfin.com.
 
     Bypasses the send gate and recipient files — alerts always go through.
     Uses Graph API directly (not SMTP). Rate limited to 1 per hour.
+
+    subject_prefix: defaults to "[ALERT]" for genuine failures. Pass
+        "[PREFLIGHT]" for routine preflight summaries so they don't read
+        as failures in the inbox.
     """
     import time as _time
     global _last_alert_time
@@ -1796,7 +1801,7 @@ def send_critical_alert(subject: str, message: str) -> bool:
         url = GRAPH_SEND_URL.format(sender=cfg["sender"])
         payload = {
             "message": {
-                "subject": f"[ALERT] {subject}",
+                "subject": f"{subject_prefix} {subject}".strip(),
                 "body": {"contentType": "HTML", "content": html_body},
                 "toRecipients": [{"emailAddress": {"address": "relasmar@rexfin.com"}}],
             },
