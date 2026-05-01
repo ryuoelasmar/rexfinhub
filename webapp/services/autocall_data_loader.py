@@ -121,15 +121,10 @@ def load(path: Path, db: Session) -> dict:
     for name, start_date, sort_order in CRISIS_PRESETS:
         db.add(AutocallCrisisPreset(name=name, start_date=start_date, sort_order=sort_order))
 
-    # Chunked bulk-insert to avoid spiking memory on small Render instances.
-    CHUNK = 20_000
-    for i in range(0, len(long_rows), CHUNK):
-        batch = long_rows[i:i + CHUNK]
-        db.bulk_insert_mappings(
-            AutocallIndexLevel,
-            [{"date": d, "ticker": t, "level": l} for d, t, l in batch],
-        )
-        db.flush()
+    db.bulk_insert_mappings(
+        AutocallIndexLevel,
+        [{"date": d, "ticker": t, "level": l} for d, t, l in long_rows],
+    )
     db.commit()
 
     return {
