@@ -2,6 +2,15 @@
    Reuses global tokens (--blue, --teal, --border, --white, --text-muted, --font-mono). */
 
 /* =============================================================
+   Full-bleed: override base.html .container max-width on this page
+   ============================================================= */
+html.ac-fullwidth .container {
+  max-width: 100% !important;
+  padding-left: 14px !important;
+  padding-right: 14px !important;
+}
+
+/* =============================================================
    Page header
    ============================================================= */
 .ac-page-header { margin: 0 0 14px; }
@@ -148,6 +157,69 @@ body.ac-present-on .ac-sidebar-expand { display: flex; }
   color: var(--text-muted, #64748b);
   margin: 12px 0 6px;
 }
+.ac-section-hint {
+  font-size: 9px;
+  font-weight: 500;
+  color: var(--text-muted, #64748b);
+  text-transform: none;
+  letter-spacing: 0;
+  margin-left: auto;
+}
+
+/* ---- Reference chip selector ---- */
+.ac-ref-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-bottom: 6px;
+  min-height: 26px;
+}
+.ac-ref-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 4px 3px 8px;
+  background: var(--blue-subtle, #dbeafe);
+  color: var(--blue, #2563eb);
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  max-width: 100%;
+}
+.ac-ref-chip-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 200px;
+}
+.ac-ref-chip-x {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  background: rgba(37,99,235,0.18);
+  color: var(--blue, #2563eb);
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 11px;
+  line-height: 1;
+  padding: 0;
+  font-weight: 700;
+}
+.ac-ref-chip-x:hover { background: rgba(37,99,235,0.32); }
+.ac-ref-chip:first-child { background: var(--blue, #2563eb); color: var(--white, #fff); }
+.ac-ref-chip:first-child .ac-ref-chip-x { background: rgba(255,255,255,0.25); color: var(--white, #fff); }
+.ac-ref-chip:first-child .ac-ref-chip-x:hover { background: rgba(255,255,255,0.4); }
+.ac-ref-empty {
+  font-size: 11px;
+  color: var(--text-muted, #64748b);
+  font-style: italic;
+  padding: 3px 0;
+}
+.ac-ref-add { font-size: 11px; }
 
 /* Field shells */
 .ac-field {
@@ -299,6 +371,15 @@ body.ac-present-on .ac-sidebar-expand { display: flex; }
   margin: 10px -2px 0;
 }
 .ac-section-title-b { color: #ea580c; }
+.ac-b-follow-row { margin-bottom: 8px; }
+.ac-b-mirror-btn {
+  width: 100%;
+  margin-top: 8px;
+  background: rgba(234,88,12,0.08);
+  border-color: rgba(234,88,12,0.30);
+  color: #c2410c;
+}
+.ac-b-mirror-btn:hover { background: rgba(234,88,12,0.16); border-color: #ea580c; color: #c2410c; }
 
 /* Toolbar grid */
 .ac-toolbar-grid {

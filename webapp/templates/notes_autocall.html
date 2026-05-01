@@ -4,6 +4,7 @@
 {% block head %}
 <link rel="stylesheet" href="/static/css/autocall.css">
 <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<script>document.documentElement.classList.add('ac-fullwidth');</script>
 {% endblock %}
 
 {% block content %}
@@ -46,17 +47,17 @@
 
       <!-- ===== References ===== -->
       <section class="ac-section">
-        <div class="ac-section-title">References</div>
-        <div class="ac-field"><label for="ac-ref-1">Reference 1 <span class="ac-required">*</span></label>
-          <select id="ac-ref-1" class="ac-select" data-ref-idx="0"></select></div>
-        <div class="ac-field"><label for="ac-ref-2">Reference 2</label>
-          <select id="ac-ref-2" class="ac-select" data-ref-idx="1"></select></div>
-        <div class="ac-field"><label for="ac-ref-3">Reference 3</label>
-          <select id="ac-ref-3" class="ac-select" data-ref-idx="2"></select></div>
-        <div class="ac-field"><label for="ac-ref-4">Reference 4</label>
-          <select id="ac-ref-4" class="ac-select" data-ref-idx="3"></select></div>
-        <div class="ac-field"><label for="ac-ref-5">Reference 5</label>
-          <select id="ac-ref-5" class="ac-select" data-ref-idx="4"></select></div>
+        <div class="ac-section-title">References <span class="ac-section-hint">up to 5</span></div>
+        <div class="ac-ref-chips" id="ac-ref-chips"></div>
+        <select id="ac-ref-add" class="ac-select ac-ref-add">
+          <option value="">+ Add reference...</option>
+        </select>
+        <!-- Hidden legacy selects kept for URL state compat (filled by JS) -->
+        <select id="ac-ref-1" data-ref-idx="0" style="display:none;"></select>
+        <select id="ac-ref-2" data-ref-idx="1" style="display:none;"></select>
+        <select id="ac-ref-3" data-ref-idx="2" style="display:none;"></select>
+        <select id="ac-ref-4" data-ref-idx="3" style="display:none;"></select>
+        <select id="ac-ref-5" data-ref-idx="4" style="display:none;"></select>
       </section>
 
       <!-- ===== Timeline ===== -->
@@ -153,17 +154,21 @@
 
       <!-- ===== Scenario B (compare) ===== -->
       <section id="ac-scenario-b" class="ac-section ac-section-b" style="display:none;">
-        <div class="ac-section-title ac-section-title-b">Scenario B</div>
+        <div class="ac-section-title ac-section-title-b">
+          Scenario B
+          <span class="ac-section-hint">vary anything from A</span>
+        </div>
 
-        <div class="ac-field"><label for="ac-b-ref-1">Reference 1 <span class="ac-required">*</span></label>
-          <select id="ac-b-ref-1" class="ac-select" data-b-ref-idx="0"></select></div>
-
-        <div class="ac-field ac-field-toggle">
-          <label for="ac-b-follow-a" class="ac-toggle-label" title="ON: B's issue date mirrors A automatically. Turn off to compare different issue dates.">
+        <div class="ac-field ac-field-toggle ac-b-follow-row">
+          <label for="ac-b-follow-a" class="ac-toggle-label" title="ON: B mirrors A's issue date and crisis preset clicks">
             <input type="checkbox" id="ac-b-follow-a" checked>
             <span>Issue date follows A</span>
           </label>
         </div>
+
+        <div class="ac-field"><label for="ac-b-ref-1">Reference</label>
+          <select id="ac-b-ref-1" class="ac-select" data-b-ref-idx="0"></select></div>
+
         <div class="ac-field"><label for="ac-b-issue">Issue Date (B)</label>
           <input type="date" id="ac-b-issue" class="ac-input"></div>
 
@@ -195,6 +200,8 @@
           <label for="ac-b-coupon-rate">Coupon % p.a. (B) <span id="ac-b-coupon-suggested-tag" class="ac-suggested-tag">SUGGESTED</span></label>
           <input type="number" id="ac-b-coupon-rate" class="ac-input" min="0" step="0.1" value="10">
         </div>
+
+        <button type="button" id="ac-b-mirror-a" class="ac-tool-btn ac-b-mirror-btn" title="Set all of B's params to match A right now">Mirror A's params</button>
       </section>
 
       <!-- ===== Toolbar ===== -->

@@ -140,6 +140,7 @@
         applyCouponMode();
         // Decode URL state AFTER defaults so URL takes precedence.
         decodeUrlState();
+        renderRefChips();
         recomputeLegalRange();
         scheduleRender();
         // Allow URL writes from now on.
@@ -159,15 +160,14 @@
       .filter(function (m) { return m.category === 'strategy_underlying'; })
       .sort(sortMeta);
 
+    // Hidden legacy selects (still used for URL state writes; mirror state.refs).
     for (var i = 0; i < 5; i++) {
       var sel = $('ac-ref-' + (i + 1));
       if (!sel) continue;
-
       var blank = document.createElement('option');
       blank.value = '';
-      blank.textContent = i === 0 ? '-- select reference --' : '(none)';
+      blank.textContent = '(none)';
       sel.appendChild(blank);
-
       if (underlyings.length) {
         var g1 = document.createElement('optgroup');
         g1.label = 'Underlyings';
@@ -181,6 +181,104 @@
         sel.appendChild(g2);
       }
     }
+
+    // The visible "+ Add reference..." selector.
+    var addSel = $('ac-ref-add');
+    if (addSel) {
+      // Already has placeholder option in HTML; append groups.
+      if (underlyings.length) {
+        var ag1 = document.createElement('optgroup');
+        ag1.label = 'Underlyings';
+        underlyings.forEach(function (m) { ag1.appendChild(makeOpt(m)); });
+        addSel.appendChild(ag1);
+      }
+      if (strategies.length) {
+        var ag2 = document.createElement('optgroup');
+        ag2.label = 'Strategy Underlyings';
+        strategies.forEach(function (m) { ag2.appendChild(makeOpt(m)); });
+        addSel.appendChild(ag2);
+      }
+      addSel.addEventListener('change', onRefAdd);
+    }
+  }
+
+  function renderRefChips() {
+    var wrap = $('ac-ref-chips');
+    if (!wrap) return;
+    wrap.innerHTML = '';
+    var picked = state.refs.filter(function (r) { return !!r; });
+    if (!picked.length) {
+      var empty = document.createElement('div');
+      empty.className = 'ac-ref-empty';
+      empty.textContent = 'No reference selected — pick one below.';
+      wrap.appendChild(empty);
+    } else {
+      picked.forEach(function (ticker, idx) {
+        var meta = state.metaByTicker[ticker];
+        var label = (meta && meta.short_name) || ticker;
+        var chip = document.createElement('span');
+        chip.className = 'ac-ref-chip';
+        var lab = document.createElement('span');
+        lab.className = 'ac-ref-chip-label';
+        lab.textContent = label;
+        lab.title = ticker;
+        chip.appendChild(lab);
+        var x = document.createElement('button');
+        x.type = 'button';
+        x.className = 'ac-ref-chip-x';
+        x.setAttribute('aria-label', 'Remove ' + ticker);
+        x.textContent = '×';
+        x.addEventListener('click', function () { onRefChipRemove(ticker); });
+        chip.appendChild(x);
+        wrap.appendChild(chip);
+      });
+    }
+    // Refresh + Add options to exclude already-selected
+    var addSel = $('ac-ref-add');
+    if (addSel) {
+      var pickedSet = {};
+      picked.forEach(function (t) { pickedSet[t] = true; });
+      Array.prototype.forEach.call(addSel.options, function (opt) {
+        if (!opt.value) return;
+        opt.disabled = !!pickedSet[opt.value];
+      });
+      addSel.disabled = picked.length >= 5;
+      addSel.options[0].textContent = picked.length >= 5
+        ? 'Max 5 references'
+        : '+ Add reference...';
+    }
+    // Mirror state.refs into hidden legacy selects (for URL writes)
+    for (var i = 0; i < 5; i++) {
+      var sel = $('ac-ref-' + (i + 1));
+      if (sel) sel.value = state.refs[i] || '';
+    }
+  }
+
+  function onRefAdd(e) {
+    var val = e.target.value;
+    if (!val) return;
+    var firstNull = state.refs.indexOf(null);
+    if (firstNull === -1) {
+      // No empty slot; ignore
+      e.target.value = '';
+      return;
+    }
+    state.refs[firstNull] = val;
+    e.target.value = '';
+    renderRefChips();
+    recomputeLegalRange();
+    scheduleRender();
+    scheduleUrlWrite();
+  }
+
+  function onRefChipRemove(ticker) {
+    // Remove and compact (preserve order of remaining picks).
+    var picked = state.refs.filter(function (r) { return r && r !== ticker; });
+    state.refs = [picked[0] || null, picked[1] || null, picked[2] || null, picked[3] || null, picked[4] || null];
+    renderRefChips();
+    recomputeLegalRange();
+    scheduleRender();
+    scheduleUrlWrite();
   }
 
   function populateScenarioBRefDropdown() {
@@ -245,6 +343,12 @@
         var slider = $('ac-issue-scrub');
         slider.value = String(snap);
         state.issueDateISO = state.legalDates[snap];
+        // Sync B's issue date when compare on (always, regardless of follow-A)
+        if (state.compareOn) {
+          state.issueDateBISO = state.issueDateISO;
+          var bIssue = $('ac-b-issue');
+          if (bIssue) bIssue.value = state.issueDateISO;
+        }
         updateIssueLabel();
         scheduleRender();
         scheduleUrlWrite();
@@ -432,6 +536,9 @@
 
     var bfa = $('ac-b-follow-a');
     if (bfa) bfa.addEventListener('change', onToggleBFollowA);
+
+    var mirrorBtn = $('ac-b-mirror-a');
+    if (mirrorBtn) mirrorBtn.addEventListener('click', onMirrorAToB);
 
     // Coupon mode toggle (Auto-suggest)
     var cmode = $('ac-coupon-mode');
@@ -693,16 +800,23 @@
     };
   }
 
-  function onTogglePresent() {
-    state.presentOn = !state.presentOn;
-    document.body.classList.toggle('ac-present-on', state.presentOn);
-    // Plotly chart needs to recompute layout after the surrounding DOM resizes.
+  function _forceChartReflow() {
+    // Re-render the whole chart from current state. More robust than
+    // Plotly.Plots.resize() — recomputes the layout (axes, shapes, annotations)
+    // against the new container width so legend + barriers reposition cleanly.
+    setTimeout(function () { scheduleRender(); }, 60);
     setTimeout(function () {
       var div = $('ac-chart');
       if (div && window.Plotly) {
         try { Plotly.Plots.resize(div); } catch (e) {}
       }
-    }, 50);
+    }, 220);
+  }
+
+  function onTogglePresent() {
+    state.presentOn = !state.presentOn;
+    document.body.classList.toggle('ac-present-on', state.presentOn);
+    _forceChartReflow();
     scheduleUrlWrite();
   }
 
@@ -710,12 +824,7 @@
     if (!state.presentOn) return;
     state.presentOn = false;
     document.body.classList.remove('ac-present-on');
-    setTimeout(function () {
-      var div = $('ac-chart');
-      if (div && window.Plotly) {
-        try { Plotly.Plots.resize(div); } catch (e) {}
-      }
-    }, 50);
+    _forceChartReflow();
     scheduleUrlWrite();
   }
 
@@ -726,6 +835,38 @@
     if (bIssue) bIssue.disabled = state.bFollowA;
     if (state.bFollowA && state.issueDateISO) {
       state.issueDateBISO = state.issueDateISO;
+      if (bIssue) bIssue.value = state.issueDateISO;
+    }
+    scheduleRender();
+    scheduleUrlWrite();
+  }
+
+  function onMirrorAToB() {
+    // Copy A's params + ref into B inputs (snapshot).
+    var pairs = [
+      ['ac-tenor', 'ac-b-tenor'],
+      ['ac-obs-freq', 'ac-b-obs-freq'],
+      ['ac-coupon-rate', 'ac-b-coupon-rate'],
+      ['ac-coupon-barrier', 'ac-b-coupon-barrier'],
+      ['ac-ac-barrier', 'ac-b-ac-barrier'],
+      ['ac-prot-barrier', 'ac-b-prot-barrier'],
+      ['ac-no-call', 'ac-b-no-call'],
+    ];
+    pairs.forEach(function (p) {
+      var a = $(p[0]); var b = $(p[1]);
+      if (a && b) b.value = a.value;
+    });
+    var memA = $('ac-memory'); var memB = $('ac-b-memory');
+    if (memA && memB) memB.checked = memA.checked;
+    var refA = (state.refs.find(function (r) { return !!r; })) || null;
+    if (refA) {
+      state.refsB[0] = refA;
+      var bSel = $('ac-b-ref-1');
+      if (bSel) bSel.value = refA;
+    }
+    if (state.issueDateISO) {
+      state.issueDateBISO = state.issueDateISO;
+      var bIssue = $('ac-b-issue');
       if (bIssue) bIssue.value = state.issueDateISO;
     }
     scheduleRender();
@@ -753,8 +894,23 @@
     // Default scenario B params from A.
     if (state.compareOn) {
       mirrorAParamsToBIfBlank();
+      // Sync follow-A behavior on first turn-on.
+      if (state.bFollowA && state.issueDateISO) {
+        state.issueDateBISO = state.issueDateISO;
+        var bI = $('ac-b-issue');
+        if (bI) bI.value = state.issueDateISO;
+      }
+      // Default B's primary ref to A's primary if not set
+      if (!state.refsB[0]) {
+        var aRef = state.refs.find(function (r) { return !!r; });
+        if (aRef) {
+          state.refsB[0] = aRef;
+          var bRefSel = $('ac-b-ref-1');
+          if (bRefSel) bRefSel.value = aRef;
+        }
+      }
     }
-    scheduleRender();
+    _forceChartReflow();
     scheduleUrlWrite();
   }
 
