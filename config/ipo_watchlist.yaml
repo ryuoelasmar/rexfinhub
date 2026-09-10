@@ -82,6 +82,15 @@ high_profile_pre_ipo:
   expected_ipo_window: rumored 2026
   sector: Fintech / Neobank
   source: ai-source-ipo
+- company: Waymo
+  valuation_usd: 45.0
+  as_of_date: '2026-09-10'
+  valuation_as_of: 2024-10
+  s1_filed: false
+  s1_filed_date: ''
+  expected_ipo_window: no timeline
+  sector: Autonomous Vehicles
+  source: ai-source-ipo
 - ticker: Figure AI
   company: Figure AI
   date: TBD
@@ -105,6 +114,15 @@ high_profile_pre_ipo:
   expected_ipo_window: TBD
   s1_filed: false
   as_of_date: '2026-05-12'
+- company: Vantage Data Centers
+  as_of_date: '2026-09-10'
+  valuation_as_of: 2021-11
+  s1_filed: false
+  s1_filed_date: ''
+  expected_ipo_window: no timeline
+  sector: Data Centers / Infrastructure
+  source: ai-source-ipo
+  valuation_usd: 15.0
 - ticker: ScaleAI
   company: Scale AI
   date: TBD
@@ -155,12 +173,12 @@ high_profile_pre_ipo:
   as_of_date: '2026-07-06'
 - company: Viva Republica (Toss)
   valuation_usd: 7.4
-  as_of_date: '2026-08-18'
+  as_of_date: '2026-09-10'
   valuation_as_of: 2021-06
   s1_filed: false
   s1_filed_date: ''
   expected_ipo_window: rumored 2025-2026
-  sector: Fintech / Neobank
+  sector: Fintech
   source: ai-source-ipo
 - company: Sierra Space
   valuation_usd: 5.3
@@ -182,12 +200,12 @@ high_profile_pre_ipo:
   source: ai-source-ipo
 - company: Whoop
   valuation_usd: 3.6
-  as_of_date: '2026-08-18'
+  as_of_date: '2026-09-10'
   valuation_as_of: 2021-08
   s1_filed: false
   s1_filed_date: ''
   expected_ipo_window: no timeline
-  sector: Fitness Wearables / Consumer Tech
+  sector: Health / Wearables
   source: ai-source-ipo
 - company: Strava
   valuation_usd: 1.5
@@ -199,7 +217,7 @@ high_profile_pre_ipo:
   sector: Fitness / Consumer Tech
   source: ai-source-ipo
 - company: X-Energy
-  as_of_date: '2026-08-18'
+  as_of_date: '2026-09-10'
   valuation_as_of: unknown
   s1_filed: false
   s1_filed_date: ''
@@ -229,14 +247,6 @@ high_profile_pre_ipo:
   s1_filed_date: ''
   expected_ipo_window: no timeline
   sector: Semiconductors / NAND Storage
-  source: ai-source-ipo
-- company: Vantage Data Centers
-  as_of_date: '2026-08-18'
-  valuation_as_of: unknown
-  s1_filed: false
-  s1_filed_date: ''
-  expected_ipo_window: no timeline
-  sector: Data Centers
   source: ai-source-ipo
 recently_priced:
 - ticker: CBRS
