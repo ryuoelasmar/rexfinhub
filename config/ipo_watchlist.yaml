@@ -116,7 +116,7 @@ high_profile_pre_ipo:
   as_of_date: '2026-05-12'
 - company: Vantage Data Centers
   as_of_date: '2026-09-10'
-  valuation_as_of: 2021-11
+  valuation_as_of: unknown
   s1_filed: false
   s1_filed_date: ''
   expected_ipo_window: no timeline
@@ -177,7 +177,7 @@ high_profile_pre_ipo:
   valuation_as_of: 2021-06
   s1_filed: false
   s1_filed_date: ''
-  expected_ipo_window: rumored 2025-2026
+  expected_ipo_window: rumored 2025–2026
   sector: Fintech
   source: ai-source-ipo
 - company: Sierra Space
@@ -205,7 +205,7 @@ high_profile_pre_ipo:
   s1_filed: false
   s1_filed_date: ''
   expected_ipo_window: no timeline
-  sector: Health / Wearables
+  sector: Health & Wearables
   source: ai-source-ipo
 - company: Strava
   valuation_usd: 1.5
@@ -222,7 +222,7 @@ high_profile_pre_ipo:
   s1_filed: false
   s1_filed_date: ''
   expected_ipo_window: no timeline
-  sector: Nuclear Energy
+  sector: Nuclear / Energy
   source: ai-source-ipo
 - company: Roze Networks
   as_of_date: '2026-08-18'

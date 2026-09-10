@@ -275,3 +275,5 @@ MTGG US,,"auto-llm-other: Global growth equity ETF without leverage, options mec
 PJSM US,,"auto-llm-other: Small-mid cap core equity ETF without leverage, options strategy, or defined outcome structure."
 PJIN US,,"auto-llm-other: International core equity ETF without leverage, options mechanics, or thematic focus."
 KPO US,,"auto-llm-other: Premium Opportunities ETF suggests potential active/opportunistic strategy but no leverage, options, or defined outcome indication."
+DIVH US,,auto-llm-other: Dividend harvest ETF; name suggests dividend focus but lacks explicit options mechanics like covered calls.
+FRUT US,,"auto-llm-other: Index-based equity ETF without leverage, options, or thematic mechanics; plain equity exposure."
