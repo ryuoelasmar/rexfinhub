@@ -103,7 +103,11 @@ def _sub(cmd):
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--skip-pull", action="store_true")
+
     args = ap.parse_args()
+    # Downstream report builders run argparse against sys.argv, so ANY flag accepted
+    # here leaks into them and aborts the build. Blank it now that ours is parsed.
+    sys.argv = sys.argv[:1]
     _load_env()
     py = sys.executable
     worst = 0
@@ -124,10 +128,29 @@ def main() -> int:
             print(f"  (alert failed: {e})")
 
     def bloomberg_sync():
-        from webapp.services.graph_files import download_bloomberg_from_sharepoint
         from webapp.database import init_db, SessionLocal
         from webapp.services.market_sync import sync_market_data
-        download_bloomberg_from_sharepoint()
+        # REXFIN_SKIP_BBG_PULL=1 syncs the workbook already on disk instead of fetching it
+        # from SharePoint. Needed when the Graph app registration is unavailable and the
+        # file has been delivered another way (OneDrive desktop sync -> scp).
+        # Guarded: refuses to run on a workbook Excel did not save TODAY, so "skip the
+        # pull" can never quietly mean "rebuild last week's numbers".
+        if os.environ.get("REXFIN_SKIP_BBG_PULL") == "1":
+            import zipfile, re as _re
+            from datetime import datetime as _dt, timedelta as _td, date as _date
+            xl = ROOT / "data" / "DASHBOARD" / "bloomberg_daily_file.xlsm"
+            with zipfile.ZipFile(xl) as _z:
+                _core = _z.read("docProps/core.xml").decode("utf8", "ignore")
+            _m = _re.search(r"<dcterms:modified[^>]*>([^<]+)<", _core).group(1)
+            _saved = _dt.strptime(_m, "%Y-%m-%dT%H:%M:%SZ") - _td(hours=4)
+            print(f"  SKIP-PULL: using on-disk workbook, saved {_saved:%Y-%m-%d %H:%M}")
+            if _saved.date() != _date.today():
+                print(f"  ABORT: workbook was saved {_saved:%Y-%m-%d}, not today. Refusing to "
+                      f"rebuild on a stale file.")
+                return 1
+        else:
+            from webapp.services.graph_files import download_bloomberg_from_sharepoint
+            download_bloomberg_from_sharepoint()
         init_db()
         db = SessionLocal()
         try:
@@ -337,7 +360,18 @@ def main() -> int:
         ("promote_or_block", promote),
         ("notify", lambda: notify()),
     ]
+    only = {x.strip() for x in os.environ.get("REXFIN_ONLY_STEPS","").split(",") if x.strip()}
+    if only:
+        unknown = only - {lbl for lbl, _ in steps}
+        if unknown:
+            print(f"ERROR: unknown step(s): {', '.join(sorted(unknown))}")
+            print(f"       valid: {', '.join(lbl for lbl, _ in steps)}")
+            return 2
+        print(f"=== PARTIAL RUN — only: {', '.join(lbl for lbl, _ in steps if lbl in only)} ===")
     for label, fn in steps:
+        if only and label not in only:
+            print(f"--- {label} SKIPPED (--only) ---")
+            continue
         rc = _step(label, fn)
         worst = max(worst, rc)
 

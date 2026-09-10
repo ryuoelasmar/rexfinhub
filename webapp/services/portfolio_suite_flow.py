@@ -163,12 +163,49 @@ def _load_master(db_path):
 
 
 def _load_flow_history(xlsm_path):
-    cols = ["Dates"] + list(TICKER_SUITE)
-    df = pd.read_excel(xlsm_path, sheet_name="data_flow", usecols=cols)
-    df["Dates"] = pd.to_datetime(df["Dates"])
-    df = df.set_index("Dates").sort_index()
-    df.columns = [c.replace(" Equity", "") for c in df.columns]
-    return df
+    """DAILY net flow per fund, reconstructed as (change in shares) x price.
+
+    This used to read the Bloomberg `data_flow` sheet directly. That sheet is
+    unreliable: for TLDR it recorded 13 non-zero days totalling $11.5M while the fund
+    actually took in $48.8M, and it showed +$5.5M for the day assets jumped $6.25M ->
+    $49.04M. The reconstruction below returned +42.78 for that same window — matching
+    Bloomberg's own fund_flow_1week (+42.78) to the cent.
+
+    Creations/redemptions ARE the flow, so d(shares) x price is the definition rather
+    than an approximation, and unlike the aggregate fund_flow_* fields it still gives a
+    DAILY series — which the weekly heatmap and 90-day cumulative sparklines need.
+
+    Guard: a reverse split collapses shares and multiplies price with market value
+    unchanged. Left alone that reads as a massive fake redemption, and leveraged funds
+    split often. Any day where shares move sharply but market value does not is treated
+    as a split and contributes zero flow.
+    """
+    tickers = list(TICKER_SUITE)
+    sh = pd.read_excel(xlsm_path, sheet_name="data_sh", usecols=["Dates"] + tickers)
+    px = pd.read_excel(xlsm_path, sheet_name="data_price", usecols=["Dates"] + tickers)
+    for d in (sh, px):
+        d["Dates"] = pd.to_datetime(d["Dates"])
+        d.set_index("Dates", inplace=True)
+        d.sort_index(inplace=True)
+        d.columns = [c.replace(" Equity", "") for c in d.columns]
+
+    sh = sh.apply(pd.to_numeric, errors="coerce")
+    px = px.apply(pd.to_numeric, errors="coerce")
+    # Only days where BOTH are present; a blank row would otherwise read as a total
+    # redemption and then a total creation the next day.
+    idx = sh.index.intersection(px.index)
+    sh, px = sh.loc[idx].ffill(), px.loc[idx].ffill()
+
+    d_sh = sh.diff()
+    flow = d_sh * px
+
+    mktval = sh * px
+    split = (
+        (d_sh.abs() > sh.shift(1).abs() * 0.40)                      # shares moved a lot
+        & ((mktval - mktval.shift(1)).abs() <= mktval.shift(1).abs() * 0.10)  # value did not
+    )
+    flow = flow.mask(split, 0.0)
+    return flow.fillna(0.0)
 
 
 def _by_suite(df):
@@ -182,6 +219,52 @@ def _by_suite(df):
             # df.sum() raise "unsupported operand type(s) for +: 'float' and 'str'"
             # and crashed the whole Portfolio report build (preview went stale).
             out[s] = df[members].apply(pd.to_numeric, errors="coerce").fillna(0).sum(axis=1)
+    return out
+
+
+# Bloomberg's own aggregate flow fields, keyed to our ticker form. These are the
+# AUTHORITATIVE window totals: Bloomberg computes them, so they are correct as of the
+# file regardless of whether every historical day was captured in the data_flow sheet.
+_MASTER_FLOW_COLS = {
+    "f1w":  "fund_flow_1week",
+    "f1m":  "fund_flow_1month",
+    "f3m":  "fund_flow_3month",
+    "f6m":  "fund_flow_6month",
+    "f1y":  "fund_flow_1year",
+    "fytd": "fund_flow_ytd",
+}
+
+
+def _load_master_flows(db_path):
+    """Per-ticker window flows from mkt_master_data.
+
+    Why not sum the data_flow sheet (what this report used to do): that sheet is a
+    DAILY history we re-read each run, so any day Ryu could not refresh it is simply
+    missing from the sum — and the shortfall is silent. TLDR made that concrete on
+    2026-08-04: assets went 6.25M -> 49.04M in a single day, Bloomberg's own
+    fund_flow_1week said +42.78M, and the data_flow sheet said +5.50M. The report
+    therefore showed a fund holding $49M that had supposedly only ever taken in $11.5M,
+    which is impossible for a T-bill fund with no market appreciation.
+
+    Bloomberg's aggregate fields are point-in-time and self-consistent with AUM, so a
+    missed pull cannot silently understate them.
+    """
+    import sqlite3
+    cols = ", ".join(_MASTER_FLOW_COLS.values())
+    con = sqlite3.connect(str(db_path))
+    try:
+        rows = con.execute(
+            f"SELECT ticker, {cols} FROM mkt_master_data WHERE market_status='ACTV'"
+        ).fetchall()
+    finally:
+        con.close()
+    out = {}
+    for r in rows:
+        vals = {k: (float(v) if v is not None else 0.0)
+                for k, v in zip(_MASTER_FLOW_COLS.keys(), r[1:])}
+        raw = str(r[0]).strip()                 # 'TLDR US' — the form this report uses
+        out[raw] = vals
+        out[raw.replace(" US", "").strip()] = vals   # and the bare form, for safety
     return out
 
 
@@ -395,11 +478,26 @@ def build_html(db_path: str, xlsm_path: str) -> tuple[str, str]:
     last_date = flow_raw.index.max()
     flow_suite_full = _by_suite(flow_raw)
 
-    win = _compute_windows(flow_raw)
+    # Window totals come from Bloomberg's aggregate fund_flow_* fields (authoritative,
+    # tie to AUM). The data_flow sheet is still used for the DAILY-granularity charts
+    # (weekly heatmap, 90-day cumulative sparklines) — it is the only daily series we
+    # have — but it no longer drives any headline number.
+    master_flows = _load_master_flows(db_path)
+    win = _compute_windows(flow_raw)          # retained for the daily-series charts
+    _missing = []
     for f in funds:
         t = f["ticker"]
-        for k in ("f1w", "f1m", "f3m", "f6m", "f1y", "fytd"):
-            f[k] = float(win[k].get(t, 0.0))
+        mf = master_flows.get(t)
+        if mf:
+            for k in ("f1w", "f1m", "f3m", "f6m", "f1y", "fytd"):
+                f[k] = mf[k]
+        else:
+            _missing.append(t)
+            for k in ("f1w", "f1m", "f3m", "f6m", "f1y", "fytd"):
+                f[k] = float(win[k].get(t, 0.0))
+    if _missing:
+        print(f"  portfolio_suite: {len(_missing)} ticker(s) absent from mkt_master_data, "
+              f"fell back to data_flow sums: {_missing[:8]}")
 
     def agg_suite(suite):
         items = [f for f in funds if f["rex_suite"] == suite]

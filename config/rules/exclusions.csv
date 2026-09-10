@@ -255,3 +255,16 @@ HXC US,,outside_tracked_categories_2026-08-25
 HXE US,,outside_tracked_categories_2026-08-25
 HXA US,,outside_tracked_categories_2026-08-25
 FSSTF US,,outside_tracked_categories_2026-08-25
+NUIB US,,auto-llm-other: Impact-focused bond ETF; ESG/thematic fixed income without options-income mechanics or leverage.
+HQDG US,,"auto-llm-other: Dividend growth fund focused on capital appreciation and dividend growth, not options-income mechanics; pure equity strategy."
+TSCZ US,,auto-llm-other: Securitized income ETF; MBS/ABS fixed income strategy without explicit options-income mechanics.
+VOOY US,,auto-llm-other: Large-cap income ETF; dividend/income equity strategy without documented options-income mechanics or leverage.
+HWGV US,,"auto-llm-other: Global value equity fund; traditional stock selection strategy without leverage, options, or defined mechanics."
+AEMV US,,"auto-llm-other: Mid-cap value equity ETF; traditional cap/style equity exposure without leverage, options, or thematic focus."
+AESB US,,"auto-llm-other: Small-cap core equity ETF; traditional market-cap exposure without leverage, options, or defined strategies."
+AESL US,,"auto-llm-other: Small-cap value equity ETF; traditional cap/style equity without leverage, options, or thematic focus."
+AESG US,,"auto-llm-other: Small-cap growth equity ETF; traditional cap/style equity without leverage, options, or defined strategies."
+AEMG US,,"auto-llm-other: Mid-cap growth equity ETF; traditional cap/style equity without leverage, options, or defined mechanics."
+AEMC US,,"auto-llm-other: Mid-cap core equity ETF; traditional market-cap exposure without leverage, options, or defined strategies."
+LBOX US,,"auto-llm-other: Short-term box strategy ETF; alternative/tactical product without clear leverage, crypto, or defined-income mechanics; classified as other due to specialized trading strategy."
+BTA US,,"auto-llm-other: Tactical alternatives/risk ETF without explicit leverage, options income, crypto, or defined-income structure; broad tactical allocation product."

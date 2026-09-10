@@ -280,6 +280,18 @@ _MARKET_MASTER_COLS = [
     ("fund_category_key", "Category Key"),
     ("is_rex", "REX Fund"),
     ("rex_suite", "REX Suite"),
+    # The three-axis taxonomy. It is populated nightly on the whole universe and was
+    # missing from this export entirely, so the only classification anyone could
+    # download was the legacy five-bucket projection — which is blank on 63% of funds
+    # by design. These are the columns that actually cover every ETP.
+    ("asset_class", "Asset Class (Taxonomy)"),
+    ("primary_strategy", "Primary Strategy"),
+    ("sub_strategy", "Sub-Strategy"),
+    ("underlier_type", "Underlier Type"),
+    ("concentration", "Concentration"),
+    ("root_underlier_name", "Root Underlier"),
+    ("wrapper_type", "Wrapper Type"),
+    ("mechanism", "Mechanism"),
     # Structure
     ("fund_type", "Fund Type"),
     ("listed_exchange", "Exchange"),

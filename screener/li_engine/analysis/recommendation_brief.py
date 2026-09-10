@@ -164,9 +164,19 @@ def comp_sub(u, span):
         out += f'<tr style="background:#fafbfc;"><td colspan="{span}" style="padding:3px 8px 3px 30px;font-size:10.5px;border-bottom:1px solid #eef1f4;color:{INK};">↳ <b>{c["issuer"]}</b> · <span style="color:{col};font-weight:600;">{c["status"]}</span> · {dt}</td></tr>'
     return out
 
+# load_rex_position() emits "Listed" for a fund we actually trade, but this map only
+# knew "Live" — so every live position fell through to the "Not in" default and the
+# brief reported that REX held nothing, including BMNU. Accept both spellings, and
+# treat an unknown label as unknown rather than silently asserting we are absent.
+_POS_LABEL = {"Listed": "Live", "Live": "Live", "Filed": "Filed"}
+
 def pos_badge(u):
-    lab = rex_pos.get(u,("—",))[0]; c = {"Live":GREEN,"Filed":BLUE}.get(lab,RED)
-    return f'<span style="color:{c};font-weight:700;">{ {"Live":"Live","Filed":"Filed"}.get(lab,"Not in") }</span>'
+    lab = rex_pos.get(u, ("—",))[0]
+    shown = _POS_LABEL.get(lab)
+    if shown is None:
+        shown = "Not in" if lab in ("—", "", None) else lab
+    c = {"Live": GREEN, "Filed": BLUE}.get(shown, RED)
+    return f'<span style="color:{c};font-weight:700;">{shown}</span>'
 def sc_cell(u): return f'<b style="color:{INK};">{smap[u]:.1f}</b>' if u in smap else f'<span style="color:{GRAY};">—</span>'
 def tcell(u, star=True):
     rev = u in reviewset and star

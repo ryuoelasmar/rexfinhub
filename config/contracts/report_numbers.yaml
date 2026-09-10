@@ -129,7 +129,7 @@ numbers:
   trex_single_stock_li_actv:
     label: T-REX single-stock L&I (live)
     means: How many of REX's live single-stock leveraged/inverse ETPs there are.
-    expected: 43  # 2026-08-04: +RAM +RAMZ. Ryu's rule — Single Equity = exactly ONE underlying security (equity OR ETF); both track the DRAM ETF. MicroSectors stays Index/Basket by the standing exception, so this does NOT repeat the 0185be8 churn (which also moved MicroSectors Gold and was reverted by a0bb34a).
+    expected: 46  # 2026-08-12: +AKAL +OCNL +PENU — single-stock underliers (AKAM/DOCN/PENG).
     looks_wrong_if: >
       The count jumps with no new launch; a not-yet-launched (PEND) or delisted fund is
       counted; or an index/basket fund slips in.
@@ -145,7 +145,7 @@ numbers:
   microsectors_index_li_actv:
     label: MicroSectors index L&I (live)
     means: How many live MicroSectors index/basket leveraged/inverse ETNs there are.
-    expected: 24  # 2026-08-04: +SMHU/+SMHD (MicroSectors 3X Long / -3X Short Semiconductor ETNs, listed 2026-08-04).
+    expected: 34  # 2026-08-20: +BRZL +BRZD +JPNU +JPND +TAWN +TPEI. 2026-08-11: +HYGU/+HYGD/+LQDU/+LQDD (HYG & LQD 3X Long / -3X Short credit ETNs). 2026-08-04: +SMHU/+SMHD (Semiconductor).
     looks_wrong_if: >
       A single-stock fund is counted here; AUM uses Bloomberg's inflated number instead of
       the override; a closed ETN still counts.
@@ -177,7 +177,7 @@ numbers:
   rex_income_index_actv:
     label: REX income index (live)
     means: REX's live index/basket option-income funds.
-    expected: 8
+    expected: 9  # 2026-08-17: +DACL (REX Defensive Autocallable Income, listed 08-13) - sibling of ATCL.
     looks_wrong_if: >
       A single-stock income fund is counted here; a fixed-income (bond) fund is miscounted
       as option-income.
@@ -193,7 +193,7 @@ numbers:
   rex_total_actv:
     label: REX total live ETPs (all suites)
     means: Every live REX product across all suites.
-    expected: 83  # 2026-08-04: +SMHU/+SMHD listed 2026-08-04. [81 from 2026-08-04 +RAMZ]
+    expected: 97  # 2026-08-20: +BRZL +BRZD +JPNU +JPND +TAWN +TPEI (MicroSectors Brazil/Japan/Taiwan 3x ETNs). 2026-08-17: +DACL (REX Defensive Autocallable Income, listed 08-13, missed rex_funds.csv). +HYGU +HYGD +LQDU +LQDD (MicroSectors HYG/LQD credit ETNs, 08-11). 2026-08-12: +AKAL +OCNL +PENU.
     looks_wrong_if: >
       Pending or closed funds are counted; the number doesn't equal the sum of the per-suite
       live counts.

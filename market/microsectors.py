@@ -49,6 +49,16 @@ _RELIABLE_TICKERS = {
     # microsector_aum columns do not exist yet (day-one listing, data_aum is #ERROR),
     # so read_overrides simply will not see them until Ryu adds the columns.
     "SMHU", "SMHD",
+    # HYGU/HYGD (3X Long / -3X Short High Yield Corporate Bond HYG) and LQDU/LQDD
+    # (3X Long / -3X Short Investment Grade Corporate Bond LQD) listed 2026-08-11.
+    # Their microsector_aum/_flow/_sh columns were ALREADY in the workbook — this set
+    # was discarding them, so all four shipped raw Bloomberg AUM (~$5.0M each, uniform
+    # seed notional) straight into the external BMO report. Added 2026-08-17.
+    "HYGU", "HYGD", "LQDU", "LQDD",
+    # Brazil / Japan / Taiwan 3x ETNs listed 2026-08-20. Listed here on day one so they
+    # can never silently fall back to raw Bloomberg issuance; their microsector_aum
+    # columns appear once Ryu adds them. Added 2026-08-25.
+    "BRZL", "BRZD", "JPNU", "JPND", "TAWN", "TPEI",
 }
 
 # Matured / delisted ETNs that legitimately have $0 AUM — not a staleness
@@ -125,6 +135,13 @@ def read_overrides(xl: pd.ExcelFile) -> dict[str, dict]:
                 if ticker in _DEAD_TICKERS:
                     continue  # known-dead, legitimately NaN every day
                 if ticker in aum_daily.columns and pd.isna(last_row.get(ticker)):
+                    # Zero notes outstanding is not staleness. A listed ETN that has
+                    # issued no notes reports blank AUM every single day by design, so
+                    # flagging it would fire daily and desensitise the real signal.
+                    if ticker in shares_daily.columns:
+                        _s = pd.to_numeric(shares_daily[ticker], errors="coerce").dropna()
+                        if not _s.empty and float(_s.iloc[-1]) == 0.0:
+                            continue
                     stale_today.append(ticker)
 
     if stale_today:
@@ -153,6 +170,17 @@ def read_overrides(xl: pd.ExcelFile) -> dict[str, dict]:
                 # Emit only the current value for them, no synthetic history. (Ryu 2026-06-17.)
                 if ticker not in _DEAD_TICKERS:
                     ov.update(_monthly_aum_history(aum_series))
+            elif ticker in shares_daily.columns:
+                # No AUM value has EVER been reported for this ticker. That is NOT a
+                # data gap when shares outstanding is populated and reads zero: the ETN
+                # is listed but has no notes outstanding, so its true AUM is $0.
+                # Without this branch read_overrides drops the ticker entirely and the
+                # fund silently falls back to raw Bloomberg seed notional (~$5.0M each
+                # for HYGD/LQDU/LQDD on 2026-08-17, ~8x overstated vs HYGU's true
+                # $0.626M). (Ryu 2026-08-17: "they have no outstanding notes yet".)
+                _sh = pd.to_numeric(shares_daily[ticker], errors="coerce").dropna()
+                if not _sh.empty and float(_sh.iloc[-1]) == 0.0:
+                    ov["aum"] = 0.0
 
         # Flows from shares + prices
         if ticker in shares_daily.columns and ticker in prices_daily.columns:

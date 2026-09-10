@@ -21,7 +21,13 @@ from pathlib import Path
 
 import pandas as pd
 
-from webapp.services.ticker_normalize import normalize_underlier as _clean
+# normalize_underlier deliberately PRESERVES the exchange code (see its docstring),
+# so REX rows whose map_li_underlier is "AFRM US" keyed as "AFRM US" while competitor
+# rows carrying a bare "AFRM" keyed as "AFRM" — the two never met, and every
+# rex_active_* count came out 0 even for funds we plainly run (ROBN, MSFX, BMNU).
+# normalize_ticker is the one that returns the bare symbol, which is what a grouping
+# key has to be.
+from webapp.services.ticker_normalize import normalize_ticker as _clean
 
 log = logging.getLogger(__name__)
 

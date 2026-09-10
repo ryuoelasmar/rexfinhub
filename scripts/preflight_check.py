@@ -1209,6 +1209,67 @@ def audit_category_vocabulary(db) -> dict:
     return out
 
 
+def audit_concept_coverage(db) -> dict:
+    """Stage C: does each report's UNIVERSE FILTER capture every fund matching its concept?
+
+    Every existing gate checks counts and internal consistency. None of them ask whether a
+    report's selection filter actually SEES all the funds it is supposed to describe. On
+    2026-08-17 the autocall report was silently showing 22 of 30 autocallables - including
+    REX's own DACL - because it filters cc_category=='autocallable' while eight funds carried
+    an exposure value (Broad Beta / Tech / Small Caps) in that field instead. Every gate was
+    green. Ryu found it by eye.
+
+    This audit is the missing class: name-identity vs classification. If a fund's NAME says it
+    is X and its classification says it is not X, the report for X will drop it. HARD FAIL.
+    """
+    import re, sqlite3
+    out = {"name": "Concept coverage", "status": "pass", "detail": "", "misses": []}
+    # (concept, name regex, predicate SQL that must hold for the fund to reach its report)
+    CHECKS = [
+        ("autocallable", r"AUTOCALL",
+         "LOWER(COALESCE(cc_category,''))='autocallable'"),
+        ("leveraged-daily", r"\b(2X|3X|4X) DAILY\b|\bDAILY (2X|3X|4X)\b",
+         "etp_category='LI'"),
+        ("buffer/defined", r"\b(BUFFER|DEFINED OUTCOME|MANAGED FLOOR)\b",
+         "etp_category IN ('Defined','CC')"),
+    ]
+    db_path = PROJECT_ROOT / "data" / "etp_tracker.db"
+    try:
+        con = sqlite3.connect(str(db_path)); cur = con.cursor()
+        cur.execute("""SELECT ticker, fund_name, etp_category, cc_category, aum
+                       FROM mkt_master_data WHERE market_status='ACTV'""")
+        rows = cur.fetchall()
+        for concept, pat, pred in CHECKS:
+            cur.execute(
+                f"""SELECT ticker FROM mkt_master_data
+                    WHERE market_status='ACTV' AND ({pred})""")
+            ok = {r[0] for r in cur.fetchall()}
+            rx = re.compile(pat)
+            for tk, nm, _c, _cc, aum in rows:
+                if not nm or not rx.search(str(nm).upper()):
+                    continue
+                if tk not in ok:
+                    out["misses"].append({"concept": concept, "ticker": tk,
+                                          "name": str(nm)[:44], "aum": aum})
+        con.close()
+    except sqlite3.Error as e:
+        out["status"] = "warn"; out["detail"] = f"coverage check failed ({e})"
+        return out
+
+    if out["misses"]:
+        out["status"] = "fail"
+        by = {}
+        for m in out["misses"]:
+            by.setdefault(m["concept"], []).append(m["ticker"])
+        out["detail"] = "; ".join(
+            f"{len(v)} fund(s) named {k} excluded from its report: " + ", ".join(v[:6])
+            for k, v in by.items()
+        ) + " - fix the classification, or the report filter, so the concept is fully covered"
+    else:
+        out["detail"] = "every report filter covers all funds matching its concept"
+    return out
+
+
 def audit_microsectors_override(db) -> dict:
     """Stage C (Tier-2 structural invariant): the MicroSectors true-AUM override MUST
     actually apply. For each reliable ETN the DB AUM must equal the override sheet's
@@ -1505,6 +1566,7 @@ def main():
                audit_report_charts, audit_status_canonical,
                audit_contract_numbers, audit_timeseries_drift,
                audit_microsectors_override, audit_override_contradictions,
+               audit_concept_coverage,
                audit_external_jargon, audit_daemon_freshness):
         # audit_ai_semantic_review is RETIRED from the gate (Ryu 2026-07-16). It judged
         # plausibility with no ground truth, so it produced confident falsehoods about

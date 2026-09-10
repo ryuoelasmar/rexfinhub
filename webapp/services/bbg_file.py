@@ -45,6 +45,33 @@ def get_bloomberg_file() -> Path:
         BloombergGraphError: Any Graph API failure. The pipeline should
             abort and surface this error rather than proceed with stale data.
     """
+    # --- Offline delivery path -------------------------------------------------
+    # When the Graph app registration is unavailable, the workbook is delivered by
+    # OneDrive desktop sync instead. Graph freshness cannot be checked, so we use a
+    # STRONGER proof in its place: the dcterms:modified stamp Excel writes inside the
+    # file when a human saves it. That travels with the bytes and cannot be forged by
+    # a copy, whereas a filesystem mtime can. Refuses anything not saved today.
+    import os as _os
+    if _os.environ.get("REXFIN_SKIP_BBG_PULL") == "1":
+        import zipfile as _zip, re as _re
+        from datetime import datetime as _dt, timedelta as _td, date as _date
+        if not _LOCAL_CACHE.exists():
+            raise BloombergGraphError(f"skip-pull set but no local workbook at {_LOCAL_CACHE}")
+        try:
+            with _zip.ZipFile(_LOCAL_CACHE) as _z:
+                _core = _z.read("docProps/core.xml").decode("utf8", "ignore")
+            _saved = _dt.strptime(
+                _re.search(r"<dcterms:modified[^>]*>([^<]+)<", _core).group(1),
+                "%Y-%m-%dT%H:%M:%SZ") - _td(hours=4)
+        except Exception as _e:
+            raise BloombergGraphError(f"skip-pull: cannot read workbook save stamp: {_e}")
+        if _saved.date() != _date.today():
+            raise BloombergGraphError(
+                f"skip-pull: workbook was saved {_saved:%Y-%m-%d %H:%M}, not today. "
+                f"Refusing to serve a stale workbook.")
+        log.warning("BBG skip-pull: serving local workbook saved %s", _saved.strftime("%Y-%m-%d %H:%M"))
+        return _LOCAL_CACHE
+
     try:
         from webapp.services.graph_files import (
             is_sharepoint_newer_than_local,

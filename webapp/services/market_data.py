@@ -1849,11 +1849,23 @@ _SUITE_CATEGORY_MAP: dict[str, list[str]] = {
     "Equity Premium Income": [],  # uses explicit competitor tickers
     "Growth & Income": ["Income - Single Equity"],
     "IncomeMax": ["Income - Single Equity"],
-    "Autocallable": ["Income - Index/Basket"],
+    "Structured": ["Income - Index/Basket"],
     "Crypto": ["Crypto"],
-    "T-Bill": [],
+    "MoneyMarket": [],
     "Thematic": ["Thematic", "Leverage & Inverse - Index/Basket"],
 }
+
+if set(_SUITE_CATEGORY_MAP) != set(_SUITE_DISPLAYS):
+    # Keyed by suite, so a stale key is not a cosmetic problem — it is a suite with no
+    # competitor set at all, rendered as though it had no competitors. The suites were
+    # renamed (Autocallable -> Structured, T-Bill -> MoneyMarket) and this map kept the
+    # old keys long after _SUITE_ORDER was migrated.
+    raise RuntimeError(
+        "suite -> category map has drifted from the definition library: "
+        f"only here={sorted(set(_SUITE_CATEGORY_MAP) - set(_SUITE_DISPLAYS))}, "
+        f"only canonical={sorted(set(_SUITE_DISPLAYS) - set(_SUITE_CATEGORY_MAP))}"
+    )
+
 
 # Explicit competitor tickers for EPI suite (not category-matched)
 _EPI_COMPS = {
@@ -2055,7 +2067,7 @@ def get_rex_performance(db: Session, suite: str | None = None) -> dict:
         elif cat_comps_categories and "category_display" in df.columns:
             comp_mask = df["category_display"].isin(cat_comps_categories)
 
-        if suite_name == "Autocallable" and "fund_name" in df.columns:
+        if suite_name == "Structured" and "fund_name" in df.columns:
             comp_mask = comp_mask & df["fund_name"].fillna("").str.lower().str.contains("autocall")
 
         if "is_rex" in df.columns:

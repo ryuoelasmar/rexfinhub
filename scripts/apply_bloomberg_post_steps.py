@@ -83,6 +83,15 @@ STEPS = [
     # canonical override-first resolution actually takes effect on the
     # mkt_master_data columns the reports read.
     ("apply_classification_overrides", [PY, str(PROJECT_ROOT / "scripts" / "apply_classification_overrides.py")]),
+    # is_rex membership was a hand-kept CSV; five launches in a row were missed and
+    # counted nowhere while the contract gate still passed. Derive it from the
+    # DEFINITIONS MicroSectors rule every run instead. Must follow the classification
+    # sweep so rex_suite is already populated.
+    ("sync_rex_membership",     [PY, str(PROJECT_ROOT / "scripts" / "sync_rex_membership.py")]),
+    # The AI classifier writes attributes_CC.csv before auto_classify Rule 1.5 can apply,
+    # so every new autocallable launch lands with an EXPOSURE value in the structure field
+    # and drops out of the autocall report. Re-assert the deterministic rule after the AI.
+    ("enforce_autocall_category", [PY, str(PROJECT_ROOT / "scripts" / "enforce_autocall_category.py")]),
     # Hub4 (2026-07-07): fetch + parse the 485A cover-page effectiveness election
     # for rows fund_extractions never captured at ingestion (step3 missed the
     # parse) — this is the actual fix for competitor/REX 485A effective dates
